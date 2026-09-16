@@ -4,6 +4,7 @@ import PhotosUI
 
 public struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
 
     @State private var showingAddExpense = false
@@ -256,6 +257,7 @@ public struct DashboardView: View {
                     }
                     .padding(.bottom, 24)
                 }
+                .id(scenePhase)
 
                 // PROCESSING OCR OVERLAY
                 if isProcessingOCR {
