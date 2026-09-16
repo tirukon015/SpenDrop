@@ -8,15 +8,28 @@ def gen_id(name):
 
 # Files list: (relativePath, isResource)
 files = [
+    # App
     ("SpendDrop/App/SpendDropApp.swift", False),
+    # Models
     ("SpendDrop/Models/Expense.swift", False),
     ("SpendDrop/Models/ExpenseCategory.swift", False),
     ("SpendDrop/Models/PaymentSource.swift", False),
     ("SpendDrop/Models/ExpenseSourceType.swift", False),
+    # Data
     ("SpendDrop/Data/ExpenseDataContainer.swift", False),
     ("SpendDrop/Data/SampleData.swift", False),
+    # Utils
     ("SpendDrop/Utils/CurrencyFormatter.swift", False),
     ("SpendDrop/Utils/HapticFeedback.swift", False),
+    # OCR (Milestone 2)
+    ("SpendDrop/OCR/OCRService.swift", False),
+    ("SpendDrop/OCR/ParsedTransaction.swift", False),
+    ("SpendDrop/OCR/MerchantDetector.swift", False),
+    ("SpendDrop/OCR/CategoryDetector.swift", False),
+    ("SpendDrop/OCR/TransactionParser.swift", False),
+    ("SpendDrop/OCR/ImageStorageService.swift", False),
+    ("SpendDrop/OCR/TransactionParserTests.swift", False),
+    # Views
     ("SpendDrop/Views/MainTabView.swift", False),
     ("SpendDrop/Views/Dashboard/DashboardView.swift", False),
     ("SpendDrop/Views/Dashboard/Components/SpendingSummaryCard.swift", False),
@@ -27,8 +40,11 @@ files = [
     ("SpendDrop/Views/Expenses/Components/ExpenseRowView.swift", False),
     ("SpendDrop/Views/Expenses/Components/FilterBarView.swift", False),
     ("SpendDrop/Views/AddExpense/AddExpenseView.swift", False),
+    ("SpendDrop/Views/Review/ExpenseReviewView.swift", False),
     ("SpendDrop/Views/Analytics/AnalyticsView.swift", False),
     ("SpendDrop/Views/Settings/SettingsView.swift", False),
+    ("SpendDrop/Views/Settings/Components/ParserSelfTestView.swift", False),
+    # Resources
     ("SpendDrop/Resources/Assets.xcassets", True),
     ("SpendDrop/Resources/Info.plist", False),
     ("SpendDrop/Resources/SpendDrop.entitlements", False),
@@ -110,14 +126,6 @@ pbx.append("\t\t};")
 pbx.append("/* End PBXFrameworksBuildPhase section */")
 
 # PBXGroup hierarchy
-# Group tree:
-# MainGroup: SpendDrop, Products
-# SpendDrop: App, Models, Data, Views, Utils, Resources
-# Views: Dashboard, Expenses, AddExpense, Analytics, Settings, MainTabView.swift
-# Dashboard: Components, DashboardView.swift
-# Expenses: Components, ExpensesView.swift, ExpenseDetailView.swift, EditExpenseView.swift
-# Resources: Info.plist, SpendDrop.entitlements, Assets.xcassets
-
 groups = {}
 
 def add_group(gid, name, path, children):
@@ -134,6 +142,11 @@ exp_comp_id = gen_id("GROUP_Views_Expenses_Components")
 add_group(exp_comp_id, "Components", "Components", [
     file_refs["SpendDrop/Views/Expenses/Components/ExpenseRowView.swift"],
     file_refs["SpendDrop/Views/Expenses/Components/FilterBarView.swift"]
+])
+
+settings_comp_id = gen_id("GROUP_Views_Settings_Components")
+add_group(settings_comp_id, "Components", "Components", [
+    file_refs["SpendDrop/Views/Settings/Components/ParserSelfTestView.swift"]
 ])
 
 # Dashboard group
@@ -158,6 +171,12 @@ add_group(addexp_group_id, "AddExpense", "AddExpense", [
     file_refs["SpendDrop/Views/AddExpense/AddExpenseView.swift"]
 ])
 
+# Review group (Milestone 2)
+review_group_id = gen_id("GROUP_Views_Review")
+add_group(review_group_id, "Review", "Review", [
+    file_refs["SpendDrop/Views/Review/ExpenseReviewView.swift"]
+])
+
 # Analytics group
 analytics_group_id = gen_id("GROUP_Views_Analytics")
 add_group(analytics_group_id, "Analytics", "Analytics", [
@@ -167,6 +186,7 @@ add_group(analytics_group_id, "Analytics", "Analytics", [
 # Settings group
 settings_group_id = gen_id("GROUP_Views_Settings")
 add_group(settings_group_id, "Settings", "Settings", [
+    settings_comp_id,
     file_refs["SpendDrop/Views/Settings/SettingsView.swift"]
 ])
 
@@ -176,9 +196,22 @@ add_group(views_group_id, "Views", "Views", [
     dash_group_id,
     exp_group_id,
     addexp_group_id,
+    review_group_id,
     analytics_group_id,
     settings_group_id,
     file_refs["SpendDrop/Views/MainTabView.swift"]
+])
+
+# OCR group (Milestone 2)
+ocr_group_id = gen_id("GROUP_OCR")
+add_group(ocr_group_id, "OCR", "OCR", [
+    file_refs["SpendDrop/OCR/OCRService.swift"],
+    file_refs["SpendDrop/OCR/ParsedTransaction.swift"],
+    file_refs["SpendDrop/OCR/MerchantDetector.swift"],
+    file_refs["SpendDrop/OCR/CategoryDetector.swift"],
+    file_refs["SpendDrop/OCR/TransactionParser.swift"],
+    file_refs["SpendDrop/OCR/ImageStorageService.swift"],
+    file_refs["SpendDrop/OCR/TransactionParserTests.swift"]
 ])
 
 # App group
@@ -225,6 +258,7 @@ add_group(spenddrop_group_id, "SpendDrop", "SpendDrop", [
     models_group_id,
     data_group_id,
     views_group_id,
+    ocr_group_id,
     utils_group_id,
     res_group_id
 ])
@@ -418,7 +452,7 @@ pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
-pbx.append("\t\t\t\tMARKETING_VERSION = 1.0.0;")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.1.0;")
 pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -446,7 +480,7 @@ pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
-pbx.append("\t\t\t\tMARKETING_VERSION = 1.0.0;")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.1.0;")
 pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -490,4 +524,4 @@ pbx_path = os.path.join(output_dir, "project.pbxproj")
 with open(pbx_path, "w", encoding="utf-8") as f:
     f.write("\n".join(pbx) + "\n")
 
-print(f"Generated {pbx_path} successfully!")
+print(f"Generated {pbx_path} successfully for Milestone 2!")
