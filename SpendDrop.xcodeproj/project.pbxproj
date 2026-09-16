@@ -1,0 +1,470 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		DC15A74B02D15A373A8487FA /* SpendDropApp.swift in Build */ = {isa = PBXBuildFile; fileRef = 7DDDB306C2B425FE70045C5D /* SpendDropApp.swift */; };
+		5037F5348859A5BAAB961C54 /* Expense.swift in Build */ = {isa = PBXBuildFile; fileRef = 02C115D71FAF7D1369671551 /* Expense.swift */; };
+		83361D7BEFC3820F488A3394 /* ExpenseCategory.swift in Build */ = {isa = PBXBuildFile; fileRef = 3EF4246226F4F0BB2752F189 /* ExpenseCategory.swift */; };
+		4CBF76AB5FA691E886FF03C5 /* PaymentSource.swift in Build */ = {isa = PBXBuildFile; fileRef = 97CE55DD36ED7364B5B6FE25 /* PaymentSource.swift */; };
+		4F83091460E6BF43C50DFD21 /* ExpenseSourceType.swift in Build */ = {isa = PBXBuildFile; fileRef = 97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */; };
+		08C2DF589A09611DF664E785 /* ExpenseDataContainer.swift in Build */ = {isa = PBXBuildFile; fileRef = 89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */; };
+		FBEA867D3150635DD936AD92 /* SampleData.swift in Build */ = {isa = PBXBuildFile; fileRef = 4527D81C4D2FA9A849BBCE99 /* SampleData.swift */; };
+		7302D46736DC5DD1751678C5 /* CurrencyFormatter.swift in Build */ = {isa = PBXBuildFile; fileRef = FE1BACF64503C1BEC388E72D /* CurrencyFormatter.swift */; };
+		7A8A02DDAB7BC2CA7518A5F7 /* HapticFeedback.swift in Build */ = {isa = PBXBuildFile; fileRef = 0E5BBB0A88C5EED87C9C57C1 /* HapticFeedback.swift */; };
+		FDE78E6C4BFAC0EB394BE155 /* MainTabView.swift in Build */ = {isa = PBXBuildFile; fileRef = 318B138603A3B23BEF35FF65 /* MainTabView.swift */; };
+		4079470EE9695C8E727C59C8 /* DashboardView.swift in Build */ = {isa = PBXBuildFile; fileRef = 366927168FEFD0A7835F5C79 /* DashboardView.swift */; };
+		517F42962E8402420C053095 /* SpendingSummaryCard.swift in Build */ = {isa = PBXBuildFile; fileRef = 07A0CF42B0860952B7A633F5 /* SpendingSummaryCard.swift */; };
+		E805FD2B5A2B312B539C4F4B /* QuickCashButton.swift in Build */ = {isa = PBXBuildFile; fileRef = FA040FE354F0E1453EE2B75A /* QuickCashButton.swift */; };
+		0CA3B5E1CE8E1B1EAE85B307 /* ExpensesView.swift in Build */ = {isa = PBXBuildFile; fileRef = 68A8F59BD084D6AAA6DC0183 /* ExpensesView.swift */; };
+		5FBFA0DA88CB3D2DB269AF01 /* ExpenseDetailView.swift in Build */ = {isa = PBXBuildFile; fileRef = EB056C93142DC2160C4A5358 /* ExpenseDetailView.swift */; };
+		AD4A4780CFDEB3F14344E3A3 /* EditExpenseView.swift in Build */ = {isa = PBXBuildFile; fileRef = 4D12EF8F3E28FE491C9CB770 /* EditExpenseView.swift */; };
+		65D9CACD90BD07FBD32557DA /* ExpenseRowView.swift in Build */ = {isa = PBXBuildFile; fileRef = D5ACB239C14653CEDDB3BD0D /* ExpenseRowView.swift */; };
+		6849550673E8EFE2213C784D /* FilterBarView.swift in Build */ = {isa = PBXBuildFile; fileRef = 2DF49081B7285C1C1E3D40B2 /* FilterBarView.swift */; };
+		8734CEB7F36B402401570B13 /* AddExpenseView.swift in Build */ = {isa = PBXBuildFile; fileRef = D0500444BD8E36ACA561A7E6 /* AddExpenseView.swift */; };
+		781FED1EA8A36E678374A88A /* AnalyticsView.swift in Build */ = {isa = PBXBuildFile; fileRef = 279B4F064A77A5CDC78840CD /* AnalyticsView.swift */; };
+		D333B1EC7D68B81AA763A25A /* SettingsView.swift in Build */ = {isa = PBXBuildFile; fileRef = BFC47BA2F7D5918598543E90 /* SettingsView.swift */; };
+		C4806CCB9C76B33BE727417D /* Assets.xcassets in Build */ = {isa = PBXBuildFile; fileRef = 23468BA13E5F0C8D819D4609 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F90F5F91183CC3DCB64EDD67 /* SpendDrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpendDrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7DDDB306C2B425FE70045C5D /* SpendDropApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SpendDropApp.swift"; sourceTree = "<group>"; };
+		02C115D71FAF7D1369671551 /* Expense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Expense.swift"; sourceTree = "<group>"; };
+		3EF4246226F4F0BB2752F189 /* ExpenseCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseCategory.swift"; sourceTree = "<group>"; };
+		97CE55DD36ED7364B5B6FE25 /* PaymentSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PaymentSource.swift"; sourceTree = "<group>"; };
+		97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseSourceType.swift"; sourceTree = "<group>"; };
+		89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseDataContainer.swift"; sourceTree = "<group>"; };
+		4527D81C4D2FA9A849BBCE99 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SampleData.swift"; sourceTree = "<group>"; };
+		FE1BACF64503C1BEC388E72D /* CurrencyFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CurrencyFormatter.swift"; sourceTree = "<group>"; };
+		0E5BBB0A88C5EED87C9C57C1 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HapticFeedback.swift"; sourceTree = "<group>"; };
+		318B138603A3B23BEF35FF65 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MainTabView.swift"; sourceTree = "<group>"; };
+		366927168FEFD0A7835F5C79 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DashboardView.swift"; sourceTree = "<group>"; };
+		07A0CF42B0860952B7A633F5 /* SpendingSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SpendingSummaryCard.swift"; sourceTree = "<group>"; };
+		FA040FE354F0E1453EE2B75A /* QuickCashButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QuickCashButton.swift"; sourceTree = "<group>"; };
+		68A8F59BD084D6AAA6DC0183 /* ExpensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpensesView.swift"; sourceTree = "<group>"; };
+		EB056C93142DC2160C4A5358 /* ExpenseDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseDetailView.swift"; sourceTree = "<group>"; };
+		4D12EF8F3E28FE491C9CB770 /* EditExpenseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditExpenseView.swift"; sourceTree = "<group>"; };
+		D5ACB239C14653CEDDB3BD0D /* ExpenseRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseRowView.swift"; sourceTree = "<group>"; };
+		2DF49081B7285C1C1E3D40B2 /* FilterBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FilterBarView.swift"; sourceTree = "<group>"; };
+		D0500444BD8E36ACA561A7E6 /* AddExpenseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AddExpenseView.swift"; sourceTree = "<group>"; };
+		279B4F064A77A5CDC78840CD /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AnalyticsView.swift"; sourceTree = "<group>"; };
+		BFC47BA2F7D5918598543E90 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		23468BA13E5F0C8D819D4609 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
+		7726428EDC941907FC865B24 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+		996D83AD64600BCBA1FBC1C9 /* SpendDrop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SpendDrop.entitlements"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4FADB9A5490C9A67C9B1C9D3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		174153C611390E7C4DE1B9C9 = {
+			isa = PBXGroup;
+			children = (
+				07A0CF42B0860952B7A633F5,
+				FA040FE354F0E1453EE2B75A,
+			);
+			name = "Components";
+			path = "Components";
+			sourceTree = "<group>";
+		};
+		A5BFE17C4DF215A243F18FB1 = {
+			isa = PBXGroup;
+			children = (
+				D5ACB239C14653CEDDB3BD0D,
+				2DF49081B7285C1C1E3D40B2,
+			);
+			name = "Components";
+			path = "Components";
+			sourceTree = "<group>";
+		};
+		0A0593D92C769872C2602B42 = {
+			isa = PBXGroup;
+			children = (
+				174153C611390E7C4DE1B9C9,
+				366927168FEFD0A7835F5C79,
+			);
+			name = "Dashboard";
+			path = "Dashboard";
+			sourceTree = "<group>";
+		};
+		7EBF011EC69EC959BA349BE9 = {
+			isa = PBXGroup;
+			children = (
+				A5BFE17C4DF215A243F18FB1,
+				68A8F59BD084D6AAA6DC0183,
+				EB056C93142DC2160C4A5358,
+				4D12EF8F3E28FE491C9CB770,
+			);
+			name = "Expenses";
+			path = "Expenses";
+			sourceTree = "<group>";
+		};
+		2A41649C6FC8F43130618C1F = {
+			isa = PBXGroup;
+			children = (
+				D0500444BD8E36ACA561A7E6,
+			);
+			name = "AddExpense";
+			path = "AddExpense";
+			sourceTree = "<group>";
+		};
+		70E699EAFD9D666951820495 = {
+			isa = PBXGroup;
+			children = (
+				279B4F064A77A5CDC78840CD,
+			);
+			name = "Analytics";
+			path = "Analytics";
+			sourceTree = "<group>";
+		};
+		CB7A6BAC98AA09F093ED334A = {
+			isa = PBXGroup;
+			children = (
+				BFC47BA2F7D5918598543E90,
+			);
+			name = "Settings";
+			path = "Settings";
+			sourceTree = "<group>";
+		};
+		F3E5B61ACB3D942D0C643D2C = {
+			isa = PBXGroup;
+			children = (
+				0A0593D92C769872C2602B42,
+				7EBF011EC69EC959BA349BE9,
+				2A41649C6FC8F43130618C1F,
+				70E699EAFD9D666951820495,
+				CB7A6BAC98AA09F093ED334A,
+				318B138603A3B23BEF35FF65,
+			);
+			name = "Views";
+			path = "Views";
+			sourceTree = "<group>";
+		};
+		073CC5FBB52E5462EC8A6EFA = {
+			isa = PBXGroup;
+			children = (
+				7DDDB306C2B425FE70045C5D,
+			);
+			name = "App";
+			path = "App";
+			sourceTree = "<group>";
+		};
+		3F7FC70FD57E951A9D0C4219 = {
+			isa = PBXGroup;
+			children = (
+				02C115D71FAF7D1369671551,
+				3EF4246226F4F0BB2752F189,
+				97CE55DD36ED7364B5B6FE25,
+				97FB3251BCFB2155C4B11241,
+			);
+			name = "Models";
+			path = "Models";
+			sourceTree = "<group>";
+		};
+		782F633D9016F8C323B526E3 = {
+			isa = PBXGroup;
+			children = (
+				89F4C17BD660E6B831C0741B,
+				4527D81C4D2FA9A849BBCE99,
+			);
+			name = "Data";
+			path = "Data";
+			sourceTree = "<group>";
+		};
+		7FBF767C08832F5CF0E1535F = {
+			isa = PBXGroup;
+			children = (
+				FE1BACF64503C1BEC388E72D,
+				0E5BBB0A88C5EED87C9C57C1,
+			);
+			name = "Utils";
+			path = "Utils";
+			sourceTree = "<group>";
+		};
+		40B9030D3776B3095D0B6F08 = {
+			isa = PBXGroup;
+			children = (
+				23468BA13E5F0C8D819D4609,
+				7726428EDC941907FC865B24,
+				996D83AD64600BCBA1FBC1C9,
+			);
+			name = "Resources";
+			path = "Resources";
+			sourceTree = "<group>";
+		};
+		93270267C6417E439B4AED04 = {
+			isa = PBXGroup;
+			children = (
+				073CC5FBB52E5462EC8A6EFA,
+				3F7FC70FD57E951A9D0C4219,
+				782F633D9016F8C323B526E3,
+				F3E5B61ACB3D942D0C643D2C,
+				7FBF767C08832F5CF0E1535F,
+				40B9030D3776B3095D0B6F08,
+			);
+			name = "SpendDrop";
+			path = "SpendDrop";
+			sourceTree = "<group>";
+		};
+		9ED67CB688CF635577C70EFD = {
+			isa = PBXGroup;
+			children = (
+				F90F5F91183CC3DCB64EDD67,
+			);
+			name = "Products";
+			sourceTree = "<group>";
+		};
+		16AAE79BBDC0FFCBBE68A1F2 = {
+			isa = PBXGroup;
+			children = (
+				93270267C6417E439B4AED04,
+				9ED67CB688CF635577C70EFD,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EDB313AFA914D38BBC912B6B /* SpendDrop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2772E51C4155F6A175286545 /* Build configuration list for PBXNativeTarget "SpendDrop" */;
+			buildPhases = (
+				99AC1DAD6892063E3D7E5084 /* Sources */,
+				4FADB9A5490C9A67C9B1C9D3 /* Frameworks */,
+				17E6524D9F49BA7E669591C4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SpendDrop;
+			productName = SpendDrop;
+			productReference = F90F5F91183CC3DCB64EDD67 /* SpendDrop.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		13B17D71E4C3E7CD16ADABA5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					EDB313AFA914D38BBC912B6B = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 64DB4D2246F37D8ECAF03B43 /* Build configuration list for PBXProject "SpendDrop" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 16AAE79BBDC0FFCBBE68A1F2;
+			productRefGroup = 9ED67CB688CF635577C70EFD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EDB313AFA914D38BBC912B6B /* SpendDrop */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		17E6524D9F49BA7E669591C4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C4806CCB9C76B33BE727417D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		99AC1DAD6892063E3D7E5084 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC15A74B02D15A373A8487FA /* SpendDropApp.swift in Sources */,
+				5037F5348859A5BAAB961C54 /* Expense.swift in Sources */,
+				83361D7BEFC3820F488A3394 /* ExpenseCategory.swift in Sources */,
+				4CBF76AB5FA691E886FF03C5 /* PaymentSource.swift in Sources */,
+				4F83091460E6BF43C50DFD21 /* ExpenseSourceType.swift in Sources */,
+				08C2DF589A09611DF664E785 /* ExpenseDataContainer.swift in Sources */,
+				FBEA867D3150635DD936AD92 /* SampleData.swift in Sources */,
+				7302D46736DC5DD1751678C5 /* CurrencyFormatter.swift in Sources */,
+				7A8A02DDAB7BC2CA7518A5F7 /* HapticFeedback.swift in Sources */,
+				FDE78E6C4BFAC0EB394BE155 /* MainTabView.swift in Sources */,
+				4079470EE9695C8E727C59C8 /* DashboardView.swift in Sources */,
+				517F42962E8402420C053095 /* SpendingSummaryCard.swift in Sources */,
+				E805FD2B5A2B312B539C4F4B /* QuickCashButton.swift in Sources */,
+				0CA3B5E1CE8E1B1EAE85B307 /* ExpensesView.swift in Sources */,
+				5FBFA0DA88CB3D2DB269AF01 /* ExpenseDetailView.swift in Sources */,
+				AD4A4780CFDEB3F14344E3A3 /* EditExpenseView.swift in Sources */,
+				65D9CACD90BD07FBD32557DA /* ExpenseRowView.swift in Sources */,
+				6849550673E8EFE2213C784D /* FilterBarView.swift in Sources */,
+				8734CEB7F36B402401570B13 /* AddExpenseView.swift in Sources */,
+				781FED1EA8A36E678374A88A /* AnalyticsView.swift in Sources */,
+				D333B1EC7D68B81AA763A25A /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		053790A3DFCF13C0265CCD4B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		25C4E0B9C6A54DD09A377300 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = "wholemodule";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		C332AA099155099B7F602039 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "SpendDrop/Resources/SpendDrop.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "SpendDrop/Resources/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		04366468B8B1B51D5011A644 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "SpendDrop/Resources/SpendDrop.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "SpendDrop/Resources/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		64DB4D2246F37D8ECAF03B43 /* Build configuration list for PBXProject "SpendDrop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				053790A3DFCF13C0265CCD4B /* Debug */,
+				25C4E0B9C6A54DD09A377300 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2772E51C4155F6A175286545 /* Build configuration list for PBXNativeTarget "SpendDrop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C332AA099155099B7F602039 /* Debug */,
+				04366468B8B1B51D5011A644 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 13B17D71E4C3E7CD16ADABA5 /* Project object */;
+}
