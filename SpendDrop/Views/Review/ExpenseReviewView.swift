@@ -17,6 +17,10 @@ public struct ExpenseReviewView: View {
     @State private var transactionReference: String?
     @State private var showingImagePreview = false
 
+    // Duplicate Check State
+    @State private var duplicateResult: DuplicateCheckResult = .none
+    @State private var showingDuplicateConfirmation = false
+
     public init(parsed: ParsedTransaction, onSaved: ((Expense) -> Void)? = nil) {
         self.initialParsed = parsed
         self.onSaved = onSaved
@@ -59,6 +63,13 @@ public struct ExpenseReviewView: View {
                             color: .orange,
                             title: "Account Balance / Credit Limit",
                             subtitle: "This looks like an account balance rather than a new expense."
+                        )
+                    } else if duplicateResult.isDuplicate {
+                        statusBanner(
+                            icon: "exclamationmark.triangle.fill",
+                            color: .yellow,
+                            title: "Possible Duplicate Detected",
+                            subtitle: duplicateResult.reason ?? "This transaction may already exist in SpendDrop."
                         )
                     } else if isHighConfidence {
                         statusBanner(
@@ -305,7 +316,7 @@ public struct ExpenseReviewView: View {
 
                     // ACTION BUTTONS
                     VStack(spacing: 12) {
-                        Button(action: saveExpense) {
+                        Button(action: handleSaveTapped) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                 Text("Save Expense")
@@ -340,6 +351,23 @@ public struct ExpenseReviewView: View {
                         dismiss()
                     }
                 }
+            }
+            .alert("Possible Duplicate Expense", isPresented: $showingDuplicateConfirmation) {
+                Button("Add Anyway") {
+                    saveExpense()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(duplicateResult.reason ?? "This transaction appears to have been recorded already. Do you want to add it anyway?")
+            }
+            .onAppear {
+                duplicateResult = DuplicateDetector.shared.checkDuplicate(
+                    amount: parsedAmount,
+                    merchant: merchant,
+                    date: date,
+                    reference: transactionReference,
+                    in: modelContext
+                )
             }
             .sheet(isPresented: $showingImagePreview) {
                 if let image = initialParsed.originalImage {
@@ -386,6 +414,14 @@ public struct ExpenseReviewView: View {
         .padding()
         .background(color.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func handleSaveTapped() {
+        if duplicateResult.isDuplicate {
+            showingDuplicateConfirmation = true
+        } else {
+            saveExpense()
+        }
     }
 
     private func saveExpense() {
