@@ -209,6 +209,56 @@ public struct TransactionParserTests {
             details: "Allows user to edit merchant when not present in screenshot"
         ))
 
+        // Test 11: Duplicate Detection (Matching existing expense)
+        let schema = Schema([Expense.self])
+        let memConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+        if let memContainer = try? ModelContainer(for: schema, configurations: [memConfig]) {
+            let testContext = memContainer.mainContext
+            let existing = Expense(
+                amount: 18.50,
+                merchant: "McDonald's",
+                category: .food,
+                paymentSource: .touchNGo,
+                date: Date(),
+                transactionReference: "TNG12345"
+            )
+            testContext.insert(existing)
+            try? testContext.save()
+
+            let dupCheck = DuplicateDetector.shared.checkDuplicate(
+                amount: 18.50,
+                merchant: "McDonald's",
+                date: Date(),
+                reference: "TNG12345",
+                in: testContext
+            )
+
+            results.append(TestCaseResult(
+                testName: "Duplicate Detection (Identical Transaction)",
+                passed: dupCheck.isDuplicate,
+                expected: "isDuplicate = true",
+                actual: "isDuplicate = \(dupCheck.isDuplicate)",
+                details: "Warns user when sharing the exact same screenshot/transaction twice"
+            ))
+
+            // Test 12: Unique Transaction (Different amount/merchant)
+            let uniqueCheck = DuplicateDetector.shared.checkDuplicate(
+                amount: 99.00,
+                merchant: "Uniqlo",
+                date: Date(),
+                reference: "UNIQLO999",
+                in: testContext
+            )
+
+            results.append(TestCaseResult(
+                testName: "Unique Transaction (Non-Duplicate)",
+                passed: !uniqueCheck.isDuplicate,
+                expected: "isDuplicate = false",
+                actual: "isDuplicate = \(uniqueCheck.isDuplicate)",
+                details: "Ensures legitimate different transactions are not blocked"
+            ))
+        }
+
         return results
     }
 }

@@ -114,7 +114,7 @@ public struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1.0 (Milestone 2 - Vision OCR)")
+                        Text("1.3.0 (Milestone 3 - Share Extension)")
                             .foregroundStyle(.secondary)
                     }
 
@@ -128,7 +128,7 @@ public struct SettingsView: View {
                     HStack {
                         Text("Storage Engine")
                         Spacer()
-                        Text("Apple SwiftData")
+                        Text("Apple SwiftData (App Group)")
                             .foregroundStyle(.secondary)
                     }
 
@@ -137,6 +137,13 @@ public struct SettingsView: View {
                         Spacer()
                         Text("Apple Vision (On-Device)")
                             .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Share Extension")
+                        Spacer()
+                        Text("Enabled (App Group)")
+                            .foregroundStyle(.green)
                     }
                 }
             }

@@ -22,9 +22,9 @@ public struct ParserSelfTestView: View {
                                 .foregroundStyle(allPassed ? .green : .blue)
 
                             VStack(alignment: .leading) {
-                                Text(allPassed ? "All Tests Passed (10/10)" : "Parser Verification")
+                                Text(allPassed ? "All Tests Passed (\(testResults.count)/\(testResults.count))" : "Parser & Duplicate Verification")
                                     .font(.headline)
-                                Text("Automated validation of Malaysian payment screenshots, false positives, balances, and multi-amounts.")
+                                Text("Automated validation of Malaysian payment screenshots, false positives, balances, multi-amounts, and duplicate detection.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
