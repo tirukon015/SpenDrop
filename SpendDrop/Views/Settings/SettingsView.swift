@@ -10,6 +10,7 @@ public struct SettingsView: View {
 
     @State private var showingClearConfirmation = false
     @State private var showingSampleDataLoadedAlert = false
+    @State private var showingSelfTestSheet = false
 
     public init() {}
 
@@ -60,6 +61,17 @@ public struct SettingsView: View {
                         }
                     }
 
+                    Button(action: {
+                        showingSelfTestSheet = true
+                    }) {
+                        HStack {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(.green)
+                            Text("Run OCR & Parser Self-Test")
+                                .foregroundStyle(.primary)
+                        }
+                    }
+
                     Button(role: .destructive, action: {
                         showingClearConfirmation = true
                     }) {
@@ -83,7 +95,7 @@ public struct SettingsView: View {
                                 .fontWeight(.semibold)
                         }
 
-                        Text("SpendDrop never asks for your bank login, passwords, OTPs, or card PINs. All data and receipts stay strictly on your device.")
+                        Text("SpendDrop never asks for your bank login, passwords, OTPs, or card PINs. All Vision OCR and transaction parsing runs entirely on your device with zero cloud tracking.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -102,7 +114,7 @@ public struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0.0 (Milestone 1)")
+                        Text("1.1.0 (Milestone 2 - Vision OCR)")
                             .foregroundStyle(.secondary)
                     }
 
@@ -119,9 +131,19 @@ public struct SettingsView: View {
                         Text("Apple SwiftData")
                             .foregroundStyle(.secondary)
                     }
+
+                    HStack {
+                        Text("OCR Engine")
+                        Spacer()
+                        Text("Apple Vision (On-Device)")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showingSelfTestSheet) {
+                ParserSelfTestView()
+            }
             .alert("Sample Data Loaded", isPresented: $showingSampleDataLoadedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
