@@ -6,8 +6,8 @@ def gen_id(name):
     h = hashlib.sha1(name.encode('utf-8')).hexdigest().upper()
     return h[:24]
 
-# Files list: (relativePath, isResource)
-files = [
+# All project files
+all_files = [
     # App
     ("SpendDrop/App/SpendDropApp.swift", False),
     # Models
@@ -17,6 +17,7 @@ files = [
     ("SpendDrop/Models/ExpenseSourceType.swift", False),
     # Data
     ("SpendDrop/Data/ExpenseDataContainer.swift", False),
+    ("SpendDrop/Data/DuplicateDetector.swift", False),
     ("SpendDrop/Data/SampleData.swift", False),
     # Utils
     ("SpendDrop/Utils/CurrencyFormatter.swift", False),
@@ -44,17 +45,47 @@ files = [
     ("SpendDrop/Views/Analytics/AnalyticsView.swift", False),
     ("SpendDrop/Views/Settings/SettingsView.swift", False),
     ("SpendDrop/Views/Settings/Components/ParserSelfTestView.swift", False),
+    # Share Extension (Milestone 3)
+    ("SpendDrop/ShareExtension/ShareViewController.swift", False),
+    ("SpendDrop/ShareExtension/ShareExtensionView.swift", False),
+    ("SpendDrop/ShareExtension/Info.plist", False),
+    ("SpendDrop/ShareExtension/ShareExtension.entitlements", False),
     # Resources
     ("SpendDrop/Resources/Assets.xcassets", True),
     ("SpendDrop/Resources/Info.plist", False),
     ("SpendDrop/Resources/SpendDrop.entitlements", False),
 ]
 
+# Files compiled by main app target
+app_source_paths = [path for path, is_res in all_files if path.endswith(".swift") and not path.startswith("SpendDrop/ShareExtension/")]
+
+# Files compiled by Share Extension target
+share_source_paths = [
+    "SpendDrop/ShareExtension/ShareViewController.swift",
+    "SpendDrop/ShareExtension/ShareExtensionView.swift",
+    "SpendDrop/Models/Expense.swift",
+    "SpendDrop/Models/ExpenseCategory.swift",
+    "SpendDrop/Models/PaymentSource.swift",
+    "SpendDrop/Models/ExpenseSourceType.swift",
+    "SpendDrop/Data/ExpenseDataContainer.swift",
+    "SpendDrop/Data/DuplicateDetector.swift",
+    "SpendDrop/OCR/OCRService.swift",
+    "SpendDrop/OCR/ParsedTransaction.swift",
+    "SpendDrop/OCR/MerchantDetector.swift",
+    "SpendDrop/OCR/CategoryDetector.swift",
+    "SpendDrop/OCR/TransactionParser.swift",
+    "SpendDrop/OCR/ImageStorageService.swift",
+    "SpendDrop/Utils/CurrencyFormatter.swift",
+    "SpendDrop/Utils/HapticFeedback.swift",
+]
+
+# IDs for Main App Target
 proj_id = gen_id("SpendDrop_Project")
 target_id = gen_id("SpendDrop_NativeTarget")
 sources_phase_id = gen_id("SpendDrop_SourcesPhase")
 resources_phase_id = gen_id("SpendDrop_ResourcesPhase")
 frameworks_phase_id = gen_id("SpendDrop_FrameworksPhase")
+embed_extensions_phase_id = gen_id("SpendDrop_EmbedExtensionsPhase")
 app_product_id = gen_id("SpendDrop_AppProduct")
 
 debug_config_target_id = gen_id("SpendDrop_Debug_Target")
@@ -65,19 +96,40 @@ debug_config_proj_id = gen_id("SpendDrop_Debug_Proj")
 release_config_proj_id = gen_id("SpendDrop_Release_Proj")
 config_list_proj_id = gen_id("SpendDrop_ConfigList_Proj")
 
+# IDs for Share Extension Target
+share_target_id = gen_id("SpendDropShare_NativeTarget")
+share_sources_phase_id = gen_id("SpendDropShare_SourcesPhase")
+share_resources_phase_id = gen_id("SpendDropShare_ResourcesPhase")
+share_frameworks_phase_id = gen_id("SpendDropShare_FrameworksPhase")
+share_product_id = gen_id("SpendDropShare_Product")
+
+debug_config_share_id = gen_id("SpendDropShare_Debug_Target")
+release_config_share_id = gen_id("SpendDropShare_Release_Target")
+config_list_share_id = gen_id("SpendDropShare_ConfigList_Target")
+
+# Dependency IDs
+container_proxy_id = gen_id("SpendDrop_ContainerItemProxy_Share")
+target_dependency_id = gen_id("SpendDrop_TargetDependency_Share")
+embed_appex_build_file_id = gen_id("SpendDrop_EmbedAppexBuildFile")
+
 main_group_id = gen_id("SpendDrop_MainGroup")
 products_group_id = gen_id("SpendDrop_ProductsGroup")
 
-# Build File Ref and Build File IDs
+# PBXFileReference IDs
 file_refs = {}
-build_files = {}
+for path, _ in all_files:
+    file_refs[path] = gen_id(f"FREF_{path}")
 
-for path, is_res in files:
-    fref_id = gen_id(f"FREF_{path}")
-    file_refs[path] = fref_id
-    if path.endswith(".swift") or is_res:
-        bf_id = gen_id(f"BF_{path}")
-        build_files[path] = bf_id
+# PBXBuildFile IDs for App target
+app_build_files = {}
+for path in app_source_paths:
+    app_build_files[path] = gen_id(f"BF_APP_{path}")
+app_res_build_file_id = gen_id("BF_APP_Assets.xcassets")
+
+# PBXBuildFile IDs for Share target
+share_build_files = {}
+for path in share_source_paths:
+    share_build_files[path] = gen_id(f"BF_SHARE_{path}")
 
 pbx = []
 pbx.append("// !$*UTF8*$!")
@@ -88,17 +140,58 @@ pbx.append("\t};")
 pbx.append("\tobjectVersion = 56;")
 pbx.append("\tobjects = {")
 
-# PBXBuildFile
+# PBXBuildFile section
 pbx.append("\n/* Begin PBXBuildFile section */")
-for path, bf_id in build_files.items():
+# App sources
+for path, bf_id in app_build_files.items():
     fref_id = file_refs[path]
     filename = os.path.basename(path)
-    pbx.append(f"\t\t{bf_id} /* {filename} in Build */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
+    pbx.append(f"\t\t{bf_id} /* {filename} in App Sources */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
+
+# App resources
+pbx.append(f"\t\t{app_res_build_file_id} /* Assets.xcassets in App Resources */ = {{isa = PBXBuildFile; fileRef = {file_refs['SpendDrop/Resources/Assets.xcassets']} /* Assets.xcassets */; }};")
+
+# Share extension sources
+for path, bf_id in share_build_files.items():
+    fref_id = file_refs[path]
+    filename = os.path.basename(path)
+    pbx.append(f"\t\t{bf_id} /* {filename} in Share Sources */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
+
+# Embed Appex in App
+pbx.append(f"\t\t{embed_appex_build_file_id} /* SpendDropShare.appex in Embed Foundation Extensions */ = {{isa = PBXBuildFile; fileRef = {share_product_id} /* SpendDropShare.appex */; settings = {{ATTRIBUTES = (RemoveHeadersOnCopy, ); }}; }};")
 pbx.append("/* End PBXBuildFile section */")
 
-# PBXFileReference
+# PBXContainerItemProxy section
+pbx.append("\n/* Begin PBXContainerItemProxy section */")
+pbx.append(f"\t\t{container_proxy_id} /* PBXContainerItemProxy */ = {{")
+pbx.append("\t\t\tisa = PBXContainerItemProxy;")
+pbx.append(f"\t\t\tcontainerPortal = {proj_id} /* Project object */;")
+pbx.append("\t\t\tproxyType = 1;")
+pbx.append(f"\t\t\tremoteGlobalIDString = {share_target_id};")
+pbx.append("\t\t\tremoteInfo = SpendDropShare;")
+pbx.append("\t\t};")
+pbx.append("/* End PBXContainerItemProxy section */")
+
+# PBXCopyFilesBuildPhase section
+pbx.append("\n/* Begin PBXCopyFilesBuildPhase section */")
+pbx.append(f"\t\t{embed_extensions_phase_id} /* Embed Foundation Extensions */ = {{")
+pbx.append("\t\t\tisa = PBXCopyFilesBuildPhase;")
+pbx.append("\t\t\tbuildActionMask = 2147483647;")
+pbx.append("\t\t\tdstPath = \"\";")
+pbx.append("\t\t\tdstSubfolderSpec = 13;")
+pbx.append("\t\t\tfiles = (")
+pbx.append(f"\t\t\t\t{embed_appex_build_file_id} /* SpendDropShare.appex in Embed Foundation Extensions */,")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\tname = \"Embed Foundation Extensions\";")
+pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+pbx.append("\t\t};")
+pbx.append("/* End PBXCopyFilesBuildPhase section */")
+
+# PBXFileReference section
 pbx.append("\n/* Begin PBXFileReference section */")
 pbx.append(f"\t\t{app_product_id} /* SpendDrop.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpendDrop.app; sourceTree = BUILT_PRODUCTS_DIR; }};")
+pbx.append(f"\t\t{share_product_id} /* SpendDropShare.appex */ = {{isa = PBXFileReference; explicitFileType = \"wrapper.app-extension\"; includeInIndex = 0; path = SpendDropShare.appex; sourceTree = BUILT_PRODUCTS_DIR; }};")
+
 for path, fref_id in file_refs.items():
     filename = os.path.basename(path)
     if path.endswith(".swift"):
@@ -114,7 +207,7 @@ for path, fref_id in file_refs.items():
     pbx.append(f"\t\t{fref_id} /* {filename} */ = {{isa = PBXFileReference; lastKnownFileType = {ft}; path = \"{filename}\"; sourceTree = \"<group>\"; }};")
 pbx.append("/* End PBXFileReference section */")
 
-# PBXFrameworksBuildPhase
+# PBXFrameworksBuildPhase section
 pbx.append("\n/* Begin PBXFrameworksBuildPhase section */")
 pbx.append(f"\t\t{frameworks_phase_id} /* Frameworks */ = {{")
 pbx.append("\t\t\tisa = PBXFrameworksBuildPhase;")
@@ -123,15 +216,20 @@ pbx.append("\t\t\tfiles = (")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
 pbx.append("\t\t};")
+pbx.append(f"\t\t{share_frameworks_phase_id} /* Frameworks */ = {{")
+pbx.append("\t\t\tisa = PBXFrameworksBuildPhase;")
+pbx.append("\t\t\tbuildActionMask = 2147483647;")
+pbx.append("\t\t\tfiles = (")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+pbx.append("\t\t};")
 pbx.append("/* End PBXFrameworksBuildPhase section */")
 
-# PBXGroup hierarchy
+# PBXGroup section
 groups = {}
-
 def add_group(gid, name, path, children):
     groups[gid] = (name, path, children)
 
-# Components groups
 dash_comp_id = gen_id("GROUP_Views_Dashboard_Components")
 add_group(dash_comp_id, "Components", "Components", [
     file_refs["SpendDrop/Views/Dashboard/Components/SpendingSummaryCard.swift"],
@@ -149,14 +247,12 @@ add_group(settings_comp_id, "Components", "Components", [
     file_refs["SpendDrop/Views/Settings/Components/ParserSelfTestView.swift"]
 ])
 
-# Dashboard group
 dash_group_id = gen_id("GROUP_Views_Dashboard")
 add_group(dash_group_id, "Dashboard", "Dashboard", [
     dash_comp_id,
     file_refs["SpendDrop/Views/Dashboard/DashboardView.swift"]
 ])
 
-# Expenses group
 exp_group_id = gen_id("GROUP_Views_Expenses")
 add_group(exp_group_id, "Expenses", "Expenses", [
     exp_comp_id,
@@ -165,32 +261,27 @@ add_group(exp_group_id, "Expenses", "Expenses", [
     file_refs["SpendDrop/Views/Expenses/EditExpenseView.swift"]
 ])
 
-# AddExpense group
 addexp_group_id = gen_id("GROUP_Views_AddExpense")
 add_group(addexp_group_id, "AddExpense", "AddExpense", [
     file_refs["SpendDrop/Views/AddExpense/AddExpenseView.swift"]
 ])
 
-# Review group (Milestone 2)
 review_group_id = gen_id("GROUP_Views_Review")
 add_group(review_group_id, "Review", "Review", [
     file_refs["SpendDrop/Views/Review/ExpenseReviewView.swift"]
 ])
 
-# Analytics group
 analytics_group_id = gen_id("GROUP_Views_Analytics")
 add_group(analytics_group_id, "Analytics", "Analytics", [
     file_refs["SpendDrop/Views/Analytics/AnalyticsView.swift"]
 ])
 
-# Settings group
 settings_group_id = gen_id("GROUP_Views_Settings")
 add_group(settings_group_id, "Settings", "Settings", [
     settings_comp_id,
     file_refs["SpendDrop/Views/Settings/SettingsView.swift"]
 ])
 
-# Views group
 views_group_id = gen_id("GROUP_Views")
 add_group(views_group_id, "Views", "Views", [
     dash_group_id,
@@ -202,7 +293,6 @@ add_group(views_group_id, "Views", "Views", [
     file_refs["SpendDrop/Views/MainTabView.swift"]
 ])
 
-# OCR group (Milestone 2)
 ocr_group_id = gen_id("GROUP_OCR")
 add_group(ocr_group_id, "OCR", "OCR", [
     file_refs["SpendDrop/OCR/OCRService.swift"],
@@ -214,13 +304,11 @@ add_group(ocr_group_id, "OCR", "OCR", [
     file_refs["SpendDrop/OCR/TransactionParserTests.swift"]
 ])
 
-# App group
 app_group_id = gen_id("GROUP_App")
 add_group(app_group_id, "App", "App", [
     file_refs["SpendDrop/App/SpendDropApp.swift"]
 ])
 
-# Models group
 models_group_id = gen_id("GROUP_Models")
 add_group(models_group_id, "Models", "Models", [
     file_refs["SpendDrop/Models/Expense.swift"],
@@ -229,21 +317,19 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpendDrop/Models/ExpenseSourceType.swift"]
 ])
 
-# Data group
 data_group_id = gen_id("GROUP_Data")
 add_group(data_group_id, "Data", "Data", [
     file_refs["SpendDrop/Data/ExpenseDataContainer.swift"],
+    file_refs["SpendDrop/Data/DuplicateDetector.swift"],
     file_refs["SpendDrop/Data/SampleData.swift"]
 ])
 
-# Utils group
 utils_group_id = gen_id("GROUP_Utils")
 add_group(utils_group_id, "Utils", "Utils", [
     file_refs["SpendDrop/Utils/CurrencyFormatter.swift"],
     file_refs["SpendDrop/Utils/HapticFeedback.swift"]
 ])
 
-# Resources group
 res_group_id = gen_id("GROUP_Resources")
 add_group(res_group_id, "Resources", "Resources", [
     file_refs["SpendDrop/Resources/Assets.xcassets"],
@@ -251,7 +337,14 @@ add_group(res_group_id, "Resources", "Resources", [
     file_refs["SpendDrop/Resources/SpendDrop.entitlements"]
 ])
 
-# SpendDrop folder group
+share_ext_group_id = gen_id("GROUP_ShareExtension")
+add_group(share_ext_group_id, "ShareExtension", "ShareExtension", [
+    file_refs["SpendDrop/ShareExtension/ShareViewController.swift"],
+    file_refs["SpendDrop/ShareExtension/ShareExtensionView.swift"],
+    file_refs["SpendDrop/ShareExtension/Info.plist"],
+    file_refs["SpendDrop/ShareExtension/ShareExtension.entitlements"]
+])
+
 spenddrop_group_id = gen_id("GROUP_SpendDrop_Folder")
 add_group(spenddrop_group_id, "SpendDrop", "SpendDrop", [
     app_group_id,
@@ -259,14 +352,14 @@ add_group(spenddrop_group_id, "SpendDrop", "SpendDrop", [
     data_group_id,
     views_group_id,
     ocr_group_id,
+    share_ext_group_id,
     utils_group_id,
     res_group_id
 ])
 
-# Products group
-add_group(products_group_id, "Products", None, [app_product_id])
+products_group_id = gen_id("GROUP_Products")
+add_group(products_group_id, "Products", None, [app_product_id, share_product_id])
 
-# Main group
 add_group(main_group_id, None, None, [spenddrop_group_id, products_group_id])
 
 pbx.append("\n/* Begin PBXGroup section */")
@@ -285,8 +378,9 @@ for gid, (name, path, children) in groups.items():
     pbx.append("\t\t};")
 pbx.append("/* End PBXGroup section */")
 
-# PBXNativeTarget
+# PBXNativeTarget section
 pbx.append("\n/* Begin PBXNativeTarget section */")
+# Main App Target
 pbx.append(f"\t\t{target_id} /* SpendDrop */ = {{")
 pbx.append("\t\t\tisa = PBXNativeTarget;")
 pbx.append(f"\t\t\tbuildConfigurationList = {config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpendDrop\" */;")
@@ -294,19 +388,40 @@ pbx.append("\t\t\tbuildPhases = (")
 pbx.append(f"\t\t\t\t{sources_phase_id} /* Sources */,")
 pbx.append(f"\t\t\t\t{frameworks_phase_id} /* Frameworks */,")
 pbx.append(f"\t\t\t\t{resources_phase_id} /* Resources */,")
+pbx.append(f"\t\t\t\t{embed_extensions_phase_id} /* Embed Foundation Extensions */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tbuildRules = (")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tdependencies = (")
+pbx.append(f"\t\t\t\t{target_dependency_id} /* PBXTargetDependency */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tname = SpendDrop;")
 pbx.append("\t\t\tproductName = SpendDrop;")
 pbx.append(f"\t\t\tproductReference = {app_product_id} /* SpendDrop.app */;")
 pbx.append("\t\t\tproductType = \"com.apple.product-type.application\";")
 pbx.append("\t\t};")
+
+# Share Extension Target
+pbx.append(f"\t\t{share_target_id} /* SpendDropShare */ = {{")
+pbx.append("\t\t\tisa = PBXNativeTarget;")
+pbx.append(f"\t\t\tbuildConfigurationList = {config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpendDropShare\" */;")
+pbx.append("\t\t\tbuildPhases = (")
+pbx.append(f"\t\t\t\t{share_sources_phase_id} /* Sources */,")
+pbx.append(f"\t\t\t\t{share_frameworks_phase_id} /* Frameworks */,")
+pbx.append(f"\t\t\t\t{share_resources_phase_id} /* Resources */,")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\tbuildRules = (")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\tdependencies = (")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\tname = SpendDropShare;")
+pbx.append("\t\t\tproductName = SpendDropShare;")
+pbx.append(f"\t\t\tproductReference = {share_product_id} /* SpendDropShare.appex */;")
+pbx.append("\t\t\tproductType = \"com.apple.product-type.app-extension\";")
+pbx.append("\t\t};")
 pbx.append("/* End PBXNativeTarget section */")
 
-# PBXProject
+# PBXProject section
 pbx.append("\n/* Begin PBXProject section */")
 pbx.append(f"\t\t{proj_id} /* Project object */ = {{")
 pbx.append("\t\t\tisa = PBXProject;")
@@ -315,6 +430,9 @@ pbx.append("\t\t\t\tBuildIndependentTargetsInParallel = 1;")
 pbx.append("\t\t\t\tLastUpgradeCheck = 1600;")
 pbx.append("\t\t\t\tTargetAttributes = {")
 pbx.append(f"\t\t\t\t\t{target_id} = {{")
+pbx.append("\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;")
+pbx.append("\t\t\t\t\t};")
+pbx.append(f"\t\t\t\t\t{share_target_id} = {{")
 pbx.append("\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;")
 pbx.append("\t\t\t\t\t};")
 pbx.append("\t\t\t\t};")
@@ -333,41 +451,68 @@ pbx.append("\t\t\tprojectDirPath = \"\";")
 pbx.append("\t\t\tprojectRoot = \"\";")
 pbx.append("\t\t\ttargets = (")
 pbx.append(f"\t\t\t\t{target_id} /* SpendDrop */,")
+pbx.append(f"\t\t\t\t{share_target_id} /* SpendDropShare */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t};")
 pbx.append("/* End PBXProject section */")
 
-# PBXResourcesBuildPhase
+# PBXResourcesBuildPhase section
 pbx.append("\n/* Begin PBXResourcesBuildPhase section */")
 pbx.append(f"\t\t{resources_phase_id} /* Resources */ = {{")
 pbx.append("\t\t\tisa = PBXResourcesBuildPhase;")
 pbx.append("\t\t\tbuildActionMask = 2147483647;")
 pbx.append("\t\t\tfiles = (")
-for path, is_res in files:
-    if is_res and path in build_files:
-        bf_id = build_files[path]
-        pbx.append(f"\t\t\t\t{bf_id} /* {os.path.basename(path)} in Resources */,")
+pbx.append(f"\t\t\t\t{app_res_build_file_id} /* Assets.xcassets in Resources */,")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+pbx.append("\t\t};")
+
+pbx.append(f"\t\t{share_resources_phase_id} /* Resources */ = {{")
+pbx.append("\t\t\tisa = PBXResourcesBuildPhase;")
+pbx.append("\t\t\tbuildActionMask = 2147483647;")
+pbx.append("\t\t\tfiles = (")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
 pbx.append("\t\t};")
 pbx.append("/* End PBXResourcesBuildPhase section */")
 
-# PBXSourcesBuildPhase
+# PBXSourcesBuildPhase section
 pbx.append("\n/* Begin PBXSourcesBuildPhase section */")
+# App sources phase
 pbx.append(f"\t\t{sources_phase_id} /* Sources */ = {{")
 pbx.append("\t\t\tisa = PBXSourcesBuildPhase;")
 pbx.append("\t\t\tbuildActionMask = 2147483647;")
 pbx.append("\t\t\tfiles = (")
-for path, is_res in files:
-    if path.endswith(".swift") and path in build_files:
-        bf_id = build_files[path]
-        pbx.append(f"\t\t\t\t{bf_id} /* {os.path.basename(path)} in Sources */,")
+for path in app_source_paths:
+    bf_id = app_build_files[path]
+    pbx.append(f"\t\t\t\t{bf_id} /* {os.path.basename(path)} in Sources */,")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+pbx.append("\t\t};")
+
+# Share sources phase
+pbx.append(f"\t\t{share_sources_phase_id} /* Sources */ = {{")
+pbx.append("\t\t\tisa = PBXSourcesBuildPhase;")
+pbx.append("\t\t\tbuildActionMask = 2147483647;")
+pbx.append("\t\t\tfiles = (")
+for path in share_source_paths:
+    bf_id = share_build_files[path]
+    pbx.append(f"\t\t\t\t{bf_id} /* {os.path.basename(path)} in Sources */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
 pbx.append("\t\t};")
 pbx.append("/* End PBXSourcesBuildPhase section */")
 
-# XCBuildConfiguration
+# PBXTargetDependency section
+pbx.append("\n/* Begin PBXTargetDependency section */")
+pbx.append(f"\t\t{target_dependency_id} /* PBXTargetDependency */ = {{")
+pbx.append("\t\t\tisa = PBXTargetDependency;")
+pbx.append(f"\t\t\ttarget = {share_target_id} /* SpendDropShare */;")
+pbx.append(f"\t\t\ttargetProxy = {container_proxy_id} /* PBXContainerItemProxy */;")
+pbx.append("\t\t};")
+pbx.append("/* End PBXTargetDependency section */")
+
+# XCBuildConfiguration section
 pbx.append("\n/* Begin XCBuildConfiguration section */")
 # Project Debug
 pbx.append(f"\t\t{debug_config_proj_id} /* Debug */ = {{")
@@ -434,7 +579,7 @@ pbx.append("\t\t\t};")
 pbx.append("\t\t\tname = Release;")
 pbx.append("\t\t};")
 
-# Target Debug
+# Target App Debug
 pbx.append(f"\t\t{debug_config_target_id} /* Debug */ = {{")
 pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
@@ -452,7 +597,7 @@ pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
-pbx.append("\t\t\t\tMARKETING_VERSION = 1.1.0;")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
 pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -462,7 +607,7 @@ pbx.append("\t\t\t};")
 pbx.append("\t\t\tname = Debug;")
 pbx.append("\t\t};")
 
-# Target Release
+# Target App Release
 pbx.append(f"\t\t{release_config_target_id} /* Release */ = {{")
 pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
@@ -480,7 +625,7 @@ pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
-pbx.append("\t\t\t\tMARKETING_VERSION = 1.1.0;")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
 pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -489,10 +634,63 @@ pbx.append("\t\t\t\tTARGETED_DEVICE_FAMILY = \"1\";")
 pbx.append("\t\t\t};")
 pbx.append("\t\t\tname = Release;")
 pbx.append("\t\t};")
+
+# Target Share Debug
+pbx.append(f"\t\t{debug_config_share_id} /* Debug */ = {{")
+pbx.append("\t\t\tisa = XCBuildConfiguration;")
+pbx.append("\t\t\tbuildSettings = {")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
+pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
+pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
+pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
+pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
+pbx.append("\t\t\t\t\t\"$(inherited)\",")
+pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
+pbx.append("\t\t\t\t\t\"@executable_path/../../Frameworks\",")
+pbx.append("\t\t\t\t);")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop.ShareExtension;")
+pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
+pbx.append("\t\t\t\tSKIP_INSTALL = YES;")
+pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
+pbx.append("\t\t\t\tSWIFT_VERSION = 5.0;")
+pbx.append("\t\t\t\tTARGETED_DEVICE_FAMILY = \"1\";")
+pbx.append("\t\t\t};")
+pbx.append("\t\t\tname = Debug;")
+pbx.append("\t\t};")
+
+# Target Share Release
+pbx.append(f"\t\t{release_config_share_id} /* Release */ = {{")
+pbx.append("\t\t\tisa = XCBuildConfiguration;")
+pbx.append("\t\t\tbuildSettings = {")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
+pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
+pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
+pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
+pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
+pbx.append("\t\t\t\t\t\"$(inherited)\",")
+pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
+pbx.append("\t\t\t\t\t\"@executable_path/../../Frameworks\",")
+pbx.append("\t\t\t\t);")
+pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop.ShareExtension;")
+pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
+pbx.append("\t\t\t\tSKIP_INSTALL = YES;")
+pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
+pbx.append("\t\t\t\tSWIFT_VERSION = 5.0;")
+pbx.append("\t\t\t\tTARGETED_DEVICE_FAMILY = \"1\";")
+pbx.append("\t\t\t};")
+pbx.append("\t\t\tname = Release;")
+pbx.append("\t\t};")
 pbx.append("/* End XCBuildConfiguration section */")
 
-# XCConfigurationList
+# XCConfigurationList section
 pbx.append("\n/* Begin XCConfigurationList section */")
+# Project config list
 pbx.append(f"\t\t{config_list_proj_id} /* Build configuration list for PBXProject \"SpendDrop\" */ = {{")
 pbx.append("\t\t\tisa = XCConfigurationList;")
 pbx.append("\t\t\tbuildConfigurations = (")
@@ -503,11 +701,23 @@ pbx.append("\t\t\tdefaultConfigurationIsVisible = 0;")
 pbx.append("\t\t\tdefaultConfigurationName = Release;")
 pbx.append("\t\t};")
 
+# App target config list
 pbx.append(f"\t\t{config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpendDrop\" */ = {{")
 pbx.append("\t\t\tisa = XCConfigurationList;")
 pbx.append("\t\t\tbuildConfigurations = (")
 pbx.append(f"\t\t\t\t{debug_config_target_id} /* Debug */,")
 pbx.append(f"\t\t\t\t{release_config_target_id} /* Release */,")
+pbx.append("\t\t\t);")
+pbx.append("\t\t\tdefaultConfigurationIsVisible = 0;")
+pbx.append("\t\t\tdefaultConfigurationName = Release;")
+pbx.append("\t\t};")
+
+# Share target config list
+pbx.append(f"\t\t{config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpendDropShare\" */ = {{")
+pbx.append("\t\t\tisa = XCConfigurationList;")
+pbx.append("\t\t\tbuildConfigurations = (")
+pbx.append(f"\t\t\t\t{debug_config_share_id} /* Debug */,")
+pbx.append(f"\t\t\t\t{release_config_share_id} /* Release */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tdefaultConfigurationIsVisible = 0;")
 pbx.append("\t\t\tdefaultConfigurationName = Release;")
@@ -524,4 +734,4 @@ pbx_path = os.path.join(output_dir, "project.pbxproj")
 with open(pbx_path, "w", encoding="utf-8") as f:
     f.write("\n".join(pbx) + "\n")
 
-print(f"Generated {pbx_path} successfully for Milestone 2!")
+print(f"Generated {pbx_path} successfully with Share Extension target!")

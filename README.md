@@ -4,7 +4,7 @@
 > **Capture → Understand → Save**  
 > *"Whatever I spend, I can drop it into SpendDrop."*
 
-SpendDrop is an independent, native iOS personal expense tracking application built exclusively with Apple's modern Swift, SwiftUI, SwiftData, and Vision frameworks.
+SpendDrop is an independent, native iOS personal expense tracking application built exclusively with Apple's modern Swift, SwiftUI, SwiftData, Vision, and Share Extension frameworks.
 
 ---
 
@@ -48,7 +48,28 @@ SpendDrop is an independent, native iOS personal expense tracking application bu
   - Optional description field (never required).
   - Original screenshot preview and local disk storage (`ImageStorageService`).
 - **In-App Automated Self-Test Runner**:
-  - Run all 10 automated test cases directly on device in **Settings → Run OCR & Parser Self-Test** with live pass/fail verification.
+  - Run all automated test cases directly on device in **Settings → Run OCR & Parser Self-Test** with live pass/fail verification.
+
+---
+
+## 📲 Milestone 3 Features: iOS Share Extension (Completed)
+- **Native iOS Share Extension Target (`SpendDropShare`)**:
+  - Integrated into iOS Share Sheet for all image types (`public.image`: PNG, JPEG, HEIC, Screenshots).
+  - Minimal, ultra-fast workflow:
+    `Payment Done` → `Take Screenshot` → `Tap Share` → `Select SpendDrop` → `Auto-Parse` → `Confirm & Save` → `Done`.
+- **Shared App Group Storage**:
+  - Both the Main App and Share Extension read and write to the same local SwiftData database container at `group.com.spenddrop.shared`.
+  - Zero backend, zero cloud, 100% offline and local-first.
+- **Asynchronous Extension Lifecycle**:
+  - Safely extracts `UIImage` from `NSItemProvider` (supporting raw UIImage, file URLs, and Data).
+  - Runs Vision OCR on a background task while displaying clean "Reading transaction..." progress.
+  - Reuses the robust `OCRService`, `TransactionParser`, and `MerchantDetector` without duplicating code.
+- **Duplicate Protection**:
+  - Automatically queries the shared store via `DuplicateDetector` to identify matching recent expenses (by amount, merchant, date, or reference).
+  - Warns the user with a "Possible Duplicate Detected" alert with `[Add Anyway]` and `[Cancel]` options.
+- **Instant Main App Reflection**:
+  - Saved extension expenses automatically appear in Dashboard, Unified History, and Analytics.
+  - Foreground reactivation triggers instant totals recalculation.
 
 ---
 
@@ -66,6 +87,7 @@ SpendDrop
 │   │   └── ExpenseSourceType.swift
 │   ├── Data/
 │   │   ├── ExpenseDataContainer.swift
+│   │   ├── DuplicateDetector.swift
 │   │   └── SampleData.swift
 │   ├── OCR/
 │   │   ├── OCRService.swift
@@ -99,6 +121,11 @@ SpendDrop
 │   │       ├── SettingsView.swift
 │   │       └── Components/
 │   │           └── ParserSelfTestView.swift
+│   ├── ShareExtension/
+│   │   ├── ShareViewController.swift
+│   │   ├── ShareExtensionView.swift
+│   │   ├── Info.plist
+│   │   └── ShareExtension.entitlements
 │   ├── Utils/
 │   │   ├── CurrencyFormatter.swift
 │   │   └── HapticFeedback.swift
@@ -112,13 +139,19 @@ SpendDrop
 
 ## 📱 How to Run & Test on iPhone 17 Pro Max
 1. Open `SpendDrop.xcodeproj` in **Xcode 16+**.
-2. Under **Signing & Capabilities** for target `SpendDrop`, select your Personal Apple ID / Team.
-3. Select your connected **iPhone 17 Pro Max** or Simulator.
-4. Press **⌘ + R** (Run) to build and launch.
-5. **Testing OCR & Image Import**:
-   - Tap **"Drop Screenshot"** on the Dashboard or **"Scan Screenshot or Receipt"** in Add Expense.
-   - Pick a transaction screenshot or receipt from your Photos library.
-   - Watch the asynchronous Vision OCR extract the amount, merchant, and payment source into the Review Screen.
-   - Edit any field (or add an optional description) and tap **Save Expense**.
-6. **Automated Parser Verification**:
-   - Go to **Settings → Run OCR & Parser Self-Test** to verify all 10 unit scenarios (TNG, Maybank, CIMB, Apple Pay, multi-amount receipts, balance rejection, limit rejection, points rejection, and failed transactions).
+2. Select your Apple Development Team under **Signing & Capabilities** for both targets:
+   - `SpendDrop` (App)
+   - `SpendDropShare` (Share Extension)
+3. Connect your **iPhone 17 Pro Max** or Simulator.
+4. Select `SpendDrop` scheme and press **⌘ + R** to run.
+5. **Testing the Share Extension**:
+   - Take a screenshot of any payment (TNG, Maybank, CIMB, Apple Pay, receipt).
+   - Tap the screenshot thumbnail or open Photos.
+   - Tap **Share** (iOS Share Sheet).
+   - Tap **SpendDrop** in the app row.
+   - Watch the Share Extension parse the transaction and display the review sheet.
+   - Tap **Save Expense**.
+   - Open SpendDrop: the expense is already saved and reflected in Dashboard totals and History!
+6. **Testing Duplicate Protection**:
+   - Share the exact same screenshot again.
+   - SpendDrop will display the warning: *"Possible Duplicate Detected: Matching expense recorded..."* with options to `Add Anyway` or `Cancel`.
