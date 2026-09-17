@@ -69,6 +69,7 @@ share_source_paths = [
     "SpendDrop/Models/ExpenseSourceType.swift",
     "SpendDrop/Data/ExpenseDataContainer.swift",
     "SpendDrop/Data/DuplicateDetector.swift",
+    "SpendDrop/Data/SampleData.swift",
     "SpendDrop/OCR/OCRService.swift",
     "SpendDrop/OCR/ParsedTransaction.swift",
     "SpendDrop/OCR/MerchantDetector.swift",
@@ -431,9 +432,11 @@ pbx.append("\t\t\t\tLastUpgradeCheck = 1600;")
 pbx.append("\t\t\t\tTargetAttributes = {")
 pbx.append(f"\t\t\t\t\t{target_id} = {{")
 pbx.append("\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;")
+pbx.append("\t\t\t\t\t\tProvisioningStyle = Automatic;")
 pbx.append("\t\t\t\t\t};")
 pbx.append(f"\t\t\t\t\t{share_target_id} = {{")
 pbx.append("\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;")
+pbx.append("\t\t\t\t\t\tProvisioningStyle = Automatic;")
 pbx.append("\t\t\t\t\t};")
 pbx.append("\t\t\t\t};")
 pbx.append("\t\t\t};")

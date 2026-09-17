@@ -47,6 +47,7 @@
 		06A069F9D647AC9F5CA75C6B /* ExpenseSourceType.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */; };
 		73BFC60533C11C57BE3E27A0 /* ExpenseDataContainer.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */; };
 		5AC5B9E911723A15E475A262 /* DuplicateDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = C192E8BA6DFD56B51CB32A67 /* DuplicateDetector.swift */; };
+		CF5D482EA48C9B722350FCE9 /* SampleData.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 4527D81C4D2FA9A849BBCE99 /* SampleData.swift */; };
 		D835E77DCBB5C6628A1A16FE /* OCRService.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 2CF751DD42F2ACBC08758673 /* OCRService.swift */; };
 		D316D8CAA3BBA50C4BD62752 /* ParsedTransaction.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 547282A88C0A93D5FA41EA0E /* ParsedTransaction.swift */; };
 		3A454E93285C871AE0BA1918 /* MerchantDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 233C6CA4C0D1974B5DF935D6 /* MerchantDetector.swift */; };
@@ -409,9 +410,11 @@
 				TargetAttributes = {
 					EDB313AFA914D38BBC912B6B = {
 						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
 					};
 					5F5AF86C079BFD0479C079F0 = {
 						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -503,6 +506,7 @@
 				06A069F9D647AC9F5CA75C6B /* ExpenseSourceType.swift in Sources */,
 				73BFC60533C11C57BE3E27A0 /* ExpenseDataContainer.swift in Sources */,
 				5AC5B9E911723A15E475A262 /* DuplicateDetector.swift in Sources */,
+				CF5D482EA48C9B722350FCE9 /* SampleData.swift in Sources */,
 				D835E77DCBB5C6628A1A16FE /* OCRService.swift in Sources */,
 				D316D8CAA3BBA50C4BD62752 /* ParsedTransaction.swift in Sources */,
 				3A454E93285C871AE0BA1918 /* MerchantDetector.swift in Sources */,
