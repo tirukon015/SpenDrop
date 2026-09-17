@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 public struct TestCaseResult: Identifiable {
     public let id = UUID()
