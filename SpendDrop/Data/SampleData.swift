@@ -3,6 +3,18 @@ import SwiftData
 
 public struct SampleData {
     public static func seed(into context: ModelContext) {
+        // Idempotency: Check if sample records already exist to prevent duplicate dummy records
+        var descriptor = FetchDescriptor<Expense>(
+            predicate: #Predicate<Expense> { expense in
+                expense.isSampleData == true
+            }
+        )
+        descriptor.fetchLimit = 1
+        if let existingCount = try? context.fetchCount(descriptor), existingCount > 0 {
+            print("[SpendDrop][SampleData] Sample data already exists, skipping idempotent seed.")
+            return
+        }
+
         let calendar = Calendar.current
         let now = Date()
 
@@ -54,7 +66,8 @@ public struct SampleData {
                 date: targetDate,
                 notes: item.notes,
                 transactionReference: item.reference,
-                sourceType: item.sourceType
+                sourceType: item.sourceType,
+                isSampleData: true
             )
             context.insert(expense)
         }

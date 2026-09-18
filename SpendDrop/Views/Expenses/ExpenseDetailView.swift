@@ -47,7 +47,28 @@ public struct ExpenseDetailView: View {
                         detailRow(title: "Category", value: expense.category.rawValue, icon: expense.category.icon, iconColor: expense.category.color)
                         Divider().padding(.leading, 48)
 
-                        detailRow(title: "Payment Method", value: expense.paymentSource.rawValue, icon: expense.paymentSource.icon, iconColor: expense.paymentSource.brandColor)
+                        HStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                ProviderLogoView(source: expense.paymentSource, size: 20)
+                                if expense.paymentSource == .applePay, let bank = expense.underlyingBank, bank != .unknown {
+                                    ProviderLogoView(source: bank, size: 20)
+                                }
+                            }
+                            .frame(width: 28, alignment: .leading)
+
+                            Text("Payment Method")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Text(expense.displayPaymentTitle)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
                         Divider().padding(.leading, 48)
 
                         detailRow(title: "Date", value: expense.date.formatted(date: .long, time: .omitted), icon: "calendar", iconColor: .blue)
@@ -88,7 +109,7 @@ public struct ExpenseDetailView: View {
 
                     // ORIGINAL IMAGE (Section 19: when practical)
                     if let imagePath = expense.imageRelativePath,
-                       let uiImage = UIImage(contentsOfFile: imagePath) {
+                       let uiImage = ImageStorageService.shared.loadImage(relativePath: imagePath) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("ORIGINAL RECEIPT / SCREENSHOT")
                                 .font(.caption)

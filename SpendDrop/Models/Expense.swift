@@ -9,6 +9,8 @@ public final class Expense {
     public var merchant: String
     public var categoryRaw: String
     public var paymentSourceRaw: String
+    public var underlyingBankRaw: String?
+    public var paymentMethodRaw: String?
     public var date: Date
     public var notes: String?
     public var transactionReference: String?
@@ -16,6 +18,7 @@ public final class Expense {
     public var sourceTypeRaw: String
     public var ocrText: String?
     public var confidence: Double?
+    public var isSampleData: Bool
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -26,6 +29,8 @@ public final class Expense {
         merchant: String = "Unknown",
         category: ExpenseCategory = .other,
         paymentSource: PaymentSource = .cash,
+        underlyingBank: PaymentSource? = nil,
+        paymentMethod: String? = nil,
         date: Date = Date(),
         notes: String? = nil,
         transactionReference: String? = nil,
@@ -33,6 +38,7 @@ public final class Expense {
         sourceType: ExpenseSourceType = .manual,
         ocrText: String? = nil,
         confidence: Double? = nil,
+        isSampleData: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -42,6 +48,8 @@ public final class Expense {
         self.merchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : merchant
         self.categoryRaw = category.rawValue
         self.paymentSourceRaw = paymentSource.rawValue
+        self.underlyingBankRaw = underlyingBank?.rawValue
+        self.paymentMethodRaw = paymentMethod ?? paymentSource.defaultPaymentMethod
         self.date = date
         self.notes = notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : notes
         self.transactionReference = transactionReference
@@ -49,6 +57,7 @@ public final class Expense {
         self.sourceTypeRaw = sourceType.rawValue
         self.ocrText = ocrText
         self.confidence = confidence
+        self.isSampleData = isSampleData
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -61,6 +70,28 @@ public final class Expense {
     public var paymentSource: PaymentSource {
         get { PaymentSource(rawValue: paymentSourceRaw) ?? .unknown }
         set { paymentSourceRaw = newValue.rawValue }
+    }
+
+    public var underlyingBank: PaymentSource? {
+        get {
+            guard let raw = underlyingBankRaw else { return nil }
+            return PaymentSource(rawValue: raw)
+        }
+        set {
+            underlyingBankRaw = newValue?.rawValue
+        }
+    }
+
+    public var paymentMethod: String {
+        get { paymentMethodRaw ?? paymentSource.defaultPaymentMethod }
+        set { paymentMethodRaw = newValue }
+    }
+
+    public var displayPaymentTitle: String {
+        if paymentSource == .applePay, let bank = underlyingBank, bank != .unknown {
+            return "Apple Pay • \(bank.rawValue)"
+        }
+        return paymentSource.rawValue
     }
 
     public var sourceType: ExpenseSourceType {

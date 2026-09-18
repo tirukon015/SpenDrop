@@ -54,7 +54,7 @@ public struct ExpensesView: View {
         let calendar = Calendar.current
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .omitted
+        dateFormatter.timeStyle = .none
 
         let grouped = Dictionary(grouping: filteredExpenses) { (expense: Expense) -> String in
             if calendar.isDateInToday(expense.date) {
@@ -66,8 +66,8 @@ public struct ExpensesView: View {
             }
         }
 
-        // Sort groups by the latest date in each group
-        return grouped.map { (dateString: $0.key, expenses: $0.value) }
+        // Sort groups by the latest date in each group, and sort expenses inside each group newest first
+        return grouped.map { (dateString: $0.key, expenses: $0.value.sorted(by: { $0.date > $1.date })) }
             .sorted { (group1, group2) -> Bool in
                 guard let d1 = group1.expenses.first?.date, let d2 = group2.expenses.first?.date else { return false }
                 return d1 > d2
@@ -139,9 +139,11 @@ public struct ExpensesView: View {
             }
             .sheet(item: $selectedExpense) { expense in
                 ExpenseDetailView(expense: expense)
+                    .environment(\.modelContext, modelContext)
             }
             .sheet(isPresented: $showingAddExpense) {
                 AddExpenseView()
+                    .environment(\.modelContext, modelContext)
             }
         }
     }

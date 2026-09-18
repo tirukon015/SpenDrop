@@ -25,10 +25,13 @@ all_files = [
     # OCR (Milestone 2)
     ("SpendDrop/OCR/OCRService.swift", False),
     ("SpendDrop/OCR/ParsedTransaction.swift", False),
+    ("SpendDrop/OCR/MonetaryCandidate.swift", False),
+    ("SpendDrop/OCR/PaymentProviderDetector.swift", False),
     ("SpendDrop/OCR/MerchantDetector.swift", False),
     ("SpendDrop/OCR/CategoryDetector.swift", False),
     ("SpendDrop/OCR/TransactionParser.swift", False),
     ("SpendDrop/OCR/ImageStorageService.swift", False),
+    ("SpendDrop/OCR/ImagePipelineDiagnostics.swift", False),
     ("SpendDrop/OCR/TransactionParserTests.swift", False),
     # Views
     ("SpendDrop/Views/MainTabView.swift", False),
@@ -39,6 +42,7 @@ all_files = [
     ("SpendDrop/Views/Expenses/ExpenseDetailView.swift", False),
     ("SpendDrop/Views/Expenses/EditExpenseView.swift", False),
     ("SpendDrop/Views/Expenses/Components/ExpenseRowView.swift", False),
+    ("SpendDrop/Views/Expenses/Components/PaymentLogoView.swift", False),
     ("SpendDrop/Views/Expenses/Components/FilterBarView.swift", False),
     ("SpendDrop/Views/AddExpense/AddExpenseView.swift", False),
     ("SpendDrop/Views/Review/ExpenseReviewView.swift", False),
@@ -54,10 +58,16 @@ all_files = [
     ("SpendDrop/Resources/Assets.xcassets", True),
     ("SpendDrop/Resources/Info.plist", False),
     ("SpendDrop/Resources/SpendDrop.entitlements", False),
+    ("SpendDrop/Resources/DiagnosticSamples/sample_screenshot.png", True),
+    ("SpendDrop/Resources/DiagnosticSamples/sample_photo.jpg", True),
+    ("SpendDrop/Resources/DiagnosticSamples/sample_camera.heic", True),
 ]
 
 # Files compiled by main app target
 app_source_paths = [path for path, is_res in all_files if path.endswith(".swift") and not path.startswith("SpendDrop/ShareExtension/")]
+
+# Resources copied by main app target
+app_res_paths = [path for path, is_res in all_files if is_res]
 
 # Files compiled by Share Extension target
 share_source_paths = [
@@ -72,6 +82,8 @@ share_source_paths = [
     "SpendDrop/Data/SampleData.swift",
     "SpendDrop/OCR/OCRService.swift",
     "SpendDrop/OCR/ParsedTransaction.swift",
+    "SpendDrop/OCR/MonetaryCandidate.swift",
+    "SpendDrop/OCR/PaymentProviderDetector.swift",
     "SpendDrop/OCR/MerchantDetector.swift",
     "SpendDrop/OCR/CategoryDetector.swift",
     "SpendDrop/OCR/TransactionParser.swift",
@@ -125,7 +137,9 @@ for path, _ in all_files:
 app_build_files = {}
 for path in app_source_paths:
     app_build_files[path] = gen_id(f"BF_APP_{path}")
-app_res_build_file_id = gen_id("BF_APP_Assets.xcassets")
+app_res_build_files = {}
+for path in app_res_paths:
+    app_res_build_files[path] = gen_id(f"BF_APP_RES_{path}")
 
 # PBXBuildFile IDs for Share target
 share_build_files = {}
@@ -150,7 +164,10 @@ for path, bf_id in app_build_files.items():
     pbx.append(f"\t\t{bf_id} /* {filename} in App Sources */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
 
 # App resources
-pbx.append(f"\t\t{app_res_build_file_id} /* Assets.xcassets in App Resources */ = {{isa = PBXBuildFile; fileRef = {file_refs['SpendDrop/Resources/Assets.xcassets']} /* Assets.xcassets */; }};")
+for path, bf_id in app_res_build_files.items():
+    fref_id = file_refs[path]
+    filename = os.path.basename(path)
+    pbx.append(f"\t\t{bf_id} /* {filename} in App Resources */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
 
 # Share extension sources
 for path, bf_id in share_build_files.items():
@@ -203,6 +220,12 @@ for path, fref_id in file_refs.items():
         ft = "text.plist.xml"
     elif path.endswith(".entitlements"):
         ft = "text.plist.entitlements"
+    elif path.endswith(".png"):
+        ft = "image.png"
+    elif path.endswith(".jpg") or path.endswith(".jpeg"):
+        ft = "image.jpeg"
+    elif path.endswith(".heic"):
+        ft = "image.heic"
     else:
         ft = "text"
     pbx.append(f"\t\t{fref_id} /* {filename} */ = {{isa = PBXFileReference; lastKnownFileType = {ft}; path = \"{filename}\"; sourceTree = \"<group>\"; }};")
@@ -240,6 +263,7 @@ add_group(dash_comp_id, "Components", "Components", [
 exp_comp_id = gen_id("GROUP_Views_Expenses_Components")
 add_group(exp_comp_id, "Components", "Components", [
     file_refs["SpendDrop/Views/Expenses/Components/ExpenseRowView.swift"],
+    file_refs["SpendDrop/Views/Expenses/Components/PaymentLogoView.swift"],
     file_refs["SpendDrop/Views/Expenses/Components/FilterBarView.swift"]
 ])
 
@@ -298,10 +322,13 @@ ocr_group_id = gen_id("GROUP_OCR")
 add_group(ocr_group_id, "OCR", "OCR", [
     file_refs["SpendDrop/OCR/OCRService.swift"],
     file_refs["SpendDrop/OCR/ParsedTransaction.swift"],
+    file_refs["SpendDrop/OCR/MonetaryCandidate.swift"],
+    file_refs["SpendDrop/OCR/PaymentProviderDetector.swift"],
     file_refs["SpendDrop/OCR/MerchantDetector.swift"],
     file_refs["SpendDrop/OCR/CategoryDetector.swift"],
     file_refs["SpendDrop/OCR/TransactionParser.swift"],
     file_refs["SpendDrop/OCR/ImageStorageService.swift"],
+    file_refs["SpendDrop/OCR/ImagePipelineDiagnostics.swift"],
     file_refs["SpendDrop/OCR/TransactionParserTests.swift"]
 ])
 
@@ -331,11 +358,19 @@ add_group(utils_group_id, "Utils", "Utils", [
     file_refs["SpendDrop/Utils/HapticFeedback.swift"]
 ])
 
+diag_samples_group_id = gen_id("GROUP_DiagnosticSamples")
+add_group(diag_samples_group_id, "DiagnosticSamples", "DiagnosticSamples", [
+    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_screenshot.png"],
+    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_photo.jpg"],
+    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_camera.heic"]
+])
+
 res_group_id = gen_id("GROUP_Resources")
 add_group(res_group_id, "Resources", "Resources", [
     file_refs["SpendDrop/Resources/Assets.xcassets"],
     file_refs["SpendDrop/Resources/Info.plist"],
-    file_refs["SpendDrop/Resources/SpendDrop.entitlements"]
+    file_refs["SpendDrop/Resources/SpendDrop.entitlements"],
+    diag_samples_group_id
 ])
 
 share_ext_group_id = gen_id("GROUP_ShareExtension")
@@ -465,7 +500,9 @@ pbx.append(f"\t\t{resources_phase_id} /* Resources */ = {{")
 pbx.append("\t\t\tisa = PBXResourcesBuildPhase;")
 pbx.append("\t\t\tbuildActionMask = 2147483647;")
 pbx.append("\t\t\tfiles = (")
-pbx.append(f"\t\t\t\t{app_res_build_file_id} /* Assets.xcassets in Resources */,")
+for path, bf_id in app_res_build_files.items():
+    filename = os.path.basename(path)
+    pbx.append(f"\t\t\t\t{bf_id} /* {filename} in Resources */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
 pbx.append("\t\t};")
@@ -528,6 +565,7 @@ pbx.append("\t\t\t\tCLANG_ENABLE_MODULES = YES;")
 pbx.append("\t\t\t\tCLANG_ENABLE_OBJC_ARC = YES;")
 pbx.append("\t\t\t\tCOPY_PHASE_STRIP = NO;")
 pbx.append("\t\t\t\tDEBUG_INFORMATION_FORMAT = dwarf;")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_STRICT_OBJC_MSGSEND = YES;")
 pbx.append("\t\t\t\tENABLE_TESTABILITY = YES;")
 pbx.append("\t\t\t\tGCC_DYNAMIC_NO_PIC = NO;")
@@ -564,6 +602,7 @@ pbx.append("\t\t\t\tCLANG_ENABLE_MODULES = YES;")
 pbx.append("\t\t\t\tCLANG_ENABLE_OBJC_ARC = YES;")
 pbx.append("\t\t\t\tCOPY_PHASE_STRIP = NO;")
 pbx.append("\t\t\t\tDEBUG_INFORMATION_FORMAT = \"dwarf-with-dsym\";")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_NS_ASSERTIONS = NO;")
 pbx.append("\t\t\t\tENABLE_STRICT_OBJC_MSGSEND = YES;")
 pbx.append("\t\t\t\tGCC_NO_COMMON_BLOCKS = YES;")
@@ -592,6 +631,7 @@ pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/Resources/SpendDrop.ent
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_ASSET_PATHS = \"\";")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_PREVIEWS = YES;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
 pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/Resources/Info.plist\";")
@@ -620,6 +660,7 @@ pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/Resources/SpendDrop.ent
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_ASSET_PATHS = \"\";")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_PREVIEWS = YES;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
 pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/Resources/Info.plist\";")
@@ -645,6 +686,7 @@ pbx.append("\t\t\tbuildSettings = {")
 pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
 pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
@@ -671,6 +713,7 @@ pbx.append("\t\t\tbuildSettings = {")
 pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
+pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
 pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")

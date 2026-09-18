@@ -39,4 +39,19 @@ public final class ExpenseDataContainer {
             fatalError("Could not create preview container: \(error)")
         }
     }()
+
+    public static func seedInitialDataIfNeeded() {
+        let defaults = UserDefaults.standard
+        let seededKey = "has_seeded_initial_sample_data_v1"
+        guard !defaults.bool(forKey: seededKey) else { return }
+
+        let context = ExpenseDataContainer.shared.mainContext
+        var descriptor = FetchDescriptor<Expense>()
+        descriptor.fetchLimit = 1
+        let count = (try? context.fetchCount(descriptor)) ?? 0
+        if count == 0 {
+            SampleData.seed(into: context)
+        }
+        defaults.set(true, forKey: seededKey)
+    }
 }

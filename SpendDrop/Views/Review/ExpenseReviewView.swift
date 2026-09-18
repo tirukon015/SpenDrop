@@ -30,6 +30,7 @@ public struct ExpenseReviewView: View {
         _selectedCategory = State(initialValue: parsed.category ?? .other)
         _selectedPaymentSource = State(initialValue: parsed.paymentSource ?? .unknown)
         _date = State(initialValue: parsed.date ?? Date())
+        _notes = State(initialValue: parsed.suggestedRemark ?? "")
         _transactionReference = State(initialValue: parsed.transactionReference)
     }
 
@@ -88,7 +89,7 @@ public struct ExpenseReviewView: View {
                     }
 
                     // AMOUNT HERO DISPLAY
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text(initialParsed.currency)
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -108,8 +109,60 @@ public struct ExpenseReviewView: View {
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
+
+                        // Alternative amount candidates quick selector (Issue 4, 5)
+                        let altCandidates = initialParsed.amountCandidates.filter {
+                            !$0.semanticType.isExcludedFromTransactionAmount
+                        }
+                        if altCandidates.count > 1 {
+                            VStack(spacing: 6) {
+                                Text("POSSIBLE AMOUNTS")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.secondary)
+                                    .tracking(0.8)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(altCandidates) { cand in
+                                            let candText = String(format: "%.2f", cand.amount)
+                                            Button {
+                                                HapticFeedback.selection()
+                                                amountText = candText
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Text("\(cand.currency)\(candText)")
+                                                        .font(.caption)
+                                                        .fontWeight(.semibold)
+                                                    if cand.semanticType != .unknown {
+                                                        Text("(\(cand.semanticType.displayName))")
+                                                            .font(.caption2)
+                                                            .opacity(0.8)
+                                                    }
+                                                }
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(
+                                                    amountText == candText
+                                                        ? Color.accentColor
+                                                        : Color(uiColor: .tertiarySystemFill)
+                                                )
+                                                .foregroundStyle(
+                                                    amountText == candText
+                                                        ? Color.white
+                                                        : Color.primary
+                                                )
+                                                .clipShape(Capsule())
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                }
+                            }
+                            .padding(.bottom, 6)
+                        }
                     }
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 14)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
@@ -185,9 +238,13 @@ public struct ExpenseReviewView: View {
 
                         // Payment source field
                         HStack(spacing: 12) {
-                            Image(systemName: selectedPaymentSource.icon)
-                                .foregroundStyle(selectedPaymentSource.brandColor)
-                                .frame(width: 24)
+                            HStack(spacing: 4) {
+                                ProviderLogoView(source: selectedPaymentSource, size: 22)
+                                if selectedPaymentSource == .applePay, let bank = initialParsed.underlyingBank, bank != .unknown {
+                                    ProviderLogoView(source: bank, size: 22)
+                                }
+                            }
+                            .frame(minWidth: 24)
 
                             Text("Payment")
                                 .font(.subheadline)
@@ -206,10 +263,17 @@ public struct ExpenseReviewView: View {
                                 }
                             } label: {
                                 HStack(spacing: 6) {
-                                    Text(selectedPaymentSource.rawValue)
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.primary)
+                                    if selectedPaymentSource == .applePay, let bank = initialParsed.underlyingBank, bank != .unknown {
+                                        Text("Apple Pay • \(bank.rawValue)")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(.primary)
+                                    } else {
+                                        Text(selectedPaymentSource.rawValue)
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(.primary)
+                                    }
                                     Image(systemName: "chevron.up.chevron.down")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -442,6 +506,8 @@ public struct ExpenseReviewView: View {
             merchant: finalMerchant,
             category: selectedCategory,
             paymentSource: selectedPaymentSource,
+            underlyingBank: selectedPaymentSource == .applePay ? initialParsed.underlyingBank : (selectedPaymentSource == .cimb || selectedPaymentSource == .maybank || selectedPaymentSource == .rhb ? selectedPaymentSource : nil),
+            paymentMethod: selectedPaymentSource.defaultPaymentMethod,
             date: date,
             notes: notes,
             transactionReference: transactionReference,

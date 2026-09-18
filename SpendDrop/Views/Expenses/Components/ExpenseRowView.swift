@@ -31,9 +31,11 @@ public struct ExpenseRowView: View {
                 HStack(spacing: 6) {
                     // Payment badge
                     HStack(spacing: 4) {
-                        Image(systemName: expense.paymentSource.icon)
-                            .font(.system(size: 9))
-                        Text(expense.paymentSource.shortName)
+                        ProviderLogoView(source: expense.paymentSource, size: 12)
+                        if expense.paymentSource == .applePay, let bank = expense.underlyingBank, bank != .unknown {
+                            ProviderLogoView(source: bank, size: 12)
+                        }
+                        Text(expense.paymentSource == .applePay && expense.underlyingBank != nil ? "Apple Pay • \(expense.underlyingBank!.shortName)" : expense.paymentSource.shortName)
                             .font(.caption2)
                             .fontWeight(.medium)
                     }
