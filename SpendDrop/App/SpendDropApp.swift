@@ -19,6 +19,7 @@ struct SpendDropApp: App {
 
         // Idempotent initial seed of dummy data on first launch
         ExpenseDataContainer.seedInitialDataIfNeeded()
+        ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
     }
 
     var body: some Scene {

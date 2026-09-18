@@ -1,7 +1,13 @@
 import SwiftUI
 
 public struct MainTabView: View {
-    @State private var selectedTab = 0
+    @State private var selectedTab: Int = {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--tab"), idx + 1 < args.count, let t = Int(args[idx + 1]) {
+            return t
+        }
+        return 0
+    }()
     @State private var showingAddExpenseSheet = false
     @AppStorage("user_appearance") private var selectedAppearance = "system"
 
@@ -29,17 +35,23 @@ public struct MainTabView: View {
                 }
                 .tag(1)
 
+            PayBookView()
+                .tabItem {
+                    Label("PayBook", systemImage: "person.crop.rectangle.stack.fill")
+                }
+                .tag(2)
+
             AnalyticsView()
                 .tabItem {
                     Label("Analytics", systemImage: "chart.bar.xaxis")
                 }
-                .tag(2)
+                .tag(3)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
-                .tag(3)
+                .tag(4)
         }
         .preferredColorScheme(preferredColorScheme)
         .tint(.blue)

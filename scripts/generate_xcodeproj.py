@@ -15,6 +15,7 @@ all_files = [
     ("SpendDrop/Models/ExpenseCategory.swift", False),
     ("SpendDrop/Models/PaymentSource.swift", False),
     ("SpendDrop/Models/ExpenseSourceType.swift", False),
+    ("SpendDrop/Models/PayBookContact.swift", False),
     # Data
     ("SpendDrop/Data/ExpenseDataContainer.swift", False),
     ("SpendDrop/Data/DuplicateDetector.swift", False),
@@ -44,6 +45,10 @@ all_files = [
     ("SpendDrop/Views/Expenses/Components/ExpenseRowView.swift", False),
     ("SpendDrop/Views/Expenses/Components/PaymentLogoView.swift", False),
     ("SpendDrop/Views/Expenses/Components/FilterBarView.swift", False),
+    ("SpendDrop/Views/PayBook/PayBookView.swift", False),
+    ("SpendDrop/Views/PayBook/PayBookDetailView.swift", False),
+    ("SpendDrop/Views/PayBook/AddPayBookContactView.swift", False),
+    ("SpendDrop/Views/PayBook/EditPayBookContactView.swift", False),
     ("SpendDrop/Views/AddExpense/AddExpenseView.swift", False),
     ("SpendDrop/Views/Review/ExpenseReviewView.swift", False),
     ("SpendDrop/Views/Analytics/AnalyticsView.swift", False),
@@ -77,6 +82,7 @@ share_source_paths = [
     "SpendDrop/Models/ExpenseCategory.swift",
     "SpendDrop/Models/PaymentSource.swift",
     "SpendDrop/Models/ExpenseSourceType.swift",
+    "SpendDrop/Models/PayBookContact.swift",
     "SpendDrop/Data/ExpenseDataContainer.swift",
     "SpendDrop/Data/DuplicateDetector.swift",
     "SpendDrop/Data/SampleData.swift",
@@ -307,10 +313,19 @@ add_group(settings_group_id, "Settings", "Settings", [
     file_refs["SpendDrop/Views/Settings/SettingsView.swift"]
 ])
 
+paybook_group_id = gen_id("GROUP_Views_PayBook")
+add_group(paybook_group_id, "PayBook", "PayBook", [
+    file_refs["SpendDrop/Views/PayBook/PayBookView.swift"],
+    file_refs["SpendDrop/Views/PayBook/PayBookDetailView.swift"],
+    file_refs["SpendDrop/Views/PayBook/AddPayBookContactView.swift"],
+    file_refs["SpendDrop/Views/PayBook/EditPayBookContactView.swift"]
+])
+
 views_group_id = gen_id("GROUP_Views")
 add_group(views_group_id, "Views", "Views", [
     dash_group_id,
     exp_group_id,
+    paybook_group_id,
     addexp_group_id,
     review_group_id,
     analytics_group_id,
@@ -342,7 +357,8 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpendDrop/Models/Expense.swift"],
     file_refs["SpendDrop/Models/ExpenseCategory.swift"],
     file_refs["SpendDrop/Models/PaymentSource.swift"],
-    file_refs["SpendDrop/Models/ExpenseSourceType.swift"]
+    file_refs["SpendDrop/Models/ExpenseSourceType.swift"],
+    file_refs["SpendDrop/Models/PayBookContact.swift"]
 ])
 
 data_group_id = gen_id("GROUP_Data")

@@ -12,6 +12,7 @@
 		6C42E0F36B29A5D9852B1725 /* ExpenseCategory.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 3EF4246226F4F0BB2752F189 /* ExpenseCategory.swift */; };
 		5C3748208FEF6E557E21811F /* PaymentSource.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 97CE55DD36ED7364B5B6FE25 /* PaymentSource.swift */; };
 		82AD1E8452503FF49C400A59 /* ExpenseSourceType.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */; };
+		10CC5BB0460A464469361E99 /* PayBookContact.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 953B784AF7D5D005C3870F6B /* PayBookContact.swift */; };
 		46DBC0F397CC9FDA1E67DB8C /* ExpenseDataContainer.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */; };
 		CF76E2BA6E09C2014E6BB835 /* DuplicateDetector.swift in App Sources */ = {isa = PBXBuildFile; fileRef = C192E8BA6DFD56B51CB32A67 /* DuplicateDetector.swift */; };
 		8E83F3D92D59FF9E4CDBA232 /* SampleData.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 4527D81C4D2FA9A849BBCE99 /* SampleData.swift */; };
@@ -37,6 +38,10 @@
 		F8649A86B7B2C027D5E6F929 /* ExpenseRowView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = D5ACB239C14653CEDDB3BD0D /* ExpenseRowView.swift */; };
 		E8DA47D3614B026A10AC3D29 /* PaymentLogoView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = F8376B663C01D1BE012CC264 /* PaymentLogoView.swift */; };
 		7D69FA05BF345407EC3DAEA1 /* FilterBarView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 2DF49081B7285C1C1E3D40B2 /* FilterBarView.swift */; };
+		2507BAD03781692C063DE8AE /* PayBookView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 62F37B080B53950BD324A1D2 /* PayBookView.swift */; };
+		8961F696DFAB7D1FEC2B4C83 /* PayBookDetailView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = C91C0D9F17E6AE93E63BD8AB /* PayBookDetailView.swift */; };
+		8188B9686F2B2B1D1182067B /* AddPayBookContactView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 73FD9F232B87A50295006510 /* AddPayBookContactView.swift */; };
+		976ADF077AAD0ADDE2A91397 /* EditPayBookContactView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = CCF18B8AED06F15DA3BAAC92 /* EditPayBookContactView.swift */; };
 		DB6484227A2BE154B6DDDB31 /* AddExpenseView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = D0500444BD8E36ACA561A7E6 /* AddExpenseView.swift */; };
 		0F0F6E8CFADB99C31789D25D /* ExpenseReviewView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 26BB5F309361AA9377E73D89 /* ExpenseReviewView.swift */; };
 		8774554499BD29753B0C4C99 /* AnalyticsView.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 279B4F064A77A5CDC78840CD /* AnalyticsView.swift */; };
@@ -52,6 +57,7 @@
 		E9C92309851EA4225CC3C3D8 /* ExpenseCategory.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 3EF4246226F4F0BB2752F189 /* ExpenseCategory.swift */; };
 		371FAD201DDCCE7ED8C94F16 /* PaymentSource.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 97CE55DD36ED7364B5B6FE25 /* PaymentSource.swift */; };
 		06A069F9D647AC9F5CA75C6B /* ExpenseSourceType.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */; };
+		8890ADE7D179F3A69D74C830 /* PayBookContact.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 953B784AF7D5D005C3870F6B /* PayBookContact.swift */; };
 		73BFC60533C11C57BE3E27A0 /* ExpenseDataContainer.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */; };
 		5AC5B9E911723A15E475A262 /* DuplicateDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = C192E8BA6DFD56B51CB32A67 /* DuplicateDetector.swift */; };
 		CF5D482EA48C9B722350FCE9 /* SampleData.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 4527D81C4D2FA9A849BBCE99 /* SampleData.swift */; };
@@ -100,6 +106,7 @@
 		3EF4246226F4F0BB2752F189 /* ExpenseCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseCategory.swift"; sourceTree = "<group>"; };
 		97CE55DD36ED7364B5B6FE25 /* PaymentSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PaymentSource.swift"; sourceTree = "<group>"; };
 		97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseSourceType.swift"; sourceTree = "<group>"; };
+		953B784AF7D5D005C3870F6B /* PayBookContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PayBookContact.swift"; sourceTree = "<group>"; };
 		89F4C17BD660E6B831C0741B /* ExpenseDataContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseDataContainer.swift"; sourceTree = "<group>"; };
 		C192E8BA6DFD56B51CB32A67 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuplicateDetector.swift"; sourceTree = "<group>"; };
 		4527D81C4D2FA9A849BBCE99 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SampleData.swift"; sourceTree = "<group>"; };
@@ -125,6 +132,10 @@
 		D5ACB239C14653CEDDB3BD0D /* ExpenseRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseRowView.swift"; sourceTree = "<group>"; };
 		F8376B663C01D1BE012CC264 /* PaymentLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PaymentLogoView.swift"; sourceTree = "<group>"; };
 		2DF49081B7285C1C1E3D40B2 /* FilterBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FilterBarView.swift"; sourceTree = "<group>"; };
+		62F37B080B53950BD324A1D2 /* PayBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PayBookView.swift"; sourceTree = "<group>"; };
+		C91C0D9F17E6AE93E63BD8AB /* PayBookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PayBookDetailView.swift"; sourceTree = "<group>"; };
+		73FD9F232B87A50295006510 /* AddPayBookContactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AddPayBookContactView.swift"; sourceTree = "<group>"; };
+		CCF18B8AED06F15DA3BAAC92 /* EditPayBookContactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditPayBookContactView.swift"; sourceTree = "<group>"; };
 		D0500444BD8E36ACA561A7E6 /* AddExpenseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AddExpenseView.swift"; sourceTree = "<group>"; };
 		26BB5F309361AA9377E73D89 /* ExpenseReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseReviewView.swift"; sourceTree = "<group>"; };
 		279B4F064A77A5CDC78840CD /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AnalyticsView.swift"; sourceTree = "<group>"; };
@@ -249,11 +260,24 @@
 			path = "Settings";
 			sourceTree = "<group>";
 		};
+		999C7906739C70131C9702D3 = {
+			isa = PBXGroup;
+			children = (
+				62F37B080B53950BD324A1D2,
+				C91C0D9F17E6AE93E63BD8AB,
+				73FD9F232B87A50295006510,
+				CCF18B8AED06F15DA3BAAC92,
+			);
+			name = "PayBook";
+			path = "PayBook";
+			sourceTree = "<group>";
+		};
 		F3E5B61ACB3D942D0C643D2C = {
 			isa = PBXGroup;
 			children = (
 				0A0593D92C769872C2602B42,
 				7EBF011EC69EC959BA349BE9,
+				999C7906739C70131C9702D3,
 				2A41649C6FC8F43130618C1F,
 				F91E78D2B03AD4E33A0C942D,
 				70E699EAFD9D666951820495,
@@ -298,6 +322,7 @@
 				3EF4246226F4F0BB2752F189,
 				97CE55DD36ED7364B5B6FE25,
 				97FB3251BCFB2155C4B11241,
+				953B784AF7D5D005C3870F6B,
 			);
 			name = "Models";
 			path = "Models";
@@ -500,6 +525,7 @@
 				6C42E0F36B29A5D9852B1725 /* ExpenseCategory.swift in Sources */,
 				5C3748208FEF6E557E21811F /* PaymentSource.swift in Sources */,
 				82AD1E8452503FF49C400A59 /* ExpenseSourceType.swift in Sources */,
+				10CC5BB0460A464469361E99 /* PayBookContact.swift in Sources */,
 				46DBC0F397CC9FDA1E67DB8C /* ExpenseDataContainer.swift in Sources */,
 				CF76E2BA6E09C2014E6BB835 /* DuplicateDetector.swift in Sources */,
 				8E83F3D92D59FF9E4CDBA232 /* SampleData.swift in Sources */,
@@ -525,6 +551,10 @@
 				F8649A86B7B2C027D5E6F929 /* ExpenseRowView.swift in Sources */,
 				E8DA47D3614B026A10AC3D29 /* PaymentLogoView.swift in Sources */,
 				7D69FA05BF345407EC3DAEA1 /* FilterBarView.swift in Sources */,
+				2507BAD03781692C063DE8AE /* PayBookView.swift in Sources */,
+				8961F696DFAB7D1FEC2B4C83 /* PayBookDetailView.swift in Sources */,
+				8188B9686F2B2B1D1182067B /* AddPayBookContactView.swift in Sources */,
+				976ADF077AAD0ADDE2A91397 /* EditPayBookContactView.swift in Sources */,
 				DB6484227A2BE154B6DDDB31 /* AddExpenseView.swift in Sources */,
 				0F0F6E8CFADB99C31789D25D /* ExpenseReviewView.swift in Sources */,
 				8774554499BD29753B0C4C99 /* AnalyticsView.swift in Sources */,
@@ -543,6 +573,7 @@
 				E9C92309851EA4225CC3C3D8 /* ExpenseCategory.swift in Sources */,
 				371FAD201DDCCE7ED8C94F16 /* PaymentSource.swift in Sources */,
 				06A069F9D647AC9F5CA75C6B /* ExpenseSourceType.swift in Sources */,
+				8890ADE7D179F3A69D74C830 /* PayBookContact.swift in Sources */,
 				73BFC60533C11C57BE3E27A0 /* ExpenseDataContainer.swift in Sources */,
 				5AC5B9E911723A15E475A262 /* DuplicateDetector.swift in Sources */,
 				CF5D482EA48C9B722350FCE9 /* SampleData.swift in Sources */,
