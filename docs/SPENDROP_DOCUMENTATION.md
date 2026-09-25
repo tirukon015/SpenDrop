@@ -7,7 +7,7 @@
 > | Project | SpenDrop (renamed from "SpendDrop" on 2026-09-25; all identifiers, targets, bundle IDs and the App Group were renamed) |
 > | Version | 1.3.0 (`MARKETING_VERSION`), build 1 (`CURRENT_PROJECT_VERSION`). The Settings screen labels this "1.3.0 (Milestone 3 - Share Extension)"; the PayBook feature (branch `feature/paybook`) was added after that label was written and the version string was not bumped. |
 > | Documentation date | 2026-09-25 |
-> | Documentation status | Complete for the current working tree on branch `feature/paybook` (commit `dd36386` + uncommitted rename and Xcode 27 project re-save) |
+> | Documentation status | Complete for the current working tree on branch `feature/paybook` (commit `efd5f99` + uncommitted rename and Xcode 27 project re-save) |
 > | Repository | `https://github.com/tirukon015/SpenDrop` (renamed on GitHub 2026-09-25; the old URL redirects; default branch `master`; private at the time of writing) |
 > | Live URL | Not applicable. Native iOS app. No App Store / TestFlight listing was found in the project files. Not verified. |
 > | Developer | Touhidul Islam Rukon (sole git author, 19 commits) |
@@ -770,8 +770,8 @@ Reconstructed from `git log` (19 commits, one author, 2026-09-16 → 2026-09-18)
 | **Milestone 1 — Core tracker** | 2026-09-16 | `b2ec656` .gitignore → `95d3a7b` SwiftData model → `feb1513` manual cash entry → `dea5b44` history + dashboard → `b3aa40e` analytics, settings, app shell → `094e618` Xcode project, resources, README | Models, all main tabs, sample data, project generator |
 | **Milestone 2 — OCR & parser** | 2026-09-16 | `9c9e76e` Vision OCR + Malaysian parser (7 files, +1,094) → `1da3d87` review screen + self-test runner → `2c68234` project/README update | `OCRService`, `TransactionParser`, `MerchantDetector`, `CategoryDetector`, `ExpenseReviewView`, `ParserSelfTestView` |
 | **Milestone 3 — Share Extension** | 2026-09-17 | `aead78c` target + entitlements → `76b5f0e` App Group persistence + `DuplicateDetector` → `9c6753c` extension wired to OCR/review (+581) → `034c099` extension/duplicate tests → `74e6f42` project/README → `0008dfb` fix `SampleData` target membership + automatic signing → `37effa6` 18 sample expenses → `26595a0` fix SwiftData import in tests | `SpenDropShare`, shared container, duplicate protection |
-| **Extraction overhaul** | 2026-09-18 | `d847429` "master bug fix, payment extraction overhaul, provider logos, and 42 simulator tests" (44 files, +3,979 / −705) | `PaymentProviderDetector`, `MonetaryCandidate`, `ImagePipelineDiagnostics`, provider logo assets, `PaymentLogoView`, real-reference tests, negative amounts, ad exclusion, sender/recipient logic |
-| **PayBook V1** | 2026-09-18 (branch `feature/paybook`) | `dd36386` (11 files, +977) | `PayBookContact`, four PayBook views, seeding/launch args, six PayBook tests |
+| **Extraction overhaul** | 2026-09-18 | `20d06c8` "master bug fix, payment extraction overhaul, provider logos, and 42 simulator tests" (44 files, +3,979 / −705) | `PaymentProviderDetector`, `MonetaryCandidate`, `ImagePipelineDiagnostics`, provider logo assets, `PaymentLogoView`, real-reference tests, negative amounts, ad exclusion, sender/recipient logic |
+| **PayBook V1** | 2026-09-18 (branch `feature/paybook`) | `efd5f99` (11 files, +977) | `PayBookContact`, four PayBook views, seeding/launch args, six PayBook tests |
 | **Uncommitted (2026-09-25)** | — | Xcode 27 re-saved `project.pbxproj` and schemes (`LastUpgradeVersion 2700`, share scheme now launches via SpringBoard); project renamed to SpenDrop | this documentation and screenshots added |
 
 Observations:
