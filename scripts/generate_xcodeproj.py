@@ -9,130 +9,130 @@ def gen_id(name):
 # All project files
 all_files = [
     # App
-    ("SpendDrop/App/SpendDropApp.swift", False),
+    ("SpenDrop/App/SpenDropApp.swift", False),
     # Models
-    ("SpendDrop/Models/Expense.swift", False),
-    ("SpendDrop/Models/ExpenseCategory.swift", False),
-    ("SpendDrop/Models/PaymentSource.swift", False),
-    ("SpendDrop/Models/ExpenseSourceType.swift", False),
-    ("SpendDrop/Models/PayBookContact.swift", False),
+    ("SpenDrop/Models/Expense.swift", False),
+    ("SpenDrop/Models/ExpenseCategory.swift", False),
+    ("SpenDrop/Models/PaymentSource.swift", False),
+    ("SpenDrop/Models/ExpenseSourceType.swift", False),
+    ("SpenDrop/Models/PayBookContact.swift", False),
     # Data
-    ("SpendDrop/Data/ExpenseDataContainer.swift", False),
-    ("SpendDrop/Data/DuplicateDetector.swift", False),
-    ("SpendDrop/Data/SampleData.swift", False),
+    ("SpenDrop/Data/ExpenseDataContainer.swift", False),
+    ("SpenDrop/Data/DuplicateDetector.swift", False),
+    ("SpenDrop/Data/SampleData.swift", False),
     # Utils
-    ("SpendDrop/Utils/CurrencyFormatter.swift", False),
-    ("SpendDrop/Utils/HapticFeedback.swift", False),
+    ("SpenDrop/Utils/CurrencyFormatter.swift", False),
+    ("SpenDrop/Utils/HapticFeedback.swift", False),
     # OCR (Milestone 2)
-    ("SpendDrop/OCR/OCRService.swift", False),
-    ("SpendDrop/OCR/ParsedTransaction.swift", False),
-    ("SpendDrop/OCR/MonetaryCandidate.swift", False),
-    ("SpendDrop/OCR/PaymentProviderDetector.swift", False),
-    ("SpendDrop/OCR/MerchantDetector.swift", False),
-    ("SpendDrop/OCR/CategoryDetector.swift", False),
-    ("SpendDrop/OCR/TransactionParser.swift", False),
-    ("SpendDrop/OCR/ImageStorageService.swift", False),
-    ("SpendDrop/OCR/ImagePipelineDiagnostics.swift", False),
-    ("SpendDrop/OCR/TransactionParserTests.swift", False),
+    ("SpenDrop/OCR/OCRService.swift", False),
+    ("SpenDrop/OCR/ParsedTransaction.swift", False),
+    ("SpenDrop/OCR/MonetaryCandidate.swift", False),
+    ("SpenDrop/OCR/PaymentProviderDetector.swift", False),
+    ("SpenDrop/OCR/MerchantDetector.swift", False),
+    ("SpenDrop/OCR/CategoryDetector.swift", False),
+    ("SpenDrop/OCR/TransactionParser.swift", False),
+    ("SpenDrop/OCR/ImageStorageService.swift", False),
+    ("SpenDrop/OCR/ImagePipelineDiagnostics.swift", False),
+    ("SpenDrop/OCR/TransactionParserTests.swift", False),
     # Views
-    ("SpendDrop/Views/MainTabView.swift", False),
-    ("SpendDrop/Views/Dashboard/DashboardView.swift", False),
-    ("SpendDrop/Views/Dashboard/Components/SpendingSummaryCard.swift", False),
-    ("SpendDrop/Views/Dashboard/Components/QuickCashButton.swift", False),
-    ("SpendDrop/Views/Expenses/ExpensesView.swift", False),
-    ("SpendDrop/Views/Expenses/ExpenseDetailView.swift", False),
-    ("SpendDrop/Views/Expenses/EditExpenseView.swift", False),
-    ("SpendDrop/Views/Expenses/Components/ExpenseRowView.swift", False),
-    ("SpendDrop/Views/Expenses/Components/PaymentLogoView.swift", False),
-    ("SpendDrop/Views/Expenses/Components/FilterBarView.swift", False),
-    ("SpendDrop/Views/PayBook/PayBookView.swift", False),
-    ("SpendDrop/Views/PayBook/PayBookDetailView.swift", False),
-    ("SpendDrop/Views/PayBook/AddPayBookContactView.swift", False),
-    ("SpendDrop/Views/PayBook/EditPayBookContactView.swift", False),
-    ("SpendDrop/Views/AddExpense/AddExpenseView.swift", False),
-    ("SpendDrop/Views/Review/ExpenseReviewView.swift", False),
-    ("SpendDrop/Views/Analytics/AnalyticsView.swift", False),
-    ("SpendDrop/Views/Settings/SettingsView.swift", False),
-    ("SpendDrop/Views/Settings/Components/ParserSelfTestView.swift", False),
+    ("SpenDrop/Views/MainTabView.swift", False),
+    ("SpenDrop/Views/Dashboard/DashboardView.swift", False),
+    ("SpenDrop/Views/Dashboard/Components/SpendingSummaryCard.swift", False),
+    ("SpenDrop/Views/Dashboard/Components/QuickCashButton.swift", False),
+    ("SpenDrop/Views/Expenses/ExpensesView.swift", False),
+    ("SpenDrop/Views/Expenses/ExpenseDetailView.swift", False),
+    ("SpenDrop/Views/Expenses/EditExpenseView.swift", False),
+    ("SpenDrop/Views/Expenses/Components/ExpenseRowView.swift", False),
+    ("SpenDrop/Views/Expenses/Components/PaymentLogoView.swift", False),
+    ("SpenDrop/Views/Expenses/Components/FilterBarView.swift", False),
+    ("SpenDrop/Views/PayBook/PayBookView.swift", False),
+    ("SpenDrop/Views/PayBook/PayBookDetailView.swift", False),
+    ("SpenDrop/Views/PayBook/AddPayBookContactView.swift", False),
+    ("SpenDrop/Views/PayBook/EditPayBookContactView.swift", False),
+    ("SpenDrop/Views/AddExpense/AddExpenseView.swift", False),
+    ("SpenDrop/Views/Review/ExpenseReviewView.swift", False),
+    ("SpenDrop/Views/Analytics/AnalyticsView.swift", False),
+    ("SpenDrop/Views/Settings/SettingsView.swift", False),
+    ("SpenDrop/Views/Settings/Components/ParserSelfTestView.swift", False),
     # Share Extension (Milestone 3)
-    ("SpendDrop/ShareExtension/ShareViewController.swift", False),
-    ("SpendDrop/ShareExtension/ShareExtensionView.swift", False),
-    ("SpendDrop/ShareExtension/Info.plist", False),
-    ("SpendDrop/ShareExtension/ShareExtension.entitlements", False),
+    ("SpenDrop/ShareExtension/ShareViewController.swift", False),
+    ("SpenDrop/ShareExtension/ShareExtensionView.swift", False),
+    ("SpenDrop/ShareExtension/Info.plist", False),
+    ("SpenDrop/ShareExtension/ShareExtension.entitlements", False),
     # Resources
-    ("SpendDrop/Resources/Assets.xcassets", True),
-    ("SpendDrop/Resources/Info.plist", False),
-    ("SpendDrop/Resources/SpendDrop.entitlements", False),
-    ("SpendDrop/Resources/DiagnosticSamples/sample_screenshot.png", True),
-    ("SpendDrop/Resources/DiagnosticSamples/sample_photo.jpg", True),
-    ("SpendDrop/Resources/DiagnosticSamples/sample_camera.heic", True),
+    ("SpenDrop/Resources/Assets.xcassets", True),
+    ("SpenDrop/Resources/Info.plist", False),
+    ("SpenDrop/Resources/SpenDrop.entitlements", False),
+    ("SpenDrop/Resources/DiagnosticSamples/sample_screenshot.png", True),
+    ("SpenDrop/Resources/DiagnosticSamples/sample_photo.jpg", True),
+    ("SpenDrop/Resources/DiagnosticSamples/sample_camera.heic", True),
 ]
 
 # Files compiled by main app target
-app_source_paths = [path for path, is_res in all_files if path.endswith(".swift") and not path.startswith("SpendDrop/ShareExtension/")]
+app_source_paths = [path for path, is_res in all_files if path.endswith(".swift") and not path.startswith("SpenDrop/ShareExtension/")]
 
 # Resources copied by main app target
 app_res_paths = [path for path, is_res in all_files if is_res]
 
 # Files compiled by Share Extension target
 share_source_paths = [
-    "SpendDrop/ShareExtension/ShareViewController.swift",
-    "SpendDrop/ShareExtension/ShareExtensionView.swift",
-    "SpendDrop/Models/Expense.swift",
-    "SpendDrop/Models/ExpenseCategory.swift",
-    "SpendDrop/Models/PaymentSource.swift",
-    "SpendDrop/Models/ExpenseSourceType.swift",
-    "SpendDrop/Models/PayBookContact.swift",
-    "SpendDrop/Data/ExpenseDataContainer.swift",
-    "SpendDrop/Data/DuplicateDetector.swift",
-    "SpendDrop/Data/SampleData.swift",
-    "SpendDrop/OCR/OCRService.swift",
-    "SpendDrop/OCR/ParsedTransaction.swift",
-    "SpendDrop/OCR/MonetaryCandidate.swift",
-    "SpendDrop/OCR/PaymentProviderDetector.swift",
-    "SpendDrop/OCR/MerchantDetector.swift",
-    "SpendDrop/OCR/CategoryDetector.swift",
-    "SpendDrop/OCR/TransactionParser.swift",
-    "SpendDrop/OCR/ImageStorageService.swift",
-    "SpendDrop/Utils/CurrencyFormatter.swift",
-    "SpendDrop/Utils/HapticFeedback.swift",
+    "SpenDrop/ShareExtension/ShareViewController.swift",
+    "SpenDrop/ShareExtension/ShareExtensionView.swift",
+    "SpenDrop/Models/Expense.swift",
+    "SpenDrop/Models/ExpenseCategory.swift",
+    "SpenDrop/Models/PaymentSource.swift",
+    "SpenDrop/Models/ExpenseSourceType.swift",
+    "SpenDrop/Models/PayBookContact.swift",
+    "SpenDrop/Data/ExpenseDataContainer.swift",
+    "SpenDrop/Data/DuplicateDetector.swift",
+    "SpenDrop/Data/SampleData.swift",
+    "SpenDrop/OCR/OCRService.swift",
+    "SpenDrop/OCR/ParsedTransaction.swift",
+    "SpenDrop/OCR/MonetaryCandidate.swift",
+    "SpenDrop/OCR/PaymentProviderDetector.swift",
+    "SpenDrop/OCR/MerchantDetector.swift",
+    "SpenDrop/OCR/CategoryDetector.swift",
+    "SpenDrop/OCR/TransactionParser.swift",
+    "SpenDrop/OCR/ImageStorageService.swift",
+    "SpenDrop/Utils/CurrencyFormatter.swift",
+    "SpenDrop/Utils/HapticFeedback.swift",
 ]
 
 # IDs for Main App Target
-proj_id = gen_id("SpendDrop_Project")
-target_id = gen_id("SpendDrop_NativeTarget")
-sources_phase_id = gen_id("SpendDrop_SourcesPhase")
-resources_phase_id = gen_id("SpendDrop_ResourcesPhase")
-frameworks_phase_id = gen_id("SpendDrop_FrameworksPhase")
-embed_extensions_phase_id = gen_id("SpendDrop_EmbedExtensionsPhase")
-app_product_id = gen_id("SpendDrop_AppProduct")
+proj_id = gen_id("SpenDrop_Project")
+target_id = gen_id("SpenDrop_NativeTarget")
+sources_phase_id = gen_id("SpenDrop_SourcesPhase")
+resources_phase_id = gen_id("SpenDrop_ResourcesPhase")
+frameworks_phase_id = gen_id("SpenDrop_FrameworksPhase")
+embed_extensions_phase_id = gen_id("SpenDrop_EmbedExtensionsPhase")
+app_product_id = gen_id("SpenDrop_AppProduct")
 
-debug_config_target_id = gen_id("SpendDrop_Debug_Target")
-release_config_target_id = gen_id("SpendDrop_Release_Target")
-config_list_target_id = gen_id("SpendDrop_ConfigList_Target")
+debug_config_target_id = gen_id("SpenDrop_Debug_Target")
+release_config_target_id = gen_id("SpenDrop_Release_Target")
+config_list_target_id = gen_id("SpenDrop_ConfigList_Target")
 
-debug_config_proj_id = gen_id("SpendDrop_Debug_Proj")
-release_config_proj_id = gen_id("SpendDrop_Release_Proj")
-config_list_proj_id = gen_id("SpendDrop_ConfigList_Proj")
+debug_config_proj_id = gen_id("SpenDrop_Debug_Proj")
+release_config_proj_id = gen_id("SpenDrop_Release_Proj")
+config_list_proj_id = gen_id("SpenDrop_ConfigList_Proj")
 
 # IDs for Share Extension Target
-share_target_id = gen_id("SpendDropShare_NativeTarget")
-share_sources_phase_id = gen_id("SpendDropShare_SourcesPhase")
-share_resources_phase_id = gen_id("SpendDropShare_ResourcesPhase")
-share_frameworks_phase_id = gen_id("SpendDropShare_FrameworksPhase")
-share_product_id = gen_id("SpendDropShare_Product")
+share_target_id = gen_id("SpenDropShare_NativeTarget")
+share_sources_phase_id = gen_id("SpenDropShare_SourcesPhase")
+share_resources_phase_id = gen_id("SpenDropShare_ResourcesPhase")
+share_frameworks_phase_id = gen_id("SpenDropShare_FrameworksPhase")
+share_product_id = gen_id("SpenDropShare_Product")
 
-debug_config_share_id = gen_id("SpendDropShare_Debug_Target")
-release_config_share_id = gen_id("SpendDropShare_Release_Target")
-config_list_share_id = gen_id("SpendDropShare_ConfigList_Target")
+debug_config_share_id = gen_id("SpenDropShare_Debug_Target")
+release_config_share_id = gen_id("SpenDropShare_Release_Target")
+config_list_share_id = gen_id("SpenDropShare_ConfigList_Target")
 
 # Dependency IDs
-container_proxy_id = gen_id("SpendDrop_ContainerItemProxy_Share")
-target_dependency_id = gen_id("SpendDrop_TargetDependency_Share")
-embed_appex_build_file_id = gen_id("SpendDrop_EmbedAppexBuildFile")
+container_proxy_id = gen_id("SpenDrop_ContainerItemProxy_Share")
+target_dependency_id = gen_id("SpenDrop_TargetDependency_Share")
+embed_appex_build_file_id = gen_id("SpenDrop_EmbedAppexBuildFile")
 
-main_group_id = gen_id("SpendDrop_MainGroup")
-products_group_id = gen_id("SpendDrop_ProductsGroup")
+main_group_id = gen_id("SpenDrop_MainGroup")
+products_group_id = gen_id("SpenDrop_ProductsGroup")
 
 # PBXFileReference IDs
 file_refs = {}
@@ -182,7 +182,7 @@ for path, bf_id in share_build_files.items():
     pbx.append(f"\t\t{bf_id} /* {filename} in Share Sources */ = {{isa = PBXBuildFile; fileRef = {fref_id} /* {filename} */; }};")
 
 # Embed Appex in App
-pbx.append(f"\t\t{embed_appex_build_file_id} /* SpendDropShare.appex in Embed Foundation Extensions */ = {{isa = PBXBuildFile; fileRef = {share_product_id} /* SpendDropShare.appex */; settings = {{ATTRIBUTES = (RemoveHeadersOnCopy, ); }}; }};")
+pbx.append(f"\t\t{embed_appex_build_file_id} /* SpenDropShare.appex in Embed Foundation Extensions */ = {{isa = PBXBuildFile; fileRef = {share_product_id} /* SpenDropShare.appex */; settings = {{ATTRIBUTES = (RemoveHeadersOnCopy, ); }}; }};")
 pbx.append("/* End PBXBuildFile section */")
 
 # PBXContainerItemProxy section
@@ -192,7 +192,7 @@ pbx.append("\t\t\tisa = PBXContainerItemProxy;")
 pbx.append(f"\t\t\tcontainerPortal = {proj_id} /* Project object */;")
 pbx.append("\t\t\tproxyType = 1;")
 pbx.append(f"\t\t\tremoteGlobalIDString = {share_target_id};")
-pbx.append("\t\t\tremoteInfo = SpendDropShare;")
+pbx.append("\t\t\tremoteInfo = SpenDropShare;")
 pbx.append("\t\t};")
 pbx.append("/* End PBXContainerItemProxy section */")
 
@@ -204,7 +204,7 @@ pbx.append("\t\t\tbuildActionMask = 2147483647;")
 pbx.append("\t\t\tdstPath = \"\";")
 pbx.append("\t\t\tdstSubfolderSpec = 13;")
 pbx.append("\t\t\tfiles = (")
-pbx.append(f"\t\t\t\t{embed_appex_build_file_id} /* SpendDropShare.appex in Embed Foundation Extensions */,")
+pbx.append(f"\t\t\t\t{embed_appex_build_file_id} /* SpenDropShare.appex in Embed Foundation Extensions */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tname = \"Embed Foundation Extensions\";")
 pbx.append("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
@@ -213,8 +213,8 @@ pbx.append("/* End PBXCopyFilesBuildPhase section */")
 
 # PBXFileReference section
 pbx.append("\n/* Begin PBXFileReference section */")
-pbx.append(f"\t\t{app_product_id} /* SpendDrop.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpendDrop.app; sourceTree = BUILT_PRODUCTS_DIR; }};")
-pbx.append(f"\t\t{share_product_id} /* SpendDropShare.appex */ = {{isa = PBXFileReference; explicitFileType = \"wrapper.app-extension\"; includeInIndex = 0; path = SpendDropShare.appex; sourceTree = BUILT_PRODUCTS_DIR; }};")
+pbx.append(f"\t\t{app_product_id} /* SpenDrop.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpenDrop.app; sourceTree = BUILT_PRODUCTS_DIR; }};")
+pbx.append(f"\t\t{share_product_id} /* SpenDropShare.appex */ = {{isa = PBXFileReference; explicitFileType = \"wrapper.app-extension\"; includeInIndex = 0; path = SpenDropShare.appex; sourceTree = BUILT_PRODUCTS_DIR; }};")
 
 for path, fref_id in file_refs.items():
     filename = os.path.basename(path)
@@ -262,63 +262,63 @@ def add_group(gid, name, path, children):
 
 dash_comp_id = gen_id("GROUP_Views_Dashboard_Components")
 add_group(dash_comp_id, "Components", "Components", [
-    file_refs["SpendDrop/Views/Dashboard/Components/SpendingSummaryCard.swift"],
-    file_refs["SpendDrop/Views/Dashboard/Components/QuickCashButton.swift"]
+    file_refs["SpenDrop/Views/Dashboard/Components/SpendingSummaryCard.swift"],
+    file_refs["SpenDrop/Views/Dashboard/Components/QuickCashButton.swift"]
 ])
 
 exp_comp_id = gen_id("GROUP_Views_Expenses_Components")
 add_group(exp_comp_id, "Components", "Components", [
-    file_refs["SpendDrop/Views/Expenses/Components/ExpenseRowView.swift"],
-    file_refs["SpendDrop/Views/Expenses/Components/PaymentLogoView.swift"],
-    file_refs["SpendDrop/Views/Expenses/Components/FilterBarView.swift"]
+    file_refs["SpenDrop/Views/Expenses/Components/ExpenseRowView.swift"],
+    file_refs["SpenDrop/Views/Expenses/Components/PaymentLogoView.swift"],
+    file_refs["SpenDrop/Views/Expenses/Components/FilterBarView.swift"]
 ])
 
 settings_comp_id = gen_id("GROUP_Views_Settings_Components")
 add_group(settings_comp_id, "Components", "Components", [
-    file_refs["SpendDrop/Views/Settings/Components/ParserSelfTestView.swift"]
+    file_refs["SpenDrop/Views/Settings/Components/ParserSelfTestView.swift"]
 ])
 
 dash_group_id = gen_id("GROUP_Views_Dashboard")
 add_group(dash_group_id, "Dashboard", "Dashboard", [
     dash_comp_id,
-    file_refs["SpendDrop/Views/Dashboard/DashboardView.swift"]
+    file_refs["SpenDrop/Views/Dashboard/DashboardView.swift"]
 ])
 
 exp_group_id = gen_id("GROUP_Views_Expenses")
 add_group(exp_group_id, "Expenses", "Expenses", [
     exp_comp_id,
-    file_refs["SpendDrop/Views/Expenses/ExpensesView.swift"],
-    file_refs["SpendDrop/Views/Expenses/ExpenseDetailView.swift"],
-    file_refs["SpendDrop/Views/Expenses/EditExpenseView.swift"]
+    file_refs["SpenDrop/Views/Expenses/ExpensesView.swift"],
+    file_refs["SpenDrop/Views/Expenses/ExpenseDetailView.swift"],
+    file_refs["SpenDrop/Views/Expenses/EditExpenseView.swift"]
 ])
 
 addexp_group_id = gen_id("GROUP_Views_AddExpense")
 add_group(addexp_group_id, "AddExpense", "AddExpense", [
-    file_refs["SpendDrop/Views/AddExpense/AddExpenseView.swift"]
+    file_refs["SpenDrop/Views/AddExpense/AddExpenseView.swift"]
 ])
 
 review_group_id = gen_id("GROUP_Views_Review")
 add_group(review_group_id, "Review", "Review", [
-    file_refs["SpendDrop/Views/Review/ExpenseReviewView.swift"]
+    file_refs["SpenDrop/Views/Review/ExpenseReviewView.swift"]
 ])
 
 analytics_group_id = gen_id("GROUP_Views_Analytics")
 add_group(analytics_group_id, "Analytics", "Analytics", [
-    file_refs["SpendDrop/Views/Analytics/AnalyticsView.swift"]
+    file_refs["SpenDrop/Views/Analytics/AnalyticsView.swift"]
 ])
 
 settings_group_id = gen_id("GROUP_Views_Settings")
 add_group(settings_group_id, "Settings", "Settings", [
     settings_comp_id,
-    file_refs["SpendDrop/Views/Settings/SettingsView.swift"]
+    file_refs["SpenDrop/Views/Settings/SettingsView.swift"]
 ])
 
 paybook_group_id = gen_id("GROUP_Views_PayBook")
 add_group(paybook_group_id, "PayBook", "PayBook", [
-    file_refs["SpendDrop/Views/PayBook/PayBookView.swift"],
-    file_refs["SpendDrop/Views/PayBook/PayBookDetailView.swift"],
-    file_refs["SpendDrop/Views/PayBook/AddPayBookContactView.swift"],
-    file_refs["SpendDrop/Views/PayBook/EditPayBookContactView.swift"]
+    file_refs["SpenDrop/Views/PayBook/PayBookView.swift"],
+    file_refs["SpenDrop/Views/PayBook/PayBookDetailView.swift"],
+    file_refs["SpenDrop/Views/PayBook/AddPayBookContactView.swift"],
+    file_refs["SpenDrop/Views/PayBook/EditPayBookContactView.swift"]
 ])
 
 views_group_id = gen_id("GROUP_Views")
@@ -330,75 +330,75 @@ add_group(views_group_id, "Views", "Views", [
     review_group_id,
     analytics_group_id,
     settings_group_id,
-    file_refs["SpendDrop/Views/MainTabView.swift"]
+    file_refs["SpenDrop/Views/MainTabView.swift"]
 ])
 
 ocr_group_id = gen_id("GROUP_OCR")
 add_group(ocr_group_id, "OCR", "OCR", [
-    file_refs["SpendDrop/OCR/OCRService.swift"],
-    file_refs["SpendDrop/OCR/ParsedTransaction.swift"],
-    file_refs["SpendDrop/OCR/MonetaryCandidate.swift"],
-    file_refs["SpendDrop/OCR/PaymentProviderDetector.swift"],
-    file_refs["SpendDrop/OCR/MerchantDetector.swift"],
-    file_refs["SpendDrop/OCR/CategoryDetector.swift"],
-    file_refs["SpendDrop/OCR/TransactionParser.swift"],
-    file_refs["SpendDrop/OCR/ImageStorageService.swift"],
-    file_refs["SpendDrop/OCR/ImagePipelineDiagnostics.swift"],
-    file_refs["SpendDrop/OCR/TransactionParserTests.swift"]
+    file_refs["SpenDrop/OCR/OCRService.swift"],
+    file_refs["SpenDrop/OCR/ParsedTransaction.swift"],
+    file_refs["SpenDrop/OCR/MonetaryCandidate.swift"],
+    file_refs["SpenDrop/OCR/PaymentProviderDetector.swift"],
+    file_refs["SpenDrop/OCR/MerchantDetector.swift"],
+    file_refs["SpenDrop/OCR/CategoryDetector.swift"],
+    file_refs["SpenDrop/OCR/TransactionParser.swift"],
+    file_refs["SpenDrop/OCR/ImageStorageService.swift"],
+    file_refs["SpenDrop/OCR/ImagePipelineDiagnostics.swift"],
+    file_refs["SpenDrop/OCR/TransactionParserTests.swift"]
 ])
 
 app_group_id = gen_id("GROUP_App")
 add_group(app_group_id, "App", "App", [
-    file_refs["SpendDrop/App/SpendDropApp.swift"]
+    file_refs["SpenDrop/App/SpenDropApp.swift"]
 ])
 
 models_group_id = gen_id("GROUP_Models")
 add_group(models_group_id, "Models", "Models", [
-    file_refs["SpendDrop/Models/Expense.swift"],
-    file_refs["SpendDrop/Models/ExpenseCategory.swift"],
-    file_refs["SpendDrop/Models/PaymentSource.swift"],
-    file_refs["SpendDrop/Models/ExpenseSourceType.swift"],
-    file_refs["SpendDrop/Models/PayBookContact.swift"]
+    file_refs["SpenDrop/Models/Expense.swift"],
+    file_refs["SpenDrop/Models/ExpenseCategory.swift"],
+    file_refs["SpenDrop/Models/PaymentSource.swift"],
+    file_refs["SpenDrop/Models/ExpenseSourceType.swift"],
+    file_refs["SpenDrop/Models/PayBookContact.swift"]
 ])
 
 data_group_id = gen_id("GROUP_Data")
 add_group(data_group_id, "Data", "Data", [
-    file_refs["SpendDrop/Data/ExpenseDataContainer.swift"],
-    file_refs["SpendDrop/Data/DuplicateDetector.swift"],
-    file_refs["SpendDrop/Data/SampleData.swift"]
+    file_refs["SpenDrop/Data/ExpenseDataContainer.swift"],
+    file_refs["SpenDrop/Data/DuplicateDetector.swift"],
+    file_refs["SpenDrop/Data/SampleData.swift"]
 ])
 
 utils_group_id = gen_id("GROUP_Utils")
 add_group(utils_group_id, "Utils", "Utils", [
-    file_refs["SpendDrop/Utils/CurrencyFormatter.swift"],
-    file_refs["SpendDrop/Utils/HapticFeedback.swift"]
+    file_refs["SpenDrop/Utils/CurrencyFormatter.swift"],
+    file_refs["SpenDrop/Utils/HapticFeedback.swift"]
 ])
 
 diag_samples_group_id = gen_id("GROUP_DiagnosticSamples")
 add_group(diag_samples_group_id, "DiagnosticSamples", "DiagnosticSamples", [
-    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_screenshot.png"],
-    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_photo.jpg"],
-    file_refs["SpendDrop/Resources/DiagnosticSamples/sample_camera.heic"]
+    file_refs["SpenDrop/Resources/DiagnosticSamples/sample_screenshot.png"],
+    file_refs["SpenDrop/Resources/DiagnosticSamples/sample_photo.jpg"],
+    file_refs["SpenDrop/Resources/DiagnosticSamples/sample_camera.heic"]
 ])
 
 res_group_id = gen_id("GROUP_Resources")
 add_group(res_group_id, "Resources", "Resources", [
-    file_refs["SpendDrop/Resources/Assets.xcassets"],
-    file_refs["SpendDrop/Resources/Info.plist"],
-    file_refs["SpendDrop/Resources/SpendDrop.entitlements"],
+    file_refs["SpenDrop/Resources/Assets.xcassets"],
+    file_refs["SpenDrop/Resources/Info.plist"],
+    file_refs["SpenDrop/Resources/SpenDrop.entitlements"],
     diag_samples_group_id
 ])
 
 share_ext_group_id = gen_id("GROUP_ShareExtension")
 add_group(share_ext_group_id, "ShareExtension", "ShareExtension", [
-    file_refs["SpendDrop/ShareExtension/ShareViewController.swift"],
-    file_refs["SpendDrop/ShareExtension/ShareExtensionView.swift"],
-    file_refs["SpendDrop/ShareExtension/Info.plist"],
-    file_refs["SpendDrop/ShareExtension/ShareExtension.entitlements"]
+    file_refs["SpenDrop/ShareExtension/ShareViewController.swift"],
+    file_refs["SpenDrop/ShareExtension/ShareExtensionView.swift"],
+    file_refs["SpenDrop/ShareExtension/Info.plist"],
+    file_refs["SpenDrop/ShareExtension/ShareExtension.entitlements"]
 ])
 
-spenddrop_group_id = gen_id("GROUP_SpendDrop_Folder")
-add_group(spenddrop_group_id, "SpendDrop", "SpendDrop", [
+spendrop_group_id = gen_id("GROUP_SpenDrop_Folder")
+add_group(spendrop_group_id, "SpenDrop", "SpenDrop", [
     app_group_id,
     models_group_id,
     data_group_id,
@@ -412,7 +412,7 @@ add_group(spenddrop_group_id, "SpendDrop", "SpendDrop", [
 products_group_id = gen_id("GROUP_Products")
 add_group(products_group_id, "Products", None, [app_product_id, share_product_id])
 
-add_group(main_group_id, None, None, [spenddrop_group_id, products_group_id])
+add_group(main_group_id, None, None, [spendrop_group_id, products_group_id])
 
 pbx.append("\n/* Begin PBXGroup section */")
 for gid, (name, path, children) in groups.items():
@@ -433,9 +433,9 @@ pbx.append("/* End PBXGroup section */")
 # PBXNativeTarget section
 pbx.append("\n/* Begin PBXNativeTarget section */")
 # Main App Target
-pbx.append(f"\t\t{target_id} /* SpendDrop */ = {{")
+pbx.append(f"\t\t{target_id} /* SpenDrop */ = {{")
 pbx.append("\t\t\tisa = PBXNativeTarget;")
-pbx.append(f"\t\t\tbuildConfigurationList = {config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpendDrop\" */;")
+pbx.append(f"\t\t\tbuildConfigurationList = {config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpenDrop\" */;")
 pbx.append("\t\t\tbuildPhases = (")
 pbx.append(f"\t\t\t\t{sources_phase_id} /* Sources */,")
 pbx.append(f"\t\t\t\t{frameworks_phase_id} /* Frameworks */,")
@@ -447,16 +447,16 @@ pbx.append("\t\t\t);")
 pbx.append("\t\t\tdependencies = (")
 pbx.append(f"\t\t\t\t{target_dependency_id} /* PBXTargetDependency */,")
 pbx.append("\t\t\t);")
-pbx.append("\t\t\tname = SpendDrop;")
-pbx.append("\t\t\tproductName = SpendDrop;")
-pbx.append(f"\t\t\tproductReference = {app_product_id} /* SpendDrop.app */;")
+pbx.append("\t\t\tname = SpenDrop;")
+pbx.append("\t\t\tproductName = SpenDrop;")
+pbx.append(f"\t\t\tproductReference = {app_product_id} /* SpenDrop.app */;")
 pbx.append("\t\t\tproductType = \"com.apple.product-type.application\";")
 pbx.append("\t\t};")
 
 # Share Extension Target
-pbx.append(f"\t\t{share_target_id} /* SpendDropShare */ = {{")
+pbx.append(f"\t\t{share_target_id} /* SpenDropShare */ = {{")
 pbx.append("\t\t\tisa = PBXNativeTarget;")
-pbx.append(f"\t\t\tbuildConfigurationList = {config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpendDropShare\" */;")
+pbx.append(f"\t\t\tbuildConfigurationList = {config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpenDropShare\" */;")
 pbx.append("\t\t\tbuildPhases = (")
 pbx.append(f"\t\t\t\t{share_sources_phase_id} /* Sources */,")
 pbx.append(f"\t\t\t\t{share_frameworks_phase_id} /* Frameworks */,")
@@ -466,9 +466,9 @@ pbx.append("\t\t\tbuildRules = (")
 pbx.append("\t\t\t);")
 pbx.append("\t\t\tdependencies = (")
 pbx.append("\t\t\t);")
-pbx.append("\t\t\tname = SpendDropShare;")
-pbx.append("\t\t\tproductName = SpendDropShare;")
-pbx.append(f"\t\t\tproductReference = {share_product_id} /* SpendDropShare.appex */;")
+pbx.append("\t\t\tname = SpenDropShare;")
+pbx.append("\t\t\tproductName = SpenDropShare;")
+pbx.append(f"\t\t\tproductReference = {share_product_id} /* SpenDropShare.appex */;")
 pbx.append("\t\t\tproductType = \"com.apple.product-type.app-extension\";")
 pbx.append("\t\t};")
 pbx.append("/* End PBXNativeTarget section */")
@@ -491,7 +491,7 @@ pbx.append("\t\t\t\t\t\tProvisioningStyle = Automatic;")
 pbx.append("\t\t\t\t\t};")
 pbx.append("\t\t\t\t};")
 pbx.append("\t\t\t};")
-pbx.append(f"\t\t\tbuildConfigurationList = {config_list_proj_id} /* Build configuration list for PBXProject \"SpendDrop\" */;")
+pbx.append(f"\t\t\tbuildConfigurationList = {config_list_proj_id} /* Build configuration list for PBXProject \"SpenDrop\" */;")
 pbx.append("\t\t\tcompatibilityVersion = \"Xcode 14.0\";")
 pbx.append("\t\t\tdevelopmentRegion = en;")
 pbx.append("\t\t\thasScannedForEncodings = 0;")
@@ -504,8 +504,8 @@ pbx.append(f"\t\t\tproductRefGroup = {products_group_id} /* Products */;")
 pbx.append("\t\t\tprojectDirPath = \"\";")
 pbx.append("\t\t\tprojectRoot = \"\";")
 pbx.append("\t\t\ttargets = (")
-pbx.append(f"\t\t\t\t{target_id} /* SpendDrop */,")
-pbx.append(f"\t\t\t\t{share_target_id} /* SpendDropShare */,")
+pbx.append(f"\t\t\t\t{target_id} /* SpenDrop */,")
+pbx.append(f"\t\t\t\t{share_target_id} /* SpenDropShare */,")
 pbx.append("\t\t\t);")
 pbx.append("\t\t};")
 pbx.append("/* End PBXProject section */")
@@ -563,7 +563,7 @@ pbx.append("/* End PBXSourcesBuildPhase section */")
 pbx.append("\n/* Begin PBXTargetDependency section */")
 pbx.append(f"\t\t{target_dependency_id} /* PBXTargetDependency */ = {{")
 pbx.append("\t\t\tisa = PBXTargetDependency;")
-pbx.append(f"\t\t\ttarget = {share_target_id} /* SpendDropShare */;")
+pbx.append(f"\t\t\ttarget = {share_target_id} /* SpenDropShare */;")
 pbx.append(f"\t\t\ttargetProxy = {container_proxy_id} /* PBXContainerItemProxy */;")
 pbx.append("\t\t};")
 pbx.append("/* End PBXTargetDependency section */")
@@ -643,21 +643,21 @@ pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
 pbx.append("\t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;")
 pbx.append("\t\t\t\tASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;")
-pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/Resources/SpendDrop.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpenDrop/Resources/SpenDrop.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_ASSET_PATHS = \"\";")
 pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_PREVIEWS = YES;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
-pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/Resources/Info.plist\";")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpenDrop/Resources/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
 pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
 pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
-pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
 pbx.append("\t\t\t\tSWIFT_VERSION = 5.0;")
@@ -672,21 +672,21 @@ pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
 pbx.append("\t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;")
 pbx.append("\t\t\t\tASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;")
-pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/Resources/SpendDrop.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpenDrop/Resources/SpenDrop.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_ASSET_PATHS = \"\";")
 pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tENABLE_PREVIEWS = YES;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
-pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/Resources/Info.plist\";")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpenDrop/Resources/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
 pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
 pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t);")
 pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
-pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDrop;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
 pbx.append("\t\t\t\tSWIFT_VERSION = 5.0;")
@@ -699,12 +699,12 @@ pbx.append("\t\t};")
 pbx.append(f"\t\t{debug_config_share_id} /* Debug */ = {{")
 pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
-pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpenDrop/ShareExtension/ShareExtension.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
-pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpenDrop/ShareExtension/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
 pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
@@ -712,7 +712,7 @@ pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t\t\"@executable_path/../../Frameworks\",")
 pbx.append("\t\t\t\t);")
 pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
-pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop.ShareExtension;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDrop.ShareExtension;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSKIP_INSTALL = YES;")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -726,12 +726,12 @@ pbx.append("\t\t};")
 pbx.append(f"\t\t{release_config_share_id} /* Release */ = {{")
 pbx.append("\t\t\tisa = XCBuildConfiguration;")
 pbx.append("\t\t\tbuildSettings = {")
-pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpendDrop/ShareExtension/ShareExtension.entitlements\";")
+pbx.append("\t\t\t\tCODE_SIGN_ENTITLEMENTS = \"SpenDrop/ShareExtension/ShareExtension.entitlements\";")
 pbx.append("\t\t\t\tCODE_SIGN_STYLE = Automatic;")
 pbx.append("\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
 pbx.append("\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;")
 pbx.append("\t\t\t\tGENERATE_INFOPLIST_FILE = NO;")
-pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpendDrop/ShareExtension/Info.plist\";")
+pbx.append("\t\t\t\tINFOPLIST_FILE = \"SpenDrop/ShareExtension/Info.plist\";")
 pbx.append("\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;")
 pbx.append("\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")
 pbx.append("\t\t\t\t\t\"$(inherited)\",")
@@ -739,7 +739,7 @@ pbx.append("\t\t\t\t\t\"@executable_path/Frameworks\",")
 pbx.append("\t\t\t\t\t\"@executable_path/../../Frameworks\",")
 pbx.append("\t\t\t\t);")
 pbx.append("\t\t\t\tMARKETING_VERSION = 1.3.0;")
-pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spenddrop.SpendDrop.ShareExtension;")
+pbx.append("\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDrop.ShareExtension;")
 pbx.append("\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";")
 pbx.append("\t\t\t\tSKIP_INSTALL = YES;")
 pbx.append("\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;")
@@ -753,7 +753,7 @@ pbx.append("/* End XCBuildConfiguration section */")
 # XCConfigurationList section
 pbx.append("\n/* Begin XCConfigurationList section */")
 # Project config list
-pbx.append(f"\t\t{config_list_proj_id} /* Build configuration list for PBXProject \"SpendDrop\" */ = {{")
+pbx.append(f"\t\t{config_list_proj_id} /* Build configuration list for PBXProject \"SpenDrop\" */ = {{")
 pbx.append("\t\t\tisa = XCConfigurationList;")
 pbx.append("\t\t\tbuildConfigurations = (")
 pbx.append(f"\t\t\t\t{debug_config_proj_id} /* Debug */,")
@@ -764,7 +764,7 @@ pbx.append("\t\t\tdefaultConfigurationName = Release;")
 pbx.append("\t\t};")
 
 # App target config list
-pbx.append(f"\t\t{config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpendDrop\" */ = {{")
+pbx.append(f"\t\t{config_list_target_id} /* Build configuration list for PBXNativeTarget \"SpenDrop\" */ = {{")
 pbx.append("\t\t\tisa = XCConfigurationList;")
 pbx.append("\t\t\tbuildConfigurations = (")
 pbx.append(f"\t\t\t\t{debug_config_target_id} /* Debug */,")
@@ -775,7 +775,7 @@ pbx.append("\t\t\tdefaultConfigurationName = Release;")
 pbx.append("\t\t};")
 
 # Share target config list
-pbx.append(f"\t\t{config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpendDropShare\" */ = {{")
+pbx.append(f"\t\t{config_list_share_id} /* Build configuration list for PBXNativeTarget \"SpenDropShare\" */ = {{")
 pbx.append("\t\t\tisa = XCConfigurationList;")
 pbx.append("\t\t\tbuildConfigurations = (")
 pbx.append(f"\t\t\t\t{debug_config_share_id} /* Debug */,")
@@ -790,7 +790,7 @@ pbx.append("\t};")
 pbx.append(f"\trootObject = {proj_id} /* Project object */;")
 pbx.append("}")
 
-output_dir = "SpendDrop.xcodeproj"
+output_dir = "SpenDrop.xcodeproj"
 os.makedirs(output_dir, exist_ok=True)
 pbx_path = os.path.join(output_dir, "project.pbxproj")
 with open(pbx_path, "w", encoding="utf-8") as f:

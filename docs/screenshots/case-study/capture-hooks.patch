@@ -1,0 +1,119 @@
+# Temporary capture hooks used on 2026-09-25 to produce the case-study screenshots.
+# Applied on top of the production sources, then reverted. Apply with: git apply docs/screenshots/case-study/capture-hooks.patch
+# Launch arguments: --demo-review <sample>, --demo-share <sample>, --demo-autosave, --demo-duplicate-alert, --open-selftest, --demo-sharesheet <sample>
+--- a/SpenDrop/Views/Dashboard/DashboardView.swift
++++ b/SpenDrop/Views/Dashboard/DashboardView.swift
+@@ -16,6 +16,10 @@
+     @State private var parsedTransaction: ParsedTransaction?
+     @State private var showingOCRError = false
+     @State private var ocrErrorMessage = ""
++
++    // TEMP-CAPTURE-HOOK: deterministic screenshot routes (reverted after capture)
++    @State private var showingDemoShare = false
++    @StateObject private var demoShareViewModel = ShareExtensionViewModel()
+ 
+     private var calendar: Calendar { Calendar.current }
+     private var now: Date { Date() }
+@@ -324,8 +328,52 @@
+                 }
+             } message: {
+                 Text(ocrErrorMessage.isEmpty ? "No clear transaction information could be extracted from this image." : ocrErrorMessage)
++            }
++            // TEMP-CAPTURE-HOOK
++            .task { await runDemoHooksIfNeeded() }
++            .fullScreenCover(isPresented: $showingDemoShare) {
++                ShareExtensionView(
++                    viewModel: demoShareViewModel,
++                    onComplete: { showingDemoShare = false },
++                    onCancel: { showingDemoShare = false }
++                )
++                .environment(\.modelContext, modelContext)
++            }
++        }
++    }
++
++    // TEMP-CAPTURE-HOOK: runs the real OCR/parser/review code on a bundled synthetic image
++    @MainActor
++    private func runDemoHooksIfNeeded() async {
++        let args = ProcessInfo.processInfo.arguments
++        func bundledImage(after flag: String) -> UIImage? {
++            guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
++            let name = args[i + 1]
++            for ext in ["png", "jpg", "heic"] {
++                if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "DiagnosticSamples")
++                    ?? Bundle.main.url(forResource: name, withExtension: ext),
++                   let image = UIImage(contentsOfFile: url.path) {
++                    return image
++                }
+             }
++            return nil
+         }
++        if let image = bundledImage(after: "--demo-review") {
++            if let ocr = try? await OCRService.shared.recognizeText(from: image) {
++                parsedTransaction = TransactionParser.shared.parse(ocrResult: ocr, image: image)
++            }
++        }
++        if let image = bundledImage(after: "--demo-share") {
++            demoShareViewModel.inputImage = image
++            showingDemoShare = true
++            demoShareViewModel.startAutomaticOCR(image: image)
++        }
++        if let image = bundledImage(after: "--demo-sharesheet") {
++            try? await Task.sleep(nanoseconds: 800_000_000)
++            let vc = UIActivityViewController(activityItems: [image], applicationActivities: nil)
++            let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
++            scene?.keyWindow?.rootViewController?.present(vc, animated: true)
++        }
+     }
+ 
+     @MainActor
+--- a/SpenDrop/ShareExtension/ShareExtensionView.swift
++++ b/SpenDrop/ShareExtension/ShareExtensionView.swift
+@@ -200,6 +200,16 @@
+             }
+             .navigationTitle("SpenDrop")
+             .navigationBarTitleDisplayMode(.inline)
++            // TEMP-CAPTURE-HOOK: autosave / duplicate-alert routes for screenshots (reverted after capture)
++            .onReceive(viewModel.$phase) { phase in
++                guard case .reviewing = phase else { return }
++                let args = ProcessInfo.processInfo.arguments
++                if args.contains("--demo-autosave") {
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { saveToSwiftData() }
++                } else if args.contains("--demo-duplicate-alert"), viewModel.duplicateResult.isDuplicate {
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { viewModel.showingDuplicateConfirmation = true }
++                }
++            }
+             .toolbar {
+                 ToolbarItem(placement: .cancellationAction) {
+                     Button("Cancel") {
+--- a/SpenDrop/Views/Settings/SettingsView.swift
++++ b/SpenDrop/Views/Settings/SettingsView.swift
+@@ -10,7 +10,7 @@
+ 
+     @State private var showingClearConfirmation = false
+     @State private var showingSampleDataLoadedAlert = false
+-    @State private var showingSelfTestSheet = false
++    @State private var showingSelfTestSheet = ProcessInfo.processInfo.arguments.contains("--open-selftest") // TEMP-CAPTURE-HOOK
+ 
+     public init() {}
+ 
+--- a/SpenDrop.xcodeproj/project.pbxproj
++++ b/SpenDrop.xcodeproj/project.pbxproj
+@@ -7,6 +7,8 @@
+ 	objects = {
+ 
+ /* Begin PBXBuildFile section */
++		DEADBEEF0000000000000001 /* ShareViewController.swift in Sources (TEMP) */ = {isa = PBXBuildFile; fileRef = 78529101E816EE614611BBC7 /* ShareViewController.swift */; };
++		DEADBEEF0000000000000002 /* ShareExtensionView.swift in Sources (TEMP) */ = {isa = PBXBuildFile; fileRef = AEC37CA6708881FE3A47B1DF /* ShareExtensionView.swift */; };
+ 		06A069F9D647AC9F5CA75C6B /* ExpenseSourceType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FB3251BCFB2155C4B11241 /* ExpenseSourceType.swift */; };
+ 		06CD1E41CC606161EA989C84 /* CurrencyFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1BACF64503C1BEC388E72D /* CurrencyFormatter.swift */; };
+ 		0F0F6E8CFADB99C31789D25D /* ExpenseReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26BB5F309361AA9377E73D89 /* ExpenseReviewView.swift */; };
+@@ -500,6 +502,8 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				DEADBEEF0000000000000001 /* ShareViewController.swift in Sources (TEMP) */,
++				DEADBEEF0000000000000002 /* ShareExtensionView.swift in Sources (TEMP) */,
+ 				22BDF41A3DB075D22F499F55 /* SpenDropApp.swift in Sources */,
+ 				9CF780B2F77FE43116520463 /* Expense.swift in Sources */,
+ 				6C42E0F36B29A5D9852B1725 /* ExpenseCategory.swift in Sources */,
