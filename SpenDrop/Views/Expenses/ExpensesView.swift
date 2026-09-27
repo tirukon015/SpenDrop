@@ -5,49 +5,13 @@ public struct ExpensesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
 
+    @Bindable private var engine = TransactionFilterEngine.shared
+
     @State private var searchText = ""
-    @State private var selectedCategory: ExpenseCategory?
-    @State private var selectedPaymentSource: PaymentSource?
     @State private var selectedExpense: Expense?
     @State private var showingAddExpense = false
 
     public init() {}
-
-    private var filteredExpenses: [Expense] {
-        allExpenses.filter { expense in
-            // Search text filter
-            let matchesSearch: Bool
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                matchesSearch = true
-            } else {
-                let term = searchText.lowercased()
-                let matchesMerchant = expense.merchant.lowercased().contains(term)
-                let matchesCategory = expense.category.rawValue.lowercased().contains(term)
-                let matchesSource = expense.paymentSource.rawValue.lowercased().contains(term)
-                let matchesNotes = expense.notes?.lowercased().contains(term) ?? false
-                let matchesAmount = String(format: "%.2f", expense.amount).contains(term)
-                matchesSearch = matchesMerchant || matchesCategory || matchesSource || matchesNotes || matchesAmount
-            }
-
-            // Category filter
-            let matchesCategory: Bool
-            if let cat = selectedCategory {
-                matchesCategory = expense.category == cat
-            } else {
-                matchesCategory = true
-            }
-
-            // Payment source filter
-            let matchesPayment: Bool
-            if let src = selectedPaymentSource {
-                matchesPayment = expense.paymentSource == src
-            } else {
-                matchesPayment = true
-            }
-
-            return matchesSearch && matchesCategory && matchesPayment
-        }
-    }
 
     // Group filtered expenses by day
     private var groupedExpenses: [(dateString: String, expenses: [Expense])] {
@@ -56,7 +20,7 @@ public struct ExpensesView: View {
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .none
 
-        let grouped = Dictionary(grouping: filteredExpenses) { (expense: Expense) -> String in
+        let grouped = Dictionary(grouping: engine.filteredExpenses) { (expense: Expense) -> String in
             if calendar.isDateInToday(expense.date) {
                 return "Today"
             } else if calendar.isDateInYesterday(expense.date) {
@@ -66,7 +30,6 @@ public struct ExpensesView: View {
             }
         }
 
-        // Sort groups by the latest date in each group, and sort expenses inside each group newest first
         return grouped.map { (dateString: $0.key, expenses: $0.value.sorted(by: { $0.date > $1.date })) }
             .sorted { (group1, group2) -> Bool in
                 guard let d1 = group1.expenses.first?.date, let d2 = group2.expenses.first?.date else { return false }
@@ -77,13 +40,53 @@ public struct ExpensesView: View {
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Filter bar
-                FilterBarView(
-                    selectedCategory: $selectedCategory,
-                    selectedPaymentSource: $selectedPaymentSource
-                )
-                .padding(.vertical, 8)
-                .background(Color(uiColor: .systemBackground))
+                // Filter bar with 10 Quick Date Filters and active tags
+                FilterBarView(engine: engine)
+                    .padding(.vertical, 8)
+                    .background(Color(uiColor: .systemBackground))
+
+                // Summary KPI Ribbon
+                if !engine.filteredExpenses.isEmpty {
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("TOTAL SPENT")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            Text(CurrencyFormatter.format(amount: engine.totalSpending))
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                        }
+
+                        Divider()
+                            .frame(height: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("COUNT")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            Text("\(engine.transactionCount) txns")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.primary)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("AVG / DAY")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            Text("\(CurrencyFormatter.format(amount: engine.averagePerDay)) / day")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                }
 
                 Divider()
 
@@ -93,11 +96,11 @@ public struct ExpensesView: View {
                         title: "No expenses recorded",
                         message: "Add your first cash expense or drop a transaction screenshot."
                     )
-                } else if filteredExpenses.isEmpty {
+                } else if engine.filteredExpenses.isEmpty {
                     emptyState(
                         icon: "magnifyingglass",
                         title: "No matching expenses",
-                        message: "Try searching with a different term or clear the active filters."
+                        message: "No transactions match '\(engine.selectedDateFilter.displayName)' with the current filters."
                     )
                 } else {
                     List {
@@ -145,6 +148,15 @@ public struct ExpensesView: View {
                 AddExpenseView()
                     .environment(\.modelContext, modelContext)
             }
+            .onAppear {
+                engine.update(expenses: allExpenses)
+            }
+            .onChange(of: allExpenses) { _, newExpenses in
+                engine.update(expenses: newExpenses)
+            }
+            .onChange(of: searchText) { _, newText in
+                engine.searchText = newText
+            }
         }
     }
 
@@ -152,6 +164,8 @@ public struct ExpensesView: View {
         HapticFeedback.notification(.warning)
         modelContext.delete(expense)
         try? modelContext.save()
+        modelContext.processPendingChanges()
+        engine.update(expenses: allExpenses)
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
@@ -170,6 +184,16 @@ public struct ExpensesView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+
+            if engine.hasActiveFilters {
+                Button("Reset Filters") {
+                    HapticFeedback.selection()
+                    engine.clearAllFilters()
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .padding(.top, 4)
+            }
 
             Spacer()
         }

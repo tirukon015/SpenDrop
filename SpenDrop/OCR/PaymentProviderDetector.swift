@@ -55,6 +55,9 @@ public struct PaymentProviderDetector {
             } else if lowerFull.contains("bank islam") || lowerFull.contains("bimb") {
                 detectedUnderlyingBank = .bankIslam
                 underlyingId = "bank_islam"
+            } else if lowerFull.contains("wise") || lowerFull.contains("transferwise") {
+                detectedUnderlyingBank = .wise
+                underlyingId = "wise"
             }
 
             let displayName: String
@@ -263,6 +266,26 @@ public struct PaymentProviderDetector {
                 displayName: "Bank Islam",
                 underlyingBank: .bankIslam,
                 underlyingBankNormalizedId: "bank_islam",
+                paymentMethod: method
+            )
+        }
+
+        // SENDER DETECTION RULE: Wise
+        let wiseKeywords = ["wise payments", "transferwise", "wise malaysia", "wise card", "wise account", "wise.com"]
+        let isWiseSender = wiseKeywords.contains(where: { lowerFull.contains($0) }) ||
+                           headerText.contains("wise") ||
+                           fromAccountText.contains("wise") ||
+                           (lowerFull.contains("wise") && (lowerFull.contains("spent") || lowerFull.contains("paid") || lowerFull.contains("sent") || lowerFull.contains("card")))
+
+        if isWiseSender {
+            let method = detectedMethod ?? "digital_wallet"
+            return ProviderDetectionResult(
+                provider: .wise,
+                normalizedId: "wise",
+                confidence: 0.98,
+                displayName: "Wise",
+                underlyingBank: .wise,
+                underlyingBankNormalizedId: "wise",
                 paymentMethod: method
             )
         }

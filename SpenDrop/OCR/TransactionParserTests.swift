@@ -1248,6 +1248,377 @@ public struct TransactionParserTests {
             ))
         }
 
+        // MARK: - Transaction Intelligence & Filtering V1 Tests (Tests 52 - 66)
+
+        // Test 52: Scenario 1 - Maybank + Apple Pay Detection
+        let mbbAppleText = """
+        Apple Pay
+        Paid RM50.00 to Starbucks
+        Maybank Debit Card ending in 4175
+        26 Sep 2026
+        """
+        let mbbAppleParsed = parser.parse(ocrResult: makeOCRResult(text: mbbAppleText))
+        let t52Passed = mbbAppleParsed.amount == 50.0 &&
+                        mbbAppleParsed.paymentChannel == .applePay &&
+                        mbbAppleParsed.displayFundingAccount.contains("Maybank")
+        results.append(TestCaseResult(
+            testName: "Scenario 1: Maybank + Apple Pay",
+            passed: t52Passed,
+            expected: "Amount: RM50.00, Channel: APPLE_PAY, Funding: Maybank",
+            actual: "Amount: RM\(mbbAppleParsed.amount ?? 0), Channel: \(mbbAppleParsed.paymentChannel.rawValue), Funding: \(mbbAppleParsed.displayFundingAccount)",
+            details: "Tests distinguishing Maybank as Funding Account and Apple Pay as Payment Channel"
+        ))
+
+        // Test 53: Scenario 2 - Maybank + QR Payment
+        let mbbQrText = """
+        Maybank2u
+        Scan & Pay Successful
+        RM35.00
+        Paid to: Restaurant Ali
+        DuitNow QR Reference: MBBQR102938
+        """
+        let mbbQrParsed = parser.parse(ocrResult: makeOCRResult(text: mbbQrText))
+        let t53Passed = mbbQrParsed.amount == 35.0 &&
+                        mbbQrParsed.paymentChannel == .qrPayment &&
+                        mbbQrParsed.displayFundingAccount.contains("Maybank")
+        results.append(TestCaseResult(
+            testName: "Scenario 2: Maybank + QR Payment",
+            passed: t53Passed,
+            expected: "Amount: RM35.00, Channel: QR_PAYMENT, Funding: Maybank",
+            actual: "Amount: RM\(mbbQrParsed.amount ?? 0), Channel: \(mbbQrParsed.paymentChannel.rawValue), Funding: \(mbbQrParsed.displayFundingAccount)",
+            details: "Tests Maybank Scan & Pay DuitNow QR detection"
+        ))
+
+        // Test 54: Scenario 3 - Maybank + Bank Transfer
+        let mbbTransferText = """
+        Maybank
+        DuitNow Transfer Successful
+        Amount: RM500.00
+        Recipient: Rahim bin Ahmad
+        Reference: 20260925MBB8291
+        """
+        let mbbTransferParsed = parser.parse(ocrResult: makeOCRResult(text: mbbTransferText))
+        let t54Passed = mbbTransferParsed.amount == 500.0 &&
+                        mbbTransferParsed.paymentChannel == .bankTransfer &&
+                        mbbTransferParsed.displayFundingAccount.contains("Maybank")
+        results.append(TestCaseResult(
+            testName: "Scenario 3: Maybank + Bank Transfer",
+            passed: t54Passed,
+            expected: "Amount: RM500.00, Channel: BANK_TRANSFER, Funding: Maybank",
+            actual: "Amount: RM\(mbbTransferParsed.amount ?? 0), Channel: \(mbbTransferParsed.paymentChannel.rawValue), Funding: \(mbbTransferParsed.displayFundingAccount)",
+            details: "Tests bank transfer channel detection with Maybank funding"
+        ))
+
+        // Test 55: Scenario 4 - Wise + Apple Pay
+        let wiseAppleText = """
+        Apple Pay
+        RM20.00
+        Uniqlo
+        Paid with Wise Card ending in 8891
+        """
+        let wiseAppleParsed = parser.parse(ocrResult: makeOCRResult(text: wiseAppleText))
+        let t55Passed = wiseAppleParsed.amount == 20.0 &&
+                        wiseAppleParsed.paymentChannel == .applePay &&
+                        wiseAppleParsed.displayFundingAccount.contains("Wise")
+        results.append(TestCaseResult(
+            testName: "Scenario 4: Wise + Apple Pay",
+            passed: t55Passed,
+            expected: "Amount: RM20.00, Channel: APPLE_PAY, Funding: Wise",
+            actual: "Amount: RM\(wiseAppleParsed.amount ?? 0), Channel: \(wiseAppleParsed.paymentChannel.rawValue), Funding: \(wiseAppleParsed.displayFundingAccount)",
+            details: "Tests Wise as funding account and Apple Pay as channel"
+        ))
+
+        // Setup In-Memory Engine for Filtering & Date Scenarios
+        let engine = TransactionFilterEngine()
+        let cal = Calendar.current
+        let testNow = Date()
+        let startOfToday = cal.startOfDay(for: testNow)
+
+        let expTodayFoodMBBApple = Expense(
+            amount: 50.0,
+            merchant: "Starbucks",
+            category: .food,
+            date: testNow,
+            paymentChannel: .applePay,
+            fundingAccount: "Maybank"
+        )
+        let exp2DaysAgoFoodMBBQR = Expense(
+            amount: 35.0,
+            merchant: "Restaurant Ali",
+            category: .food,
+            date: cal.date(byAdding: .day, value: -2, to: startOfToday)!.addingTimeInterval(3600),
+            paymentChannel: .qrPayment,
+            fundingAccount: "Maybank"
+        )
+        let exp5DaysAgoShoppingWiseApple = Expense(
+            amount: 20.0,
+            merchant: "Uniqlo",
+            category: .shopping,
+            date: cal.date(byAdding: .day, value: -5, to: startOfToday)!.addingTimeInterval(7200),
+            paymentChannel: .applePay,
+            fundingAccount: "Wise"
+        )
+        let exp15DaysAgoTransportMBB = Expense(
+            amount: 80.0,
+            merchant: "Shell Petrol",
+            category: .transport,
+            date: cal.date(byAdding: .day, value: -15, to: startOfToday)!,
+            paymentChannel: .card,
+            fundingAccount: "Maybank"
+        )
+        let expYesterdayFoodCash = Expense(
+            amount: 15.0,
+            merchant: "Mamak",
+            category: .food,
+            date: cal.date(byAdding: .day, value: -1, to: startOfToday)!.addingTimeInterval(4000),
+            paymentChannel: .cash,
+            fundingAccount: "Cash"
+        )
+
+        let sampleExpenses = [
+            expTodayFoodMBBApple,
+            expYesterdayFoodCash,
+            exp2DaysAgoFoodMBBQR,
+            exp5DaysAgoShoppingWiseApple,
+            exp15DaysAgoTransportMBB
+        ]
+        engine.update(expenses: sampleExpenses)
+
+        // Test 56: Scenario 5 - Food + Last 7 Days
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last7Days
+        engine.selectedCategory = .food
+        let food7DaysExpenses = engine.filteredExpenses
+        let food7DaysTotal = engine.totalSpending
+        let t56Passed = food7DaysExpenses.count == 3 && abs(food7DaysTotal - 100.0) < 0.01 // 50 + 15 + 35 = 100
+        results.append(TestCaseResult(
+            testName: "Scenario 5: Food + Last 7 Days",
+            passed: t56Passed,
+            expected: "3 expenses, Total: RM100.00",
+            actual: "\(food7DaysExpenses.count) expenses, Total: RM\(food7DaysTotal)",
+            details: "Tests combined category and Last 7 Days filter"
+        ))
+
+        // Test 57: Scenario 6 - Maybank + Food + Last 7 Days
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last7Days
+        engine.selectedCategory = .food
+        engine.selectedFundingAccount = "Maybank"
+        let mbbFood7Days = engine.filteredExpenses
+        let mbbFood7DaysTotal = engine.totalSpending
+        let t57Passed = mbbFood7Days.count == 2 && abs(mbbFood7DaysTotal - 85.0) < 0.01 // 50 + 35 = 85
+        results.append(TestCaseResult(
+            testName: "Scenario 6: Maybank + Food + Last 7 Days",
+            passed: t57Passed,
+            expected: "2 expenses, Total: RM85.00",
+            actual: "\(mbbFood7Days.count) expenses, Total: RM\(mbbFood7DaysTotal)",
+            details: "Tests combined Account + Category + Date window"
+        ))
+
+        // Test 58: Scenario 7 - Apple Pay + Food + Last 7 Days
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last7Days
+        engine.selectedCategory = .food
+        engine.selectedPaymentChannel = .applePay
+        let appleFood7Days = engine.filteredExpenses
+        let appleFood7DaysTotal = engine.totalSpending
+        let t58Passed = appleFood7Days.count == 1 && abs(appleFood7DaysTotal - 50.0) < 0.01
+        results.append(TestCaseResult(
+            testName: "Scenario 7: Apple Pay + Food + Last 7 Days",
+            passed: t58Passed,
+            expected: "1 expense, Total: RM50.00",
+            actual: "\(appleFood7Days.count) expenses, Total: RM\(appleFood7DaysTotal)",
+            details: "Tests combined Channel + Category + Date window"
+        ))
+
+        // Test 59: Scenario 8 - Yesterday Filter
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .yesterday
+        let yesterdayExpenses = engine.filteredExpenses
+        let t59Passed = yesterdayExpenses.count == 1 && yesterdayExpenses.first?.merchant == "Mamak"
+        results.append(TestCaseResult(
+            testName: "Scenario 8: Yesterday Filter",
+            passed: t59Passed,
+            expected: "1 expense (Mamak RM15.00)",
+            actual: "\(yesterdayExpenses.count) expense(s), First: \(yesterdayExpenses.first?.merchant ?? "nil")",
+            details: "Tests Yesterday date boundary"
+        ))
+
+        // Test 60: Scenario 9 - Last 3 Days Filter
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last3Days
+        let last3DaysExpenses = engine.filteredExpenses
+        let t60Passed = last3DaysExpenses.count == 3 // Today (Starbucks), Yesterday (Mamak), 2 Days ago (Restaurant Ali)
+        results.append(TestCaseResult(
+            testName: "Scenario 9: Last 3 Days Filter",
+            passed: t60Passed,
+            expected: "3 expenses (Starbucks, Mamak, Restaurant Ali)",
+            actual: "\(last3DaysExpenses.count) expenses",
+            details: "Tests Today + previous 2 calendar days = 3 days"
+        ))
+
+        // Test 61: Scenario 10 - Last 7 Days Filter (Today + previous 6 calendar days)
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last7Days
+        let (l7Start, l7End) = engine.dateInterval(for: .last7Days, now: testNow)
+        let daysBetween = cal.dateComponents([.day], from: cal.startOfDay(for: l7Start), to: cal.startOfDay(for: l7End)).day ?? 0
+        let l7Expenses = engine.filteredExpenses
+        let t61Passed = (daysBetween == 6) && (engine.numberOfCalendarDays == 7) && (l7Expenses.count == 4) // excludes 15 days ago
+        results.append(TestCaseResult(
+            testName: "Scenario 10: Last 7 Days (Today + previous 6 days)",
+            passed: t61Passed,
+            expected: "Exact 7 calendar days window, 4 expenses (excludes Shell)",
+            actual: "Days=\(engine.numberOfCalendarDays), Expenses=\(l7Expenses.count), Subtitle=\(engine.currentSubtitle)",
+            details: "Strict definition: Today + previous 6 calendar days"
+        ))
+
+        // Test 62: Scenario 11 - Last 30 Days Filter
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last30Days
+        let l30Expenses = engine.filteredExpenses
+        let t62Passed = l30Expenses.count == 5 && (engine.numberOfCalendarDays == 30)
+        results.append(TestCaseResult(
+            testName: "Scenario 11: Last 30 Days Filter",
+            passed: t62Passed,
+            expected: "Exact 30 calendar days window, all 5 expenses",
+            actual: "Days=\(engine.numberOfCalendarDays), Expenses=\(l30Expenses.count)",
+            details: "Today + previous 29 calendar days"
+        ))
+
+        // Test 63: Scenario 12 - Custom Date Range
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .custom
+        engine.customStartDate = cal.date(byAdding: .day, value: -6, to: startOfToday)!
+        engine.customEndDate = cal.date(byAdding: .day, value: -2, to: startOfToday)!
+        let customExpenses = engine.filteredExpenses
+        let t63Passed = customExpenses.count == 2 // 2 days ago (Restaurant Ali) and 5 days ago (Uniqlo)
+        results.append(TestCaseResult(
+            testName: "Scenario 12: Custom Date Range",
+            passed: t63Passed,
+            expected: "2 expenses within custom interval",
+            actual: "\(customExpenses.count) expenses (\(engine.currentSubtitle))",
+            details: "User custom start and end date bounds"
+        ))
+
+        // Test 64: Scenario 13 - Duplicate Apple Pay & Bank Transaction Reconciliation
+        var t64Passed = false
+        if let recSchema = try? Schema([Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self]),
+           let recConfig = try? ModelConfiguration(isStoredInMemoryOnly: true),
+           let recContainer = try? ModelContainer(for: recSchema, configurations: [recConfig]) {
+            let recCtx = recContainer.mainContext
+
+            // Record 1: Apple Pay screenshot (amount RM50, merchant Starbucks, funding Unknown, channel Apple Pay)
+            let exp1 = Expense(
+                amount: 50.0,
+                merchant: "Starbucks",
+                category: .food,
+                date: testNow,
+                paymentChannel: .applePay,
+                fundingAccount: "Unknown"
+            )
+            recCtx.insert(exp1)
+            try? recCtx.save()
+
+            // Candidate from Maybank debit statement (amount RM50, merchant Starbucks, funding Maybank, channel Unknown, reference MBB12345)
+            let match = TransactionReconciliationEngine.shared.findMatch(
+                amount: 50.0,
+                merchant: "Starbucks",
+                date: testNow,
+                reference: "MBB12345",
+                in: recCtx
+            )
+
+            let candidate = ReconcileCandidate(
+                amount: 50.0,
+                merchant: "Starbucks Mid Valley",
+                date: testNow,
+                category: .food,
+                fundingAccount: "Maybank",
+                paymentChannel: .unknown,
+                reference: "MBB12345",
+                notes: "Bank debit statement"
+            )
+
+            let reconciled = TransactionReconciliationEngine.shared.reconcile(existing: exp1, with: candidate, in: recCtx)
+            let allRec = (try? recCtx.fetch(FetchDescriptor<Expense>())) ?? []
+
+            t64Passed = match.isMatch &&
+                        allRec.count == 1 &&
+                        reconciled.effectiveFundingAccount == "Maybank" &&
+                        reconciled.paymentChannel == .applePay &&
+                        reconciled.isReconciled &&
+                        reconciled.transactionReference == "MBB12345" &&
+                        abs(reconciled.amount - 50.0) < 0.001
+        }
+        results.append(TestCaseResult(
+            testName: "Scenario 13: Reconciliation into ONE Expense",
+            passed: t64Passed,
+            expected: "Match detected, single record retained, Maybank + Apple Pay reconciled, 0 duplicate count",
+            actual: "ReconciliationPassed=\(t64Passed)",
+            details: "Merges Apple Pay authorization and bank debit into 1 financial transaction"
+        ))
+
+        // Test 65: Scenario 14 - New Transaction Immediately Appears After Saving
+        var t65Passed = false
+        if let invSchema = try? Schema([Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self]),
+           let invConfig = try? ModelConfiguration(isStoredInMemoryOnly: true),
+           let invContainer = try? ModelContainer(for: invSchema, configurations: [invConfig]) {
+            let invCtx = invContainer.mainContext
+            let testEngine = TransactionFilterEngine()
+            testEngine.selectedDateFilter = .last7Days
+            testEngine.update(expenses: (try? invCtx.fetch(FetchDescriptor<Expense>())) ?? [])
+
+            let initialCount = testEngine.filteredExpenses.count
+
+            let newExpense = Expense(
+                amount: 99.0,
+                merchant: "Apple Store",
+                category: .shopping,
+                date: testNow,
+                paymentChannel: .applePay,
+                fundingAccount: "Maybank"
+            )
+            invCtx.insert(newExpense)
+            try? invCtx.save()
+            invCtx.processPendingChanges()
+
+            testEngine.update(expenses: (try? invCtx.fetch(FetchDescriptor<Expense>())) ?? [])
+            let newCount = testEngine.filteredExpenses.count
+            t65Passed = (initialCount == 0) && (newCount == 1) && (testEngine.totalSpending == 99.0)
+        }
+        results.append(TestCaseResult(
+            testName: "Scenario 14: New Transaction Immediately Visible",
+            passed: t65Passed,
+            expected: "Engine invalidation on save updates filtered list and total instantly",
+            actual: "ImmediateVisibilityPassed=\(t65Passed)",
+            details: "Tests SwiftData processPendingChanges and TransactionFilterEngine immediate refresh"
+        ))
+
+        // Test 66: Scenario 15 - Mathematical Consistency Across All Views
+        engine.clearAllFilters()
+        engine.selectedDateFilter = .last7Days
+        let totalDirect = engine.totalSpending
+        let sumDaily = engine.dailySpending.reduce(0.0) { $0 + $1.amount }
+        let sumCategory = engine.categoryBreakdown.reduce(0.0) { $0 + $1.total }
+        let sumChannel = engine.paymentChannelBreakdown.reduce(0.0) { $0 + $1.total }
+        let sumFunding = engine.fundingAccountBreakdown.reduce(0.0) { $0 + $1.total }
+        let sumExpenses = engine.filteredExpenses.reduce(0.0) { $0 + $1.amount }
+
+        let t66Passed = abs(totalDirect - sumDaily) < 0.001 &&
+                        abs(totalDirect - sumCategory) < 0.001 &&
+                        abs(totalDirect - sumChannel) < 0.001 &&
+                        abs(totalDirect - sumFunding) < 0.001 &&
+                        abs(totalDirect - sumExpenses) < 0.001 &&
+                        totalDirect > 0
+
+        results.append(TestCaseResult(
+            testName: "Scenario 15: Mathematical Consistency Across All Views",
+            passed: t66Passed,
+            expected: "Total == Sum(Daily) == Sum(Category) == Sum(Channel) == Sum(Funding) == Sum(List)",
+            actual: "Total=\(totalDirect), Daily=\(sumDaily), Category=\(sumCategory), Channel=\(sumChannel), Funding=\(sumFunding)",
+            details: "Proves single source of truth across list, analytics, and all breakdown dimensions"
+        ))
+
         return results
     }
 }

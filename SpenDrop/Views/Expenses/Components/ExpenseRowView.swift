@@ -7,6 +7,11 @@ public struct ExpenseRowView: View {
         self.expense = expense
     }
 
+    private var fundingSource: PaymentSource? {
+        let funding = expense.effectiveFundingAccount
+        return PaymentSource.allCases.first { $0.rawValue.caseInsensitiveCompare(funding) == .orderedSame }
+    }
+
     public var body: some View {
         HStack(spacing: 14) {
             // Category Icon Badge
@@ -14,7 +19,7 @@ public struct ExpenseRowView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(expense.category.color.opacity(0.15))
                     .frame(width: 44, height: 44)
-                
+
                 Image(systemName: expense.category.icon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(expense.category.color)
@@ -22,27 +27,38 @@ public struct ExpenseRowView: View {
 
             // Merchant & Details
             VStack(alignment: .leading, spacing: 4) {
-                Text(expense.merchant)
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(expense.merchant)
+                        .font(.body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if expense.isReconciled {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
+                    }
+                }
 
                 HStack(spacing: 6) {
-                    // Payment badge
+                    // Payment badge: Funding Account • Payment Channel
                     HStack(spacing: 4) {
-                        ProviderLogoView(source: expense.paymentSource, size: 12)
-                        if expense.paymentSource == .applePay, let bank = expense.underlyingBank, bank != .unknown {
-                            ProviderLogoView(source: bank, size: 12)
+                        if let src = fundingSource {
+                            ProviderLogoView(source: src, size: 12)
+                        } else {
+                            Image(systemName: expense.paymentChannel.iconName)
+                                .font(.system(size: 10))
                         }
-                        Text(expense.paymentSource == .applePay && expense.underlyingBank != nil ? "Apple Pay • \(expense.underlyingBank!.shortName)" : expense.paymentSource.shortName)
+
+                        Text(expense.displayFundingAndChannel)
                             .font(.caption2)
                             .fontWeight(.medium)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(expense.paymentSource.brandColor.opacity(0.12))
-                    .foregroundStyle(expense.paymentSource.brandColor)
+                    .background(Color(uiColor: .tertiarySystemFill))
+                    .foregroundStyle(.primary)
                     .clipShape(Capsule())
 
                     if let notes = expense.notes, !notes.isEmpty {

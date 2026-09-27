@@ -22,6 +22,13 @@ public final class Expense {
     public var createdAt: Date
     public var updatedAt: Date
 
+    // MARK: - Transaction Intelligence V1 (Channels & Funding Accounts)
+    public var paymentChannelRaw: String = PaymentChannel.unknown.rawValue
+    public var fundingAccount: String = "Unknown"
+    public var externalTransactionId: String? = nil
+    public var matchingStatusRaw: String = "UNMATCHED"
+    public var matchingConfidence: Double? = nil
+
     public init(
         id: UUID = UUID(),
         amount: Double,
@@ -40,7 +47,12 @@ public final class Expense {
         confidence: Double? = nil,
         isSampleData: Bool = false,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        paymentChannel: PaymentChannel = .unknown,
+        fundingAccount: String? = nil,
+        externalTransactionId: String? = nil,
+        matchingStatus: String = "UNMATCHED",
+        matchingConfidence: Double? = nil
     ) {
         self.id = id
         self.amount = amount
@@ -60,6 +72,40 @@ public final class Expense {
         self.isSampleData = isSampleData
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+
+        // Funding Account derivation
+        if let explicitFunding = fundingAccount, !explicitFunding.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.fundingAccount = explicitFunding
+        } else if let bank = underlyingBank, bank != .unknown {
+            self.fundingAccount = bank.rawValue
+        } else if paymentSource != .applePay && paymentSource != .qrPayment &&
+                    paymentSource != .bankTransfer && paymentSource != .physicalCard &&
+                    paymentSource != .unknown && paymentSource != .other {
+            self.fundingAccount = paymentSource.rawValue
+        } else {
+            self.fundingAccount = "Unknown"
+        }
+
+        // Payment Channel derivation (Never guesses: uses unknown if not confirmed)
+        if paymentChannel != .unknown {
+            self.paymentChannelRaw = paymentChannel.rawValue
+        } else if paymentSource == .applePay {
+            self.paymentChannelRaw = PaymentChannel.applePay.rawValue
+        } else if paymentSource == .qrPayment || paymentMethod == "duitnow_qr" {
+            self.paymentChannelRaw = PaymentChannel.qrPayment.rawValue
+        } else if paymentSource == .bankTransfer || paymentMethod == "bank_transfer" {
+            self.paymentChannelRaw = PaymentChannel.bankTransfer.rawValue
+        } else if paymentSource == .physicalCard || paymentMethod == "card" {
+            self.paymentChannelRaw = PaymentChannel.card.rawValue
+        } else if paymentSource == .cash || paymentMethod == "cash" {
+            self.paymentChannelRaw = PaymentChannel.cash.rawValue
+        } else {
+            self.paymentChannelRaw = PaymentChannel.unknown.rawValue
+        }
+
+        self.externalTransactionId = externalTransactionId
+        self.matchingStatusRaw = matchingStatus
+        self.matchingConfidence = matchingConfidence
     }
 
     public var category: ExpenseCategory {
@@ -87,11 +133,70 @@ public final class Expense {
         set { paymentMethodRaw = newValue }
     }
 
-    public var displayPaymentTitle: String {
-        if paymentSource == .applePay, let bank = underlyingBank, bank != .unknown {
-            return "Apple Pay • \(bank.rawValue)"
+    public var paymentChannel: PaymentChannel {
+        get {
+            if let channel = PaymentChannel(rawValue: paymentChannelRaw), channel != .unknown {
+                return channel
+            }
+            // Conservative fallback for older records
+            if paymentSourceRaw == PaymentSource.applePay.rawValue || paymentMethodRaw == "digital_wallet" {
+                return .applePay
+            } else if paymentSourceRaw == PaymentSource.qrPayment.rawValue || paymentMethodRaw == "duitnow_qr" {
+                return .qrPayment
+            } else if paymentSourceRaw == PaymentSource.bankTransfer.rawValue || paymentMethodRaw == "bank_transfer" {
+                return .bankTransfer
+            } else if paymentSourceRaw == PaymentSource.physicalCard.rawValue || paymentMethodRaw == "card" {
+                return .card
+            } else if paymentSourceRaw == PaymentSource.cash.rawValue || paymentMethodRaw == "cash" {
+                return .cash
+            }
+            return .unknown
         }
-        return paymentSource.rawValue
+        set {
+            paymentChannelRaw = newValue.rawValue
+        }
+    }
+
+    public var effectiveFundingAccount: String {
+        let trimmed = fundingAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != "Unknown" {
+            return trimmed
+        }
+        if let bank = underlyingBankRaw, !bank.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, bank != "Unknown" {
+            return bank
+        }
+        if paymentSourceRaw != PaymentSource.applePay.rawValue &&
+           paymentSourceRaw != PaymentSource.qrPayment.rawValue &&
+           paymentSourceRaw != PaymentSource.bankTransfer.rawValue &&
+           paymentSourceRaw != PaymentSource.physicalCard.rawValue &&
+           paymentSourceRaw != PaymentSource.unknown.rawValue &&
+           paymentSourceRaw != PaymentSource.other.rawValue &&
+           !paymentSourceRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return paymentSourceRaw
+        }
+        return "Unknown"
+    }
+
+    public var displayFundingAndChannel: String {
+        let funding = effectiveFundingAccount
+        let channel = paymentChannel
+        if funding != "Unknown" && channel != .unknown {
+            return "\(funding) • \(channel.displayName)"
+        } else if funding != "Unknown" {
+            return funding
+        } else if channel != .unknown {
+            return channel.displayName
+        } else {
+            return "Unknown"
+        }
+    }
+
+    public var displayPaymentTitle: String {
+        displayFundingAndChannel
+    }
+
+    public var isReconciled: Bool {
+        matchingStatusRaw == "RECONCILED" || matchingStatusRaw == "MATCHED"
     }
 
     public var sourceType: ExpenseSourceType {

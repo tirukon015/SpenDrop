@@ -1,137 +1,163 @@
 import SwiftUI
 
 public struct FilterBarView: View {
-    @Binding public var selectedCategory: ExpenseCategory?
-    @Binding public var selectedPaymentSource: PaymentSource?
+    @Bindable public var engine: TransactionFilterEngine = TransactionFilterEngine.shared
+    @State private var showingCustomDatePicker = false
 
-    public init(
-        selectedCategory: Binding<ExpenseCategory?>,
-        selectedPaymentSource: Binding<PaymentSource?>
-    ) {
-        self._selectedCategory = selectedCategory
-        self._selectedPaymentSource = selectedPaymentSource
+    public init(engine: TransactionFilterEngine = TransactionFilterEngine.shared) {
+        self.engine = engine
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // "All" filter chip
-                Button(action: {
-                    HapticFeedback.selection()
-                    selectedCategory = nil
-                    selectedPaymentSource = nil
-                }) {
-                    Text("All")
-                        .font(.subheadline)
-                        .fontWeight(selectedCategory == nil && selectedPaymentSource == nil ? .semibold : .regular)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            selectedCategory == nil && selectedPaymentSource == nil
-                                ? Color.primary
-                                : Color(uiColor: .secondarySystemFill)
-                        )
-                        .foregroundStyle(
-                            selectedCategory == nil && selectedPaymentSource == nil
-                                ? Color(uiColor: .systemBackground)
-                                : Color.primary
-                        )
-                        .clipShape(Capsule())
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            // MARK: - 10 Quick Date Filters
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(QuickDateFilter.allCases) { filter in
+                        let isSelected = engine.selectedDateFilter == filter
+                        Button {
+                            HapticFeedback.selection()
+                            engine.selectedDateFilter = filter
+                            if filter == .custom {
+                                showingCustomDatePicker = true
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(filter.displayName)
+                                    .fontWeight(isSelected ? .bold : .regular)
 
-                // Cash quick filter
-                Button(action: {
-                    HapticFeedback.selection()
-                    if selectedPaymentSource == .cash {
-                        selectedPaymentSource = nil
-                    } else {
-                        selectedPaymentSource = .cash
-                    }
-                }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: PaymentSource.cash.icon)
-                        Text("Cash Only")
-                    }
-                    .font(.subheadline)
-                    .fontWeight(selectedPaymentSource == .cash ? .semibold : .regular)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(
-                        selectedPaymentSource == .cash
-                            ? Color.green
-                            : Color(uiColor: .secondarySystemFill)
-                    )
-                    .foregroundStyle(
-                        selectedPaymentSource == .cash
-                            ? Color.white
-                            : Color.primary
-                    )
-                    .clipShape(Capsule())
-                }
-
-                // Touch 'n Go quick filter
-                Button(action: {
-                    HapticFeedback.selection()
-                    if selectedPaymentSource == .touchNGo {
-                        selectedPaymentSource = nil
-                    } else {
-                        selectedPaymentSource = .touchNGo
-                    }
-                }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: PaymentSource.touchNGo.icon)
-                        Text("TNG")
-                    }
-                    .font(.subheadline)
-                    .fontWeight(selectedPaymentSource == .touchNGo ? .semibold : .regular)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(
-                        selectedPaymentSource == .touchNGo
-                            ? Color.blue
-                            : Color(uiColor: .secondarySystemFill)
-                    )
-                    .foregroundStyle(
-                        selectedPaymentSource == .touchNGo
-                            ? Color.white
-                            : Color.primary
-                    )
-                    .clipShape(Capsule())
-                }
-
-                // Category chips
-                ForEach(ExpenseCategory.allCases) { category in
-                    Button(action: {
-                        HapticFeedback.selection()
-                        if selectedCategory == category {
-                            selectedCategory = nil
-                        } else {
-                            selectedCategory = category
+                                if isSelected {
+                                    Text("(\(engine.dateSubtitle(for: filter)))")
+                                        .font(.caption2)
+                                        .opacity(0.85)
+                                }
+                            }
+                            .font(.subheadline)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemFill))
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .clipShape(Capsule())
                         }
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: category.icon)
-                            Text(category.rawValue)
+                    }
+                }
+                .padding(.horizontal)
+            }
+
+            // MARK: - Active Dimension Filter Tags (Category, Funding, Channel)
+            if engine.selectedCategory != nil || engine.selectedFundingAccount != nil || engine.selectedPaymentChannel != nil {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("Filters:")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                            .tracking(0.5)
+
+                        // Active Category Chip
+                        if let cat = engine.selectedCategory {
+                            HStack(spacing: 4) {
+                                Image(systemName: cat.icon)
+                                Text(cat.rawValue)
+                                Button {
+                                    HapticFeedback.selection()
+                                    engine.selectedCategory = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption2)
+                                }
+                            }
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(cat.color.opacity(0.2))
+                            .foregroundStyle(cat.color)
+                            .clipShape(Capsule())
                         }
-                        .font(.subheadline)
-                        .fontWeight(selectedCategory == category ? .semibold : .regular)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            selectedCategory == category
-                                ? category.color
-                                : Color(uiColor: .secondarySystemFill)
-                        )
-                        .foregroundStyle(
-                            selectedCategory == category
-                                ? Color.white
-                                : Color.primary
-                        )
-                        .clipShape(Capsule())
+
+                        // Active Funding Account Chip
+                        if let funding = engine.selectedFundingAccount {
+                            HStack(spacing: 4) {
+                                Image(systemName: "building.columns.fill")
+                                Text(funding)
+                                Button {
+                                    HapticFeedback.selection()
+                                    engine.selectedFundingAccount = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption2)
+                                }
+                            }
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundStyle(Color.blue)
+                            .clipShape(Capsule())
+                        }
+
+                        // Active Payment Channel Chip
+                        if let channel = engine.selectedPaymentChannel {
+                            HStack(spacing: 4) {
+                                Image(systemName: channel.iconName)
+                                Text(channel.displayName)
+                                Button {
+                                    HapticFeedback.selection()
+                                    engine.selectedPaymentChannel = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption2)
+                                }
+                            }
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(channel.tintColor.opacity(0.18))
+                            .foregroundStyle(channel.tintColor)
+                            .clipShape(Capsule())
+                        }
+
+                        // Reset / Clear All Filters button
+                        Button {
+                            HapticFeedback.impact(.light)
+                            engine.selectedCategory = nil
+                            engine.selectedFundingAccount = nil
+                            engine.selectedPaymentChannel = nil
+                        } label: {
+                            Text("Clear")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+        .sheet(isPresented: $showingCustomDatePicker) {
+            NavigationStack {
+                Form {
+                    Section("Select Date Range") {
+                        DatePicker("Start Date", selection: $engine.customStartDate, displayedComponents: [.date])
+                        DatePicker("End Date", selection: $engine.customEndDate, displayedComponents: [.date])
+                    }
+                }
+                .navigationTitle("Custom Range")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Apply") {
+                            showingCustomDatePicker = false
+                        }
                     }
                 }
             }
-            .padding(.horizontal)
+            .presentationDetents([.fraction(0.4)])
         }
     }
 }

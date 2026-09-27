@@ -17,6 +17,11 @@ public struct ExpenseReviewView: View {
     @State private var transactionReference: String?
     @State private var showingImagePreview = false
 
+    // Funding Account & Payment Channel
+    @State private var fundingAccount: String
+    @State private var selectedPaymentChannel: PaymentChannel
+    private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
+
     // Duplicate Check State
     @State private var duplicateResult: DuplicateCheckResult = .none
     @State private var showingDuplicateConfirmation = false
@@ -32,6 +37,8 @@ public struct ExpenseReviewView: View {
         _merchant = State(initialValue: parsed.merchant ?? "")
         _selectedCategory = State(initialValue: parsed.category ?? .other)
         _selectedPaymentSource = State(initialValue: parsed.paymentSource ?? .unknown)
+        _fundingAccount = State(initialValue: parsed.displayFundingAccount)
+        _selectedPaymentChannel = State(initialValue: parsed.paymentChannel)
         _date = State(initialValue: parsed.date ?? Date())
         _notes = State(initialValue: parsed.suggestedRemark ?? "")
         _transactionReference = State(initialValue: parsed.transactionReference)
@@ -239,58 +246,74 @@ public struct ExpenseReviewView: View {
 
                         Divider().padding(.leading, 48)
 
-                        // Payment source field
+                        // Funding Account field (Where money actually came from)
                         HStack(spacing: 12) {
-                            HStack(spacing: 4) {
-                                ProviderLogoView(source: selectedPaymentSource, size: 22)
-                                if selectedPaymentSource == .applePay, let bank = initialParsed.underlyingBank, bank != .unknown {
-                                    ProviderLogoView(source: bank, size: 22)
-                                }
-                            }
-                            .frame(minWidth: 24)
+                            Image(systemName: "building.columns.fill")
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
 
-                            Text("Payment")
+                            Text("Funding Account")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
                             Spacer()
 
                             Menu {
-                                ForEach(PaymentSource.allCases) { src in
+                                ForEach(commonFundingAccounts, id: \.self) { acc in
                                     Button {
                                         HapticFeedback.selection()
-                                        selectedPaymentSource = src
+                                        fundingAccount = acc
                                     } label: {
-                                        Label(src.rawValue, systemImage: src.icon)
+                                        Text(acc)
                                     }
                                 }
                             } label: {
                                 HStack(spacing: 6) {
-                                    if selectedPaymentSource == .applePay, let bank = initialParsed.underlyingBank, bank != .unknown {
-                                        Text("Apple Pay • \(bank.rawValue)")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(.primary)
-                                    } else {
-                                        Text(selectedPaymentSource.rawValue)
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(.primary)
-                                    }
+                                    Text(fundingAccount.isEmpty ? "Unknown" : fundingAccount)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.primary)
                                     Image(systemName: "chevron.up.chevron.down")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                        }
+                        .padding()
 
-                            if initialParsed.paymentSource != nil {
-                                Image(systemName: "checkmark")
-                                    .font(.caption2)
-                                    .foregroundStyle(.green)
-                            } else {
-                                Image(systemName: "questionmark")
-                                    .font(.caption2)
-                                    .foregroundStyle(.orange)
+                        Divider().padding(.leading, 48)
+
+                        // Payment Channel field (How payment was made)
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedPaymentChannel.iconName)
+                                .foregroundStyle(selectedPaymentChannel.tintColor)
+                                .frame(width: 24)
+
+                            Text("Payment Channel")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Menu {
+                                ForEach(PaymentChannel.allCases) { ch in
+                                    Button {
+                                        HapticFeedback.selection()
+                                        selectedPaymentChannel = ch
+                                    } label: {
+                                        Label(ch.displayName, systemImage: ch.iconName)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(selectedPaymentChannel.displayName)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.primary)
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                         .padding()
@@ -446,13 +469,16 @@ public struct ExpenseReviewView: View {
                     )
                 )
             }
-            .alert("Possible Duplicate Expense", isPresented: $showingDuplicateConfirmation) {
-                Button("Add Anyway") {
+            .alert("Existing Transaction Detected", isPresented: $showingDuplicateConfirmation) {
+                Button("Reconcile with Existing (Recommended)") {
+                    reconcileExpense()
+                }
+                Button("Add as Separate Transaction") {
                     saveExpense()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(duplicateResult.reason ?? "This transaction appears to have been recorded already. Do you want to add it anyway?")
+                Text(duplicateResult.reason ?? "This transaction matches an existing record. Reconciling will link them into one single expense without double-counting.")
             }
             .onAppear {
                 duplicateResult = DuplicateDetector.shared.checkDuplicate(
@@ -518,6 +544,44 @@ public struct ExpenseReviewView: View {
         }
     }
 
+    private func reconcileExpense() {
+        guard let existing = duplicateResult.matchedExpense else {
+            saveExpense()
+            return
+        }
+
+        var savedImagePath: String? = nil
+        if let image = initialParsed.originalImage {
+            savedImagePath = ImageStorageService.shared.saveImage(image)
+        }
+
+        let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalMerchant = trimmedMerchant.isEmpty ? "Unknown" : trimmedMerchant
+
+        let candidate = ReconcileCandidate(
+            amount: parsedAmount,
+            merchant: finalMerchant,
+            date: date,
+            category: selectedCategory,
+            fundingAccount: fundingAccount,
+            paymentChannel: selectedPaymentChannel,
+            reference: transactionReference,
+            notes: notes.isEmpty ? nil : notes,
+            imageRelativePath: savedImagePath,
+            rawOCRText: initialParsed.rawOCRText
+        )
+
+        let reconciled = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
+
+        if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
+            TransactionFilterEngine.shared.update(expenses: all)
+        }
+
+        HapticFeedback.notification(.success)
+        onSaved?(reconciled)
+        dismiss()
+    }
+
     private func saveExpense() {
         guard isValid else { return }
 
@@ -536,7 +600,7 @@ public struct ExpenseReviewView: View {
             merchant: finalMerchant,
             category: selectedCategory,
             paymentSource: selectedPaymentSource,
-            underlyingBank: selectedPaymentSource == .applePay ? initialParsed.underlyingBank : (selectedPaymentSource == .cimb || selectedPaymentSource == .maybank || selectedPaymentSource == .rhb ? selectedPaymentSource : nil),
+            underlyingBank: selectedPaymentSource == .applePay ? initialParsed.underlyingBank : nil,
             paymentMethod: selectedPaymentSource.defaultPaymentMethod,
             date: date,
             notes: notes,
@@ -544,11 +608,19 @@ public struct ExpenseReviewView: View {
             imageRelativePath: savedImagePath,
             sourceType: .screenshot,
             ocrText: initialParsed.rawOCRText,
-            confidence: initialParsed.confidence == .high ? 1.0 : (initialParsed.confidence == .medium ? 0.7 : 0.4)
+            confidence: initialParsed.confidence == .high ? 1.0 : (initialParsed.confidence == .medium ? 0.7 : 0.4),
+            paymentChannel: selectedPaymentChannel,
+            fundingAccount: fundingAccount
         )
 
         modelContext.insert(expense)
         try? modelContext.save()
+        modelContext.processPendingChanges()
+
+        // Invalidate engine cache immediately
+        if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
+            TransactionFilterEngine.shared.update(expenses: all)
+        }
 
         HapticFeedback.notification(.success)
         onSaved?(expense)

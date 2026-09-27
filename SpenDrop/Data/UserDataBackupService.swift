@@ -53,6 +53,9 @@ public final class UserDataBackupService {
         public let ocrText: String?
         public let isSampleData: Bool
         public let createdAt: Date
+        public let paymentChannelRaw: String?
+        public let fundingAccount: String?
+        public let matchingStatusRaw: String?
 
         public init(from expense: Expense) {
             self.id = expense.id
@@ -70,6 +73,9 @@ public final class UserDataBackupService {
             self.ocrText = expense.ocrText
             self.isSampleData = expense.isSampleData
             self.createdAt = expense.createdAt
+            self.paymentChannelRaw = expense.paymentChannelRaw
+            self.fundingAccount = expense.effectiveFundingAccount
+            self.matchingStatusRaw = expense.matchingStatusRaw
         }
 
         public init(
@@ -87,7 +93,10 @@ public final class UserDataBackupService {
             sourceTypeRaw: String = ExpenseSourceType.screenshot.rawValue,
             ocrText: String? = nil,
             isSampleData: Bool = false,
-            createdAt: Date = Date()
+            createdAt: Date = Date(),
+            paymentChannelRaw: String? = nil,
+            fundingAccount: String? = nil,
+            matchingStatusRaw: String? = nil
         ) {
             self.id = id
             self.amount = amount
@@ -104,6 +113,9 @@ public final class UserDataBackupService {
             self.ocrText = ocrText
             self.isSampleData = isSampleData
             self.createdAt = createdAt
+            self.paymentChannelRaw = paymentChannelRaw
+            self.fundingAccount = fundingAccount
+            self.matchingStatusRaw = matchingStatusRaw
         }
     }
 
@@ -623,6 +635,9 @@ public final class UserDataBackupService {
             let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
             let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
             let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
+            let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
+            let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
+            let matching = dto.matchingStatusRaw ?? "UNMATCHED"
 
             let expense = Expense(
                 id: dto.id,
@@ -638,7 +653,10 @@ public final class UserDataBackupService {
                 transactionReference: dto.transactionReference,
                 sourceType: sType,
                 ocrText: dto.ocrText,
-                isSampleData: dto.isSampleData
+                isSampleData: dto.isSampleData,
+                paymentChannel: channel,
+                fundingAccount: funding,
+                matchingStatus: matching
             )
             context.insert(expense)
             insertedCount += 1
@@ -962,6 +980,9 @@ public final class UserDataBackupService {
             let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
             let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
             let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
+            let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
+            let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
+            let matching = dto.matchingStatusRaw ?? "UNMATCHED"
 
             let expense = Expense(
                 id: dto.id,
@@ -977,7 +998,10 @@ public final class UserDataBackupService {
                 transactionReference: dto.transactionReference,
                 sourceType: sType,
                 ocrText: dto.ocrText,
-                isSampleData: dto.isSampleData
+                isSampleData: dto.isSampleData,
+                paymentChannel: channel,
+                fundingAccount: funding,
+                matchingStatus: matching
             )
             context.insert(expense)
             expensesAdded += 1

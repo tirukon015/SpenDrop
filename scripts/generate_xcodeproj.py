@@ -14,6 +14,7 @@ all_files = [
     ("SpenDrop/Models/Expense.swift", False),
     ("SpenDrop/Models/ExpenseCategory.swift", False),
     ("SpenDrop/Models/PaymentSource.swift", False),
+    ("SpenDrop/Models/PaymentChannel.swift", False),
     ("SpenDrop/Models/ExpenseSourceType.swift", False),
     ("SpenDrop/Models/PayBookProfile.swift", False),
     ("SpenDrop/Models/PayBookPaymentMethod.swift", False),
@@ -21,6 +22,8 @@ all_files = [
     # Data
     ("SpenDrop/Data/ExpenseDataContainer.swift", False),
     ("SpenDrop/Data/DuplicateDetector.swift", False),
+    ("SpenDrop/Data/TransactionFilterEngine.swift", False),
+    ("SpenDrop/Data/TransactionReconciliationEngine.swift", False),
     ("SpenDrop/Data/SampleData.swift", False),
     ("SpenDrop/Data/UserDataBackupService.swift", False),
     # Utils
@@ -87,12 +90,14 @@ share_source_paths = [
     "SpenDrop/Models/Expense.swift",
     "SpenDrop/Models/ExpenseCategory.swift",
     "SpenDrop/Models/PaymentSource.swift",
+    "SpenDrop/Models/PaymentChannel.swift",
     "SpenDrop/Models/ExpenseSourceType.swift",
     "SpenDrop/Models/PayBookProfile.swift",
     "SpenDrop/Models/PayBookPaymentMethod.swift",
     "SpenDrop/Models/PayBookContact.swift",
     "SpenDrop/Data/ExpenseDataContainer.swift",
     "SpenDrop/Data/DuplicateDetector.swift",
+    "SpenDrop/Data/TransactionReconciliationEngine.swift",
     "SpenDrop/Data/SampleData.swift",
     "SpenDrop/Data/UserDataBackupService.swift",
     "SpenDrop/OCR/OCRService.swift",
@@ -369,6 +374,7 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpenDrop/Models/Expense.swift"],
     file_refs["SpenDrop/Models/ExpenseCategory.swift"],
     file_refs["SpenDrop/Models/PaymentSource.swift"],
+    file_refs["SpenDrop/Models/PaymentChannel.swift"],
     file_refs["SpenDrop/Models/ExpenseSourceType.swift"],
     file_refs["SpenDrop/Models/PayBookProfile.swift"],
     file_refs["SpenDrop/Models/PayBookPaymentMethod.swift"],
@@ -379,6 +385,8 @@ data_group_id = gen_id("GROUP_Data")
 add_group(data_group_id, "Data", "Data", [
     file_refs["SpenDrop/Data/ExpenseDataContainer.swift"],
     file_refs["SpenDrop/Data/DuplicateDetector.swift"],
+    file_refs["SpenDrop/Data/TransactionFilterEngine.swift"],
+    file_refs["SpenDrop/Data/TransactionReconciliationEngine.swift"],
     file_refs["SpenDrop/Data/SampleData.swift"],
     file_refs["SpenDrop/Data/UserDataBackupService.swift"]
 ])

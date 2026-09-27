@@ -1,0 +1,106 @@
+import SwiftUI
+
+/// Distinguishes how a payment was executed (Payment Channel) from where the funds came from (Funding Account).
+/// Requirement: Never guess the payment channel. If it cannot be reliably identified, use `.unknown`.
+public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
+    case applePay = "APPLE_PAY"
+    case qrPayment = "QR_PAYMENT"
+    case bankTransfer = "BANK_TRANSFER"
+    case card = "CARD"
+    case cash = "CASH"
+    case other = "OTHER"
+    case unknown = "UNKNOWN"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .applePay: return "Apple Pay"
+        case .qrPayment: return "QR Payment"
+        case .bankTransfer: return "Bank Transfer"
+        case .card: return "Card"
+        case .cash: return "Cash"
+        case .other: return "Other"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .applePay: return "apple.logo"
+        case .qrPayment: return "qrcode"
+        case .bankTransfer: return "arrow.left.arrow.right"
+        case .card: return "creditcard.fill"
+        case .cash: return "banknote.fill"
+        case .other: return "ellipsis.circle"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+
+    public var tintColor: Color {
+        switch self {
+        case .applePay: return .primary
+        case .qrPayment: return .indigo
+        case .bankTransfer: return .teal
+        case .card: return .purple
+        case .cash: return .green
+        case .other: return .orange
+        case .unknown: return .gray
+        }
+    }
+
+    /// Conservative detection from OCR text or metadata.
+    /// Never guesses: returns .unknown if clear evidence is absent.
+    public static func detect(from text: String, paymentSource: PaymentSource? = nil, paymentMethod: String? = nil) -> PaymentChannel {
+        let lower = text.lowercased()
+
+        // 1. Apple Pay evidence
+        if lower.contains("apple pay") || lower.contains("apple wallet") || lower.contains("pay with apple") || lower.contains("apple cash") {
+            return .applePay
+        }
+
+        // 2. QR payment evidence
+        if lower.contains("duitnow qr") || lower.contains("scan & pay") || lower.contains("scan and pay") ||
+           lower.contains("qr pay") || lower.contains("paynet qr") || lower.contains("scan qr") ||
+           lower.contains("via qr") || lower.contains("d-qr") || paymentMethod == "duitnow_qr" {
+            return .qrPayment
+        }
+
+        // 3. Bank transfer evidence
+        if lower.contains("duitnow transfer") || lower.contains("fund transfer") || lower.contains("funds transfer") ||
+           lower.contains("interbank") || lower.contains("ibg") || lower.contains("fpx payment") ||
+           lower.contains("fpx") || lower.contains("giro") || lower.contains("transferred to") ||
+           lower.contains("transfer to account") || lower.contains("instant transfer") ||
+           paymentMethod == "bank_transfer" {
+            return .bankTransfer
+        }
+
+        // 4. Card evidence (Physical/Virtual card)
+        if lower.contains("visa card") || lower.contains("mastercard") || lower.contains("credit card") ||
+           lower.contains("debit card") || (lower.contains("card ending") || lower.contains("card no")) ||
+           paymentMethod == "card" {
+            return .card
+        }
+
+        // 5. Cash evidence
+        if lower.contains("cash") || lower.contains("tunai") || lower.contains("wang tunai") || paymentMethod == "cash" || paymentSource == .cash {
+            return .cash
+        }
+
+        // Conservative fallback: If paymentSource was explicitly Apple Pay or QR Payment in older data
+        if paymentSource == .applePay {
+            return .applePay
+        }
+        if paymentSource == .qrPayment {
+            return .qrPayment
+        }
+        if paymentSource == .bankTransfer {
+            return .bankTransfer
+        }
+        if paymentSource == .physicalCard {
+            return .card
+        }
+
+        return .unknown
+    }
+}

@@ -10,6 +10,7 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
     case grabPay = "GrabPay"
     case boost = "Boost"
     case duitNow = "DuitNow"
+    case wise = "Wise"
     case applePay = "Apple Pay"
     case physicalCard = "Physical Card"
     case qrPayment = "QR Payment"
@@ -38,7 +39,7 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
     public var defaultPaymentMethod: String {
         switch self {
         case .touchNGo, .grabPay, .boost: return "ewallet"
-        case .applePay: return "digital_wallet"
+        case .applePay, .wise: return "digital_wallet"
         case .maybank, .cimb, .rhb, .publicBank, .bankIslam, .duitNow, .bankTransfer: return "bank_transfer"
         case .physicalCard: return "card"
         case .qrPayment: return "qr_code"
@@ -58,6 +59,7 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
         case .grabPay: return "grabpay"
         case .boost: return "boost"
         case .duitNow: return "duitnow"
+        case .wise: return "wise"
         case .applePay: return "apple_pay"
         case .physicalCard: return "physical_card"
         case .qrPayment: return "duitnow"
@@ -100,6 +102,7 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
         case .grabPay: return "creditcard.and.123"
         case .boost: return "bolt.fill"
         case .duitNow: return "arrow.triangle.2.circlepath"
+        case .wise: return "globe.asia.australia.fill"
         case .applePay: return "apple.logo"
         case .physicalCard: return "creditcard.fill"
         case .qrPayment: return "qrcode"
@@ -121,6 +124,7 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
         case .grabPay: return Color.green
         case .boost: return Color.red
         case .duitNow: return Color.pink
+        case .wise: return Color.mint
         case .applePay: return Color.primary
         case .physicalCard: return Color.purple
         case .qrPayment: return Color.indigo

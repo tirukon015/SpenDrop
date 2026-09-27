@@ -23,6 +23,8 @@ public struct ParsedTransaction: Identifiable {
     public var provider: String
     public var providerConfidence: Double
     public var paymentMethod: String?
+    public var paymentChannel: PaymentChannel
+    public var fundingAccount: String?
     public var underlyingBank: PaymentSource?
     public var underlyingBankNormalizedId: String?
     public var suggestedRemark: String?
@@ -53,6 +55,8 @@ public struct ParsedTransaction: Identifiable {
         provider: String = "unknown",
         providerConfidence: Double = 0.0,
         paymentMethod: String? = nil,
+        paymentChannel: PaymentChannel = .unknown,
+        fundingAccount: String? = nil,
         underlyingBank: PaymentSource? = nil,
         underlyingBankNormalizedId: String? = nil,
         suggestedRemark: String? = nil,
@@ -80,6 +84,8 @@ public struct ParsedTransaction: Identifiable {
         self.provider = provider
         self.providerConfidence = providerConfidence
         self.paymentMethod = paymentMethod
+        self.paymentChannel = paymentChannel
+        self.fundingAccount = fundingAccount
         self.underlyingBank = underlyingBank
         self.underlyingBankNormalizedId = underlyingBankNormalizedId
         self.suggestedRemark = suggestedRemark
@@ -141,5 +147,18 @@ public struct ParsedTransaction: Identifiable {
 
     public var displayDate: Date {
         date ?? Date()
+    }
+
+    public var displayFundingAccount: String {
+        if let fa = fundingAccount, !fa.isEmpty, fa != "Unknown" {
+            return fa
+        }
+        if let bank = underlyingBank, bank != .unknown {
+            return bank.rawValue
+        }
+        if let src = paymentSource, src != .applePay, src != .qrPayment, src != .bankTransfer, src != .physicalCard, src != .unknown {
+            return src.rawValue
+        }
+        return "Unknown"
     }
 }

@@ -47,29 +47,16 @@ public struct ExpenseDetailView: View {
                         detailRow(title: "Category", value: expense.category.rawValue, icon: expense.category.icon, iconColor: expense.category.color)
                         Divider().padding(.leading, 48)
 
-                        HStack(spacing: 12) {
-                            HStack(spacing: 4) {
-                                ProviderLogoView(source: expense.paymentSource, size: 20)
-                                if expense.paymentSource == .applePay, let bank = expense.underlyingBank, bank != .unknown {
-                                    ProviderLogoView(source: bank, size: 20)
-                                }
-                            }
-                            .frame(width: 28, alignment: .leading)
-
-                            Text("Payment Method")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            Text(expense.displayPaymentTitle)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                        detailRow(title: "Funding Account", value: expense.effectiveFundingAccount, icon: "building.columns.fill", iconColor: .blue)
                         Divider().padding(.leading, 48)
+
+                        detailRow(title: "Payment Channel", value: expense.paymentChannel.displayName, icon: expense.paymentChannel.iconName, iconColor: expense.paymentChannel.tintColor)
+                        Divider().padding(.leading, 48)
+
+                        if expense.isReconciled {
+                            detailRow(title: "Status", value: "Reconciled", icon: "checkmark.seal.fill", iconColor: .blue)
+                            Divider().padding(.leading, 48)
+                        }
 
                         detailRow(title: "Date", value: expense.date.formatted(date: .long, time: .omitted), icon: "calendar", iconColor: .blue)
                         Divider().padding(.leading, 48)

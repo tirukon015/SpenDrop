@@ -95,6 +95,9 @@ public final class TransactionParser {
             statusDisplayText = "Possible Expense"
         }
 
+        let detectedChannel = PaymentChannel.detect(from: fullText, paymentSource: detectedSource, paymentMethod: paymentMethod)
+        let detectedFunding: String = underlyingBank?.rawValue ?? (detectedSource != .applePay && detectedSource != .qrPayment && detectedSource != .bankTransfer && detectedSource != .physicalCard && detectedSource != .unknown && detectedSource != nil ? detectedSource!.rawValue : "Unknown")
+
         return ParsedTransaction(
             amount: selectedAmount,
             amountConfidence: amountConfidence,
@@ -107,6 +110,8 @@ public final class TransactionParser {
             provider: normalizedProvider,
             providerConfidence: providerConfidence,
             paymentMethod: paymentMethod,
+            paymentChannel: detectedChannel,
+            fundingAccount: detectedFunding,
             underlyingBank: underlyingBank,
             underlyingBankNormalizedId: underlyingBankNormalizedId,
             suggestedRemark: suggestedRemark,

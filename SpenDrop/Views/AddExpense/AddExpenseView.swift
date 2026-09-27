@@ -9,10 +9,14 @@ public struct AddExpenseView: View {
     @State private var amountText: String = ""
     @State private var merchant: String = ""
     @State private var selectedCategory: ExpenseCategory = .food
+    @State private var fundingAccount: String = "Maybank"
+    @State private var selectedPaymentChannel: PaymentChannel = .unknown
     @State private var selectedPaymentSource: PaymentSource
     @State private var date: Date = Date()
     @State private var notes: String = ""
     @State private var currency: String = "RM"
+
+    private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
     // Image Import & OCR States
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -147,37 +151,75 @@ public struct AddExpenseView: View {
                         .background(Color(uiColor: .secondarySystemGroupedBackground))
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                        // PAYMENT METHOD PICKER
+                        // FUNDING ACCOUNT PICKER (Where money came from)
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("PAYMENT METHOD")
+                            Text("FUNDING ACCOUNT (WHERE MONEY CAME FROM)")
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.secondary)
-                                .tracking(1.0)
+                                .tracking(0.8)
                                 .padding(.horizontal, 4)
 
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(PaymentSource.allCases) { source in
+                                HStack(spacing: 8) {
+                                    ForEach(commonFundingAccounts, id: \.self) { acc in
                                         Button(action: {
                                             HapticFeedback.selection()
-                                            selectedPaymentSource = source
+                                            fundingAccount = acc
+                                        }) {
+                                            Text(acc)
+                                                .font(.subheadline)
+                                                .fontWeight(fundingAccount == acc ? .semibold : .regular)
+                                                .padding(.horizontal, 14)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    fundingAccount == acc
+                                                        ? Color.blue
+                                                        : Color(uiColor: .secondarySystemGroupedBackground)
+                                                )
+                                                .foregroundStyle(
+                                                    fundingAccount == acc
+                                                        ? Color.white
+                                                        : Color.primary
+                                                )
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // PAYMENT CHANNEL PICKER (How payment was made)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("PAYMENT CHANNEL (HOW PAYMENT WAS MADE)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.secondary)
+                                .tracking(0.8)
+                                .padding(.horizontal, 4)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(PaymentChannel.allCases) { channel in
+                                        Button(action: {
+                                            HapticFeedback.selection()
+                                            selectedPaymentChannel = channel
                                         }) {
                                             HStack(spacing: 6) {
-                                                Image(systemName: source.icon)
-                                                Text(source.shortName)
+                                                Image(systemName: channel.iconName)
+                                                Text(channel.displayName)
                                                     .font(.subheadline)
-                                                    .fontWeight(.medium)
+                                                    .fontWeight(selectedPaymentChannel == channel ? .semibold : .regular)
                                             }
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 10)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
                                             .background(
-                                                selectedPaymentSource == source
-                                                    ? source.brandColor
+                                                selectedPaymentChannel == channel
+                                                    ? channel.tintColor
                                                     : Color(uiColor: .secondarySystemGroupedBackground)
                                             )
                                             .foregroundStyle(
-                                                selectedPaymentSource == source
+                                                selectedPaymentChannel == channel
                                                     ? Color.white
                                                     : Color.primary
                                             )
@@ -581,11 +623,18 @@ public struct AddExpenseView: View {
             paymentSource: selectedPaymentSource,
             date: date,
             notes: notes,
-            sourceType: selectedPaymentSource == .cash ? .manual : .manual
+            sourceType: selectedPaymentChannel == .cash ? .manual : .manual,
+            paymentChannel: selectedPaymentChannel,
+            fundingAccount: fundingAccount
         )
 
         modelContext.insert(expense)
         try? modelContext.save()
+        modelContext.processPendingChanges()
+
+        if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
+            TransactionFilterEngine.shared.update(expenses: all)
+        }
 
         HapticFeedback.notification(.success)
         dismiss()
