@@ -77,7 +77,7 @@ docs/                           documentation and screenshots
 
 1. Requirements: macOS with Xcode 27 (the project was last upgraded with Xcode 27; iOS 17.0 deployment target).
 2. Clone the repository and open `SpenDrop.xcodeproj`.
-3. In **Signing & Capabilities**, select your team for both targets (`SpenDrop`, `SpenDropShare`). Automatic signing is configured; the App Group `group.com.spenddrop.shared` (kept from before the rename so existing installs keep their data) must be available to your team for device builds.
+3. In **Signing & Capabilities**, select your team for both targets (`SpenDrop`, `SpenDropShare`). Automatic signing is configured; the App Group `group.com.spendrop.shared` must be available to your team for device builds.
 
 ## Environment Variables
 
@@ -167,7 +167,7 @@ Shared framework/Swift package for the engine · XCTest target and GitHub Action
 
 ## Project Status
 
-Actively developed. Milestones 1–3 (core tracker, OCR/parser, Share Extension) and PayBook V1 are complete. Version 1.3.0. Not released. Renamed from "SpendDrop" to "SpenDrop" on 2026-09-25; existing installs keep their data because the App Group identifier was retained. The bundled diagnostic sample images are synthetic.
+Actively developed. Milestones 1–3 (core tracker, OCR/parser, Share Extension) and PayBook V1 are complete. Version 1.3.0. Not released. Fully named SpenDrop with automatic migration for legacy installs. The bundled diagnostic sample images are synthetic.
 
 ## License
 

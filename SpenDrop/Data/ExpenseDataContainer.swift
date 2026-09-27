@@ -3,12 +3,38 @@ import SwiftData
 
 @MainActor
 public final class ExpenseDataContainer {
-    /// Legacy App Group identifier, kept on purpose after the app was renamed from "SpendDrop" to "SpenDrop".
-    /// Existing installs store their data in this container; changing it would orphan users' data.
-    /// Both the main app and the Share Extension must declare this group in their entitlements.
-    public static let appGroupIdentifier = "group.com.spenddrop.shared"
+    public static let appGroupIdentifier = "group.com.spendrop.shared"
+    private static let legacyAppGroupIdentifier = "group.com.spenddrop.shared"
+
+    private static func migrateLegacyStoreIfNeeded() {
+        let fm = FileManager.default
+        guard let legacyURL = fm.containerURL(forSecurityApplicationGroupIdentifier: legacyAppGroupIdentifier),
+              let newURL = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            return
+        }
+        let legacyAppSupport = legacyURL.appendingPathComponent("Library/Application Support", isDirectory: true)
+        let newAppSupport = newURL.appendingPathComponent("Library/Application Support", isDirectory: true)
+
+        let legacyStore = legacyAppSupport.appendingPathComponent("default.store")
+        let newStore = newAppSupport.appendingPathComponent("default.store")
+
+        guard fm.fileExists(atPath: legacyStore.path) && !fm.fileExists(atPath: newStore.path) else {
+            return
+        }
+
+        try? fm.createDirectory(at: newAppSupport, withIntermediateDirectories: true)
+        let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+        for file in storeFiles {
+            let src = legacyAppSupport.appendingPathComponent(file)
+            let dst = newAppSupport.appendingPathComponent(file)
+            if fm.fileExists(atPath: src.path) {
+                try? fm.copyItem(at: src, to: dst)
+            }
+        }
+    }
 
     public static let shared: ModelContainer = {
+        migrateLegacyStoreIfNeeded()
         let schema = Schema([Expense.self, PayBookContact.self])
 
         // Store lives at <App Group>/Library/Application Support/default.store, shared by app and extension.

@@ -3,7 +3,8 @@ import UIKit
 public struct ImageStorageService {
     public static let shared = ImageStorageService()
 
-    private let folderName = "SpendDropReceipts" // legacy folder name kept so existing receipts stay reachable
+    private let folderName = "SpenDropReceipts"
+    private let legacyFolderName = "SpendDropReceipts"
 
     private init() {
         createFolderIfNeeded()
@@ -55,7 +56,20 @@ public struct ImageStorageService {
         let docURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(folderName, isDirectory: true)
             .appendingPathComponent(relativePath)
-        return UIImage(contentsOfFile: docURL.path)
+        if FileManager.default.fileExists(atPath: docURL.path) {
+            return UIImage(contentsOfFile: docURL.path)
+        }
+        // Legacy folder checks (App Group and Documents)
+        if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.spenddrop.shared") {
+            let legacyAppGroupURL = containerURL.appendingPathComponent(legacyFolderName, isDirectory: true).appendingPathComponent(relativePath)
+            if FileManager.default.fileExists(atPath: legacyAppGroupURL.path) {
+                return UIImage(contentsOfFile: legacyAppGroupURL.path)
+            }
+        }
+        let legacyDocURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(legacyFolderName, isDirectory: true)
+            .appendingPathComponent(relativePath)
+        return UIImage(contentsOfFile: legacyDocURL.path)
     }
 
     /// Deletes the image from disk

@@ -50,7 +50,7 @@
   <text x="1090" y="150" fill="#4fb2e0" font-size="14" font-weight="600" letter-spacing="1.5">ON THE DEVICE</text>
   <rect x="1090" y="168" width="462" height="170" rx="10" fill="#10151c" stroke="#4fb2e0" stroke-width="2"/>
   <text x="1110" y="200" fill="#edf1f4" font-size="20" font-weight="600">App Group shared store</text>
-  <text x="1110" y="228" fill="#99a3ad" font-size="15">group.com.spenddrop.shared</text>
+  <text x="1110" y="228" fill="#99a3ad" font-size="15">group.com.spendrop.shared</text>
   <text x="1110" y="252" fill="#99a3ad" font-size="15">SwiftData: Expense, PayBookContact</text>
   <text x="1110" y="276" fill="#99a3ad" font-size="15">receipt JPEGs beside the database</text>
   <text x="1110" y="308" fill="#626b74" font-size="14">Read by both the app and the extension</text>
