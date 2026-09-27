@@ -43,6 +43,10 @@ struct SpenDropApp: App {
                     ExpenseDataContainer.seedInitialDataIfNeeded()
                     ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
 
+                    if ProcessInfo.processInfo.arguments.contains("--restore-user-data") {
+                        UserDataBackupService.restoreAccountData(into: ExpenseDataContainer.shared.mainContext, force: true)
+                    }
+
                     if ProcessInfo.processInfo.arguments.contains("--run-image-diagnostics") {
                         let reports = await ImagePipelineDiagnostics.runAllTests()
                         for report in reports {

@@ -112,8 +112,7 @@ public final class ExpenseDataContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         do {
             let container = try ModelContainer(for: schema, configurations: [configuration])
-            SampleData.seed(into: container.mainContext)
-            seedSamplePayBookContacts(into: container.mainContext)
+            UserDataBackupService.restoreAccountData(into: container.mainContext)
             return container
         } catch {
             fatalError("Could not create preview container: \(error)")
@@ -122,26 +121,20 @@ public final class ExpenseDataContainer {
 
     public static func seedInitialDataIfNeeded() {
         let context = ExpenseDataContainer.shared.mainContext
-        let defaults = UserDefaults.standard
 
-        // Seed Paybook if empty
+        // 1. Ensure Paybook profiles exist
         var profileDescriptor = FetchDescriptor<PayBookProfile>()
         profileDescriptor.fetchLimit = 1
         let profileCount = (try? context.fetchCount(profileDescriptor)) ?? 0
-        if profileCount == 0 {
-            seedSamplePayBookContacts(into: context)
-        }
 
-        // Seed Expenses if empty
-        let seededKey = "has_seeded_initial_sample_data_v1"
-        if !defaults.bool(forKey: seededKey) {
-            var descriptor = FetchDescriptor<Expense>()
-            descriptor.fetchLimit = 1
-            let count = (try? context.fetchCount(descriptor)) ?? 0
-            if count == 0 {
-                SampleData.seed(into: context)
-            }
-            defaults.set(true, forKey: seededKey)
+        // 2. Ensure Expenses exist
+        var descriptor = FetchDescriptor<Expense>()
+        descriptor.fetchLimit = 1
+        let expenseCount = (try? context.fetchCount(descriptor)) ?? 0
+
+        if expenseCount == 0 || profileCount == 0 {
+            print("[ExpenseDataContainer] Database needs rehydration (expenses: \(expenseCount), profiles: \(profileCount)). Restoring user account & screenshot data...")
+            UserDataBackupService.restoreFromAutoBackupIfNeeded(into: context)
         }
     }
 

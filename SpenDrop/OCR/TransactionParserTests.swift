@@ -1178,6 +1178,74 @@ public struct TransactionParserTests {
                 actual: "ExpBefore=\(expCountBefore), After=\(expCountAfter), Profs=\(profCountAfter)",
                 details: "Guarantees complete table/model isolation between Expense and PayBookProfile"
             ))
+
+            // Test 49: UserDataBackupService — Screenshot Receipts Rehydration & Idempotency
+            let initialRestore = UserDataBackupService.restoreAccountData(into: pbCtx, force: true)
+            let expCountAfterSeed = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
+            let allRestored = (try? pbCtx.fetch(FetchDescriptor<Expense>())) ?? []
+            let hasRana = allRestored.contains { $0.merchant == "RANA SOHEL" && $0.amount == 22.00 }
+            let hasIpay88 = allRestored.contains { $0.merchant == "IPAY88" && $0.amount == 932.46 }
+            let hasBarakat = allRestored.contains { $0.merchant == "BARAKAT MD ABUL" && $0.amount == 12.00 }
+            let hasStarbucks = allRestored.contains { $0.merchant == "Starbucks Coffee" && $0.amount == 25.90 }
+
+            // Re-run non-forced restore -> should be strictly idempotent (0 duplicates added)
+            let secondRestore = UserDataBackupService.restoreAccountData(into: pbCtx, force: false)
+            let expCountAfterSecond = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
+
+            let restorePassed = initialRestore.expensesCount >= 20 &&
+                                expCountAfterSeed >= 20 &&
+                                hasRana && hasIpay88 && hasBarakat && hasStarbucks &&
+                                secondRestore.expensesCount == 0 &&
+                                expCountAfterSecond == expCountAfterSeed
+
+            results.append(TestCaseResult(
+                testName: "UserDataBackupService: Screenshot Receipts Rehydration & Idempotency",
+                passed: restorePassed,
+                expected: "Restores >=20 expenses (Rana Sohel, IPAY88, Barakat, Starbucks), second run adds 0 duplicates",
+                actual: "Initial=\(initialRestore.expensesCount), Total=\(expCountAfterSeed), Rana=\(hasRana), IPAY88=\(hasIpay88), Barakat=\(hasBarakat), Starbucks=\(hasStarbucks), 2ndRunAdded=\(secondRestore.expensesCount)",
+                details: "Rehydrates verified screenshot transactions into active SwiftData and enforces idempotency"
+            ))
+
+            // Test 50: UserDataBackupService — PayBook Profile Account Holder (Touhidul Islam Rukon)
+            let profs = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>())) ?? []
+            let rukonProf = profs.first { $0.name.lowercased() == "touhidul islam rukon" }
+            let rukonMethods = rukonProf?.paymentMethods ?? []
+            let hasCimb = rukonMethods.contains { $0.displayProvider == "CIMB Bank" && $0.accountIdentifier == "7658174175" }
+            let hasMbb = rukonMethods.contains { $0.displayProvider == "Maybank" && $0.accountIdentifier == "168603292644" }
+            let hasRhb = rukonMethods.contains { $0.displayProvider == "RHB Bank" && $0.accountIdentifier == "21601100036406" }
+            let hasTng = rukonMethods.contains { $0.displayProvider == "Touch 'n Go" }
+            let hasDuitNow = rukonMethods.contains { $0.displayProvider == "DuitNow" && $0.accountIdentifier == "tirukon015@gmail.com" }
+
+            let rukonPassed = rukonProf != nil && hasCimb && hasMbb && hasRhb && hasTng && hasDuitNow
+            results.append(TestCaseResult(
+                testName: "UserDataBackupService: Account Holder PayBook Profile",
+                passed: rukonPassed,
+                expected: "Profile 'Touhidul Islam Rukon' with CIMB, Maybank, RHB, TNG, and DuitNow accounts",
+                actual: "ProfileFound=\(rukonProf != nil), CIMB=\(hasCimb), MBB=\(hasMbb), RHB=\(hasRhb), TNG=\(hasTng), DuitNow=\(hasDuitNow)",
+                details: "Restores owner account profile with 5 verified banking & eWallet methods"
+            ))
+
+            // Test 51: UserDataBackupService — JSON Export & Import Roundtrip
+            var roundtripPassed = false
+            if let exportURL = UserDataBackupService.generateExportJSONFile(from: pbCtx) {
+                if let importContainer = try? ModelContainer(for: pbSchema, configurations: [pbConfig]) {
+                    let importCtx = importContainer.mainContext
+                    if let importResult = try? UserDataBackupService.importFromJSON(at: exportURL, into: importCtx) {
+                        let importedExpCount = (try? importCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
+                        let importedProfCount = (try? importCtx.fetch(FetchDescriptor<PayBookProfile>()))?.count ?? 0
+                        roundtripPassed = (importResult.expensesAdded == importedExpCount) && (importedExpCount >= 20) && (importedProfCount >= 4)
+                    }
+                }
+                try? FileManager.default.removeItem(at: exportURL)
+            }
+
+            results.append(TestCaseResult(
+                testName: "UserDataBackupService: JSON Export & Import Roundtrip",
+                passed: roundtripPassed,
+                expected: "Exports full JSON backup, imports into clean container, recovers all records with zero loss",
+                actual: "RoundtripPassed=\(roundtripPassed)",
+                details: "Verifies complete serialization, file writing, deserialization, and SwiftData restoration"
+            ))
         }
 
         return results

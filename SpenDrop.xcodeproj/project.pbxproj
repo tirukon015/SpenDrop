@@ -18,6 +18,7 @@
 		9FF5EFDA66B67C50372BA5C6 /* ExpenseDataContainer.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 6B13BFA0565178CE6CA86F31 /* ExpenseDataContainer.swift */; };
 		5AE77E69CAE1B69677D256FE /* DuplicateDetector.swift in App Sources */ = {isa = PBXBuildFile; fileRef = F9472BC1B655354029FA1C75 /* DuplicateDetector.swift */; };
 		C44BE60271B30C3ED054FBCC /* SampleData.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 61BA0658BA7924F016833930 /* SampleData.swift */; };
+		39757F5DDD9707BD045356BF /* UserDataBackupService.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 148438B821533F49A6F1BC80 /* UserDataBackupService.swift */; };
 		40AC567280C00C0A3077E07C /* CurrencyFormatter.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 4C2E5DD7370E8B1ACD070FDE /* CurrencyFormatter.swift */; };
 		8828C7BA183662656170B5D9 /* HapticFeedback.swift in App Sources */ = {isa = PBXBuildFile; fileRef = 106D5EBDD0321891C8D0CE05 /* HapticFeedback.swift */; };
 		56C05257CBE8D801EBE5BCBA /* OCRService.swift in App Sources */ = {isa = PBXBuildFile; fileRef = CE7E090FFFE372AC1C551217 /* OCRService.swift */; };
@@ -68,6 +69,7 @@
 		E585E7A052DA6C512AC02D0A /* ExpenseDataContainer.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 6B13BFA0565178CE6CA86F31 /* ExpenseDataContainer.swift */; };
 		EC03FFD8633141FB8B4F3632 /* DuplicateDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = F9472BC1B655354029FA1C75 /* DuplicateDetector.swift */; };
 		C401501A0E6691F14C48EC61 /* SampleData.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 61BA0658BA7924F016833930 /* SampleData.swift */; };
+		EC1CCCD005BF246E0FDA029C /* UserDataBackupService.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 148438B821533F49A6F1BC80 /* UserDataBackupService.swift */; };
 		421395C2CC97558432E08B35 /* OCRService.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = CE7E090FFFE372AC1C551217 /* OCRService.swift */; };
 		E9E605C4CD18ACEF0E1EEF23 /* ParsedTransaction.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 1A5CFD942731F85E3986B2A8 /* ParsedTransaction.swift */; };
 		A588CD1AD851F3CB9474E33D /* MonetaryCandidate.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 69960A5F72889E62936D12AF /* MonetaryCandidate.swift */; };
@@ -119,6 +121,7 @@
 		6B13BFA0565178CE6CA86F31 /* ExpenseDataContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExpenseDataContainer.swift"; sourceTree = "<group>"; };
 		F9472BC1B655354029FA1C75 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuplicateDetector.swift"; sourceTree = "<group>"; };
 		61BA0658BA7924F016833930 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SampleData.swift"; sourceTree = "<group>"; };
+		148438B821533F49A6F1BC80 /* UserDataBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserDataBackupService.swift"; sourceTree = "<group>"; };
 		4C2E5DD7370E8B1ACD070FDE /* CurrencyFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CurrencyFormatter.swift"; sourceTree = "<group>"; };
 		106D5EBDD0321891C8D0CE05 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HapticFeedback.swift"; sourceTree = "<group>"; };
 		CE7E090FFFE372AC1C551217 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OCRService.swift"; sourceTree = "<group>"; };
@@ -351,6 +354,7 @@
 				6B13BFA0565178CE6CA86F31,
 				F9472BC1B655354029FA1C75,
 				61BA0658BA7924F016833930,
+				148438B821533F49A6F1BC80,
 			);
 			name = "Data";
 			path = "Data";
@@ -548,6 +552,7 @@
 				9FF5EFDA66B67C50372BA5C6 /* ExpenseDataContainer.swift in Sources */,
 				5AE77E69CAE1B69677D256FE /* DuplicateDetector.swift in Sources */,
 				C44BE60271B30C3ED054FBCC /* SampleData.swift in Sources */,
+				39757F5DDD9707BD045356BF /* UserDataBackupService.swift in Sources */,
 				40AC567280C00C0A3077E07C /* CurrencyFormatter.swift in Sources */,
 				8828C7BA183662656170B5D9 /* HapticFeedback.swift in Sources */,
 				56C05257CBE8D801EBE5BCBA /* OCRService.swift in Sources */,
@@ -601,6 +606,7 @@
 				E585E7A052DA6C512AC02D0A /* ExpenseDataContainer.swift in Sources */,
 				EC03FFD8633141FB8B4F3632 /* DuplicateDetector.swift in Sources */,
 				C401501A0E6691F14C48EC61 /* SampleData.swift in Sources */,
+				EC1CCCD005BF246E0FDA029C /* UserDataBackupService.swift in Sources */,
 				421395C2CC97558432E08B35 /* OCRService.swift in Sources */,
 				E9E605C4CD18ACEF0E1EEF23 /* ParsedTransaction.swift in Sources */,
 				A588CD1AD851F3CB9474E33D /* MonetaryCandidate.swift in Sources */,

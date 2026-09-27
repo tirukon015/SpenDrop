@@ -22,6 +22,7 @@ all_files = [
     ("SpenDrop/Data/ExpenseDataContainer.swift", False),
     ("SpenDrop/Data/DuplicateDetector.swift", False),
     ("SpenDrop/Data/SampleData.swift", False),
+    ("SpenDrop/Data/UserDataBackupService.swift", False),
     # Utils
     ("SpenDrop/Utils/CurrencyFormatter.swift", False),
     ("SpenDrop/Utils/HapticFeedback.swift", False),
@@ -93,6 +94,7 @@ share_source_paths = [
     "SpenDrop/Data/ExpenseDataContainer.swift",
     "SpenDrop/Data/DuplicateDetector.swift",
     "SpenDrop/Data/SampleData.swift",
+    "SpenDrop/Data/UserDataBackupService.swift",
     "SpenDrop/OCR/OCRService.swift",
     "SpenDrop/OCR/ParsedTransaction.swift",
     "SpenDrop/OCR/MonetaryCandidate.swift",
@@ -377,7 +379,8 @@ data_group_id = gen_id("GROUP_Data")
 add_group(data_group_id, "Data", "Data", [
     file_refs["SpenDrop/Data/ExpenseDataContainer.swift"],
     file_refs["SpenDrop/Data/DuplicateDetector.swift"],
-    file_refs["SpenDrop/Data/SampleData.swift"]
+    file_refs["SpenDrop/Data/SampleData.swift"],
+    file_refs["SpenDrop/Data/UserDataBackupService.swift"]
 ])
 
 utils_group_id = gen_id("GROUP_Utils")
