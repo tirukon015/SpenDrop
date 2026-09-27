@@ -22,6 +22,10 @@ public struct AddExpenseView: View {
     @State private var showingOCRError = false
     @State private var ocrErrorMessage = ""
 
+    // PayBook Integration States
+    @State private var showingPayBookPicker = false
+    @State private var showingSaveToPayBookSheet = false
+
     // Quick suggestions for fast Malaysian daily spending
     private let quickMerchants = ["McDonald's", "Grab", "MYDIN", "Mamak", "Starbucks", "7-Eleven", "Shell"]
     private let quickAmounts: [Double] = [5, 10, 20, 50]
@@ -227,17 +231,48 @@ public struct AddExpenseView: View {
 
                         // MERCHANT INPUT & QUICK SUGGESTIONS
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("MERCHANT / STORE")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(1.0)
-                                .padding(.horizontal, 4)
+                            HStack {
+                                Text("MERCHANT / RECIPIENT")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.secondary)
+                                    .tracking(1.0)
 
-                            TextField("e.g. McDonald's, Mamak, Grab (optional)", text: $merchant)
+                                Spacer()
+
+                                Button(action: {
+                                    showingPayBookPicker = true
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "person.crop.rectangle.stack")
+                                        Text("Select from PayBook")
+                                    }
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.blue)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+
+                            TextField("e.g. McDonald's, Mamak, Rahim (optional)", text: $merchant)
                                 .padding()
                                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                            if !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button(action: {
+                                    showingSaveToPayBookSheet = true
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "person.badge.plus")
+                                        Text("Save Recipient to PayBook")
+                                    }
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.blue)
+                                }
+                                .padding(.horizontal, 4)
+                            }
 
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
@@ -362,6 +397,36 @@ public struct AddExpenseView: View {
                     dismiss()
                 }
                 .environment(\.modelContext, modelContext)
+            }
+            .sheet(isPresented: $showingPayBookPicker) {
+                PayBookPickerSheet(mode: .selectForPayment) { profile, method in
+                    merchant = profile.name
+                    let provLower = method.displayProvider.lowercased()
+                    if provLower.contains("maybank") {
+                        selectedPaymentSource = .maybank
+                    } else if provLower.contains("cimb") {
+                        selectedPaymentSource = .cimb
+                    } else if provLower.contains("rhb") {
+                        selectedPaymentSource = .rhb
+                    } else if provLower.contains("touch") || provLower.contains("tng") {
+                        selectedPaymentSource = .touchNGo
+                    } else if provLower.contains("grab") {
+                        selectedPaymentSource = .grabPay
+                    } else if provLower.contains("boost") {
+                        selectedPaymentSource = .boost
+                    } else if provLower.contains("duitnow") {
+                        selectedPaymentSource = .duitNow
+                    }
+                    let accInfo = "\(method.displayProvider): \(method.accountIdentifier)"
+                    if notes.isEmpty {
+                        notes = accInfo
+                    } else if !notes.contains(method.accountIdentifier) {
+                        notes += " (\(accInfo))"
+                    }
+                }
+            }
+            .sheet(isPresented: $showingSaveToPayBookSheet) {
+                PayBookPickerSheet(mode: .saveRecipient(name: merchant, provider: selectedPaymentSource.rawValue, account: ""))
             }
             .alert("Couldn't read this image", isPresented: $showingOCRError) {
                 Button("Try Again") {

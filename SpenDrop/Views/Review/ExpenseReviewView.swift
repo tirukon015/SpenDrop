@@ -21,6 +21,9 @@ public struct ExpenseReviewView: View {
     @State private var duplicateResult: DuplicateCheckResult = .none
     @State private var showingDuplicateConfirmation = false
 
+    // PayBook Integration State
+    @State private var showingSaveToPayBookSheet = false
+
     public init(parsed: ParsedTransaction, onSaved: ((Expense) -> Void)? = nil) {
         self.initialParsed = parsed
         self.onSaved = onSaved
@@ -380,6 +383,24 @@ public struct ExpenseReviewView: View {
 
                     // ACTION BUTTONS
                     VStack(spacing: 12) {
+                        if !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button(action: {
+                                showingSaveToPayBookSheet = true
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "person.badge.plus")
+                                    Text("Save Recipient to PayBook")
+                                }
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.blue)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color.blue.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                        }
+
                         Button(action: handleSaveTapped) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
@@ -415,6 +436,15 @@ public struct ExpenseReviewView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(isPresented: $showingSaveToPayBookSheet) {
+                PayBookPickerSheet(
+                    mode: .saveRecipient(
+                        name: merchant,
+                        provider: selectedPaymentSource.rawValue,
+                        account: transactionReference ?? ""
+                    )
+                )
             }
             .alert("Possible Duplicate Expense", isPresented: $showingDuplicateConfirmation) {
                 Button("Add Anyway") {

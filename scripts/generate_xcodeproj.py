@@ -15,6 +15,8 @@ all_files = [
     ("SpenDrop/Models/ExpenseCategory.swift", False),
     ("SpenDrop/Models/PaymentSource.swift", False),
     ("SpenDrop/Models/ExpenseSourceType.swift", False),
+    ("SpenDrop/Models/PayBookProfile.swift", False),
+    ("SpenDrop/Models/PayBookPaymentMethod.swift", False),
     ("SpenDrop/Models/PayBookContact.swift", False),
     # Data
     ("SpenDrop/Data/ExpenseDataContainer.swift", False),
@@ -47,8 +49,11 @@ all_files = [
     ("SpenDrop/Views/Expenses/Components/FilterBarView.swift", False),
     ("SpenDrop/Views/PayBook/PayBookView.swift", False),
     ("SpenDrop/Views/PayBook/PayBookDetailView.swift", False),
-    ("SpenDrop/Views/PayBook/AddPayBookContactView.swift", False),
-    ("SpenDrop/Views/PayBook/EditPayBookContactView.swift", False),
+    ("SpenDrop/Views/PayBook/AddPayBookProfileView.swift", False),
+    ("SpenDrop/Views/PayBook/EditPayBookProfileView.swift", False),
+    ("SpenDrop/Views/PayBook/AddPaymentMethodView.swift", False),
+    ("SpenDrop/Views/PayBook/EditPaymentMethodView.swift", False),
+    ("SpenDrop/Views/PayBook/PayBookPickerSheet.swift", False),
     ("SpenDrop/Views/AddExpense/AddExpenseView.swift", False),
     ("SpenDrop/Views/Review/ExpenseReviewView.swift", False),
     ("SpenDrop/Views/Analytics/AnalyticsView.swift", False),
@@ -82,6 +87,8 @@ share_source_paths = [
     "SpenDrop/Models/ExpenseCategory.swift",
     "SpenDrop/Models/PaymentSource.swift",
     "SpenDrop/Models/ExpenseSourceType.swift",
+    "SpenDrop/Models/PayBookProfile.swift",
+    "SpenDrop/Models/PayBookPaymentMethod.swift",
     "SpenDrop/Models/PayBookContact.swift",
     "SpenDrop/Data/ExpenseDataContainer.swift",
     "SpenDrop/Data/DuplicateDetector.swift",
@@ -317,8 +324,11 @@ paybook_group_id = gen_id("GROUP_Views_PayBook")
 add_group(paybook_group_id, "PayBook", "PayBook", [
     file_refs["SpenDrop/Views/PayBook/PayBookView.swift"],
     file_refs["SpenDrop/Views/PayBook/PayBookDetailView.swift"],
-    file_refs["SpenDrop/Views/PayBook/AddPayBookContactView.swift"],
-    file_refs["SpenDrop/Views/PayBook/EditPayBookContactView.swift"]
+    file_refs["SpenDrop/Views/PayBook/AddPayBookProfileView.swift"],
+    file_refs["SpenDrop/Views/PayBook/EditPayBookProfileView.swift"],
+    file_refs["SpenDrop/Views/PayBook/AddPaymentMethodView.swift"],
+    file_refs["SpenDrop/Views/PayBook/EditPaymentMethodView.swift"],
+    file_refs["SpenDrop/Views/PayBook/PayBookPickerSheet.swift"]
 ])
 
 views_group_id = gen_id("GROUP_Views")
@@ -358,6 +368,8 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpenDrop/Models/ExpenseCategory.swift"],
     file_refs["SpenDrop/Models/PaymentSource.swift"],
     file_refs["SpenDrop/Models/ExpenseSourceType.swift"],
+    file_refs["SpenDrop/Models/PayBookProfile.swift"],
+    file_refs["SpenDrop/Models/PayBookPaymentMethod.swift"],
     file_refs["SpenDrop/Models/PayBookContact.swift"]
 ])
 

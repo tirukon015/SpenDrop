@@ -1018,211 +1018,165 @@ public struct TransactionParserTests {
             ))
         }
 
-        // Test 43: PayBook — Account Number Masking & Display Subtitle
-        let pbMaskContact1 = PayBookContact(
-            name: "Rahim",
-            bankName: "Maybank",
-            accountHolderName: "Abdul Rahim",
-            accountNumber: "1234567890"
-        )
-        let pbMaskContact2 = PayBookContact(
-            name: "Ahmad",
-            bankName: "CIMB",
-            accountHolderName: "Ahmad",
-            accountNumber: "7890"
-        )
-        let mask1Correct = pbMaskContact1.maskedAccountNumber == "••••7890" &&
-                           pbMaskContact1.displaySubtitle == "Maybank ••••7890"
-        let mask2Correct = pbMaskContact2.maskedAccountNumber == "7890" &&
-                           pbMaskContact2.displaySubtitle == "CIMB • 7890"
-        let pbMaskPassed = mask1Correct && mask2Correct
+        // Test 43: PayBook — One Person / Profile -> Multiple Payment Accounts
+        let rahim = PayBookProfile(name: "Rahim")
+        let m1 = PayBookPaymentMethod(paymentType: .bankAccount, provider: "CIMB Bank", accountIdentifier: "123456789", label: "Personal", profile: rahim)
+        let m2 = PayBookPaymentMethod(paymentType: .bankAccount, provider: "Maybank", accountIdentifier: "987654321", label: "Savings", profile: rahim)
+        let m3 = PayBookPaymentMethod(paymentType: .eWallet, provider: "Touch 'n Go", accountIdentifier: "0123456789", profile: rahim)
+        rahim.paymentMethods = [m1, m2, m3]
+
+        let multipleAccountsPassed = rahim.paymentMethods.count == 3 &&
+                                     rahim.paymentMethods.contains(where: { $0.provider == "CIMB Bank" }) &&
+                                     rahim.paymentMethods.contains(where: { $0.provider == "Maybank" }) &&
+                                     rahim.paymentMethods.contains(where: { $0.provider == "Touch 'n Go" })
         results.append(TestCaseResult(
-            testName: "PayBook: Account Number Masking & Display Subtitle",
-            passed: pbMaskPassed,
-            expected: "Maybank ••••7890 and CIMB • 7890",
-            actual: "\(pbMaskContact1.displaySubtitle) and \(pbMaskContact2.displaySubtitle)",
-            details: "Tests partial masking (>4 digits) and formatted subtitle without bank logos"
+            testName: "PayBook: One Profile -> Multiple Payment Accounts",
+            passed: multipleAccountsPassed,
+            expected: "1 Rahim profile with 3 accounts (CIMB, Maybank, TNG)",
+            actual: "Count=\(rahim.paymentMethods.count), Providers=\(rahim.providersSummary)",
+            details: "Verifies that one person holds multiple bank accounts and e-wallets"
         ))
 
-        // PayBook Database Tests Container (Schema: Expense + PayBookContact)
-        let pbSchema = Schema([Expense.self, PayBookContact.self])
+        // Test 44: PayBook — Same Bank Multiple Accounts Allowed & Masking
+        let m4 = PayBookPaymentMethod(paymentType: .bankAccount, provider: "CIMB Bank", accountIdentifier: "999888777", label: "Business", profile: rahim)
+        rahim.paymentMethods.append(m4)
+        let cimbAccounts = rahim.paymentMethods.filter { $0.displayProvider == "CIMB Bank" }
+        let sameBankPassed = cimbAccounts.count == 2 &&
+                             cimbAccounts.contains(where: { $0.accountIdentifier == "123456789" }) &&
+                             cimbAccounts.contains(where: { $0.accountIdentifier == "999888777" }) &&
+                             m1.maskedIdentifier == "••••6789" &&
+                             m2.maskedIdentifier == "••••4321"
+        results.append(TestCaseResult(
+            testName: "PayBook: Same Bank Multiple Accounts Allowed",
+            passed: sameBankPassed,
+            expected: "2 distinct CIMB accounts under Rahim (123456789 and 999888777) with masking",
+            actual: "CIMB Accounts count=\(cimbAccounts.count), Masked=\(m1.maskedIdentifier)",
+            details: "Allows multiple different accounts from the same provider under one person"
+        ))
+
+        // PayBook Database Tests Container (Schema: Expense + PayBookProfile + PayBookPaymentMethod)
+        let pbSchema = Schema([Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self])
         let pbConfig = ModelConfiguration(isStoredInMemoryOnly: true)
         if let pbContainer = try? ModelContainer(for: pbSchema, configurations: [pbConfig]) {
             let pbCtx = pbContainer.mainContext
 
-            // Test 44: PayBook — Persistence Lifecycle (Insert, Fetch, Update, Delete)
-            let newContact = PayBookContact(
-                name: "Rahim",
-                bankName: "Maybank",
-                accountHolderName: "Abdul Rahim",
-                accountNumber: "1234567890",
-                phoneNumber: "0123456789"
-            )
-            pbCtx.insert(newContact)
+            // Test 45: PayBook — Duplicate Account Detection Logic
+            let testPerson = PayBookProfile(name: "Test Person")
+            pbCtx.insert(testPerson)
+            let existingAcc = PayBookPaymentMethod(paymentType: .bankAccount, provider: "Maybank", accountIdentifier: "1234-5678-90", profile: testPerson)
+            testPerson.paymentMethods.append(existingAcc)
+            pbCtx.insert(existingAcc)
             try? pbCtx.save()
 
-            let fetchDesc = FetchDescriptor<PayBookContact>(
-                predicate: #Predicate<PayBookContact> { $0.name == "Rahim" }
-            )
-            let fetched = (try? pbCtx.fetch(fetchDesc)) ?? []
-            let insertPassed = fetched.count == 1 &&
-                               fetched.first?.bankName == "Maybank" &&
-                               fetched.first?.accountNumber == "1234567890" &&
-                               fetched.first?.phoneNumber == "0123456789"
-
-            // Update
-            if let contactToUpdate = fetched.first {
-                contactToUpdate.bankName = "Maybank Islamic"
-                contactToUpdate.phoneNumber = "0198765432"
-                try? pbCtx.save()
-            }
-            let updatedList = (try? pbCtx.fetch(fetchDesc)) ?? []
-            let updatePassed = updatedList.first?.bankName == "Maybank Islamic" &&
-                               updatedList.first?.phoneNumber == "0198765432"
-
-            // Delete
-            if let contactToDelete = updatedList.first {
-                pbCtx.delete(contactToDelete)
-                try? pbCtx.save()
-            }
-            let remainingList = (try? pbCtx.fetch(fetchDesc)) ?? []
-            let deletePassed = remainingList.isEmpty
-
-            let lifecyclePassed = insertPassed && updatePassed && deletePassed
-            results.append(TestCaseResult(
-                testName: "PayBook: Persistence Lifecycle (Insert, Fetch, Update, Delete)",
-                passed: lifecyclePassed,
-                expected: "Insert=true, Update=true, Delete=true",
-                actual: "Insert=\(insertPassed), Update=\(updatePassed), Delete=\(deletePassed)",
-                details: "Verifies CRUD operations on PayBookContact in SwiftData"
-            ))
-
-            // Test 45: PayBook — Duplicate Detection Logic
-            let contactA = PayBookContact(
-                name: "Rahim",
-                bankName: "Maybank",
-                accountHolderName: "Abdul Rahim",
-                accountNumber: "1234567890"
-            )
-            pbCtx.insert(contactA)
-            try? pbCtx.save()
-
-            // Helper duplicate checker identical to PayBook Add/Edit logic
-            func isDuplicate(bank: String, account: String, contacts: [PayBookContact]) -> Bool {
-                let normBank = bank.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            func isDuplicateMethod(provider: String, account: String, in profile: PayBookProfile) -> Bool {
+                let normProv = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let normAcc = account.trimmingCharacters(in: .whitespacesAndNewlines).filter { $0.isNumber || $0.isLetter }.lowercased()
-                return contacts.contains {
-                    let exBank = $0.bankName.lowercased()
-                    let exAcc = $0.accountNumber.filter { $0.isNumber || $0.isLetter }.lowercased()
-                    return exBank == normBank && exAcc == normAcc
+                return profile.paymentMethods.contains {
+                    $0.displayProvider.lowercased() == normProv && $0.normalizedIdentifier == normAcc
                 }
             }
 
-            let allPB = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>())) ?? []
-            let dupCaseInsensitive = isDuplicate(bank: "  MAYBANK  ", account: "1234-5678-90", contacts: allPB)
-            let nonDupDiffBank = isDuplicate(bank: "CIMB", account: "1234567890", contacts: allPB)
-            let nonDupDiffAcc = isDuplicate(bank: "Maybank", account: "9999888877", contacts: allPB)
+            let dupExact = isDuplicateMethod(provider: "  MAYBANK  ", account: "1234567890", in: testPerson)
+            let nonDupDiffBank = isDuplicateMethod(provider: "CIMB", account: "1234567890", in: testPerson)
+            let nonDupDiffAcc = isDuplicateMethod(provider: "Maybank", account: "9999888877", in: testPerson)
 
-            let dupPassed = dupCaseInsensitive && !nonDupDiffBank && !nonDupDiffAcc
+            let dupPassed = dupExact && !nonDupDiffBank && !nonDupDiffAcc
             results.append(TestCaseResult(
-                testName: "PayBook: Duplicate Detection Logic",
+                testName: "PayBook: Duplicate Account Detection Logic",
                 passed: dupPassed,
-                expected: "Duplicate=true for same bank & account; false for different bank or account",
-                actual: "SameBankAcc=\(dupCaseInsensitive), DiffBank=\(nonDupDiffBank), DiffAcc=\(nonDupDiffAcc)",
-                details: "Checks case-insensitive and punctuation-stripped account duplicate detection"
+                expected: "Duplicate=true for same provider & account under person; false otherwise",
+                actual: "SameAcc=\(dupExact), DiffBank=\(nonDupDiffBank), DiffAcc=\(nonDupDiffAcc)",
+                details: "Detects duplicate payment accounts under the same person profile"
             ))
 
-            // Test 46: PayBook — Name Search Filtering Logic
-            let searchContacts = [
-                PayBookContact(name: "Ahmad Bin Ali", bankName: "CIMB", accountHolderName: "Ahmad", accountNumber: "1111"),
-                PayBookContact(name: "Abdul Rahim", bankName: "Maybank", accountHolderName: "Abdul Rahim", accountNumber: "2222"),
-                PayBookContact(name: "Siti Nurhaliza", bankName: "RHB", accountHolderName: "Siti", accountNumber: "3333"),
-                PayBookContact(name: "Tan Ah Kow", bankName: "Public Bank", accountHolderName: "Tan", accountNumber: "4444")
-            ]
-            for sc in searchContacts { pbCtx.insert(sc) }
+            // Test 46: PayBook — Persistence Lifecycle & Cascade Delete
+            let persProfile = PayBookProfile(name: "Cascade Test Person")
+            pbCtx.insert(persProfile)
+            let childMethod1 = PayBookPaymentMethod(paymentType: .bankAccount, provider: "RHB", accountIdentifier: "1111", profile: persProfile)
+            let childMethod2 = PayBookPaymentMethod(paymentType: .eWallet, provider: "Touch 'n Go", accountIdentifier: "2222", profile: persProfile)
+            persProfile.paymentMethods.append(contentsOf: [childMethod1, childMethod2])
+            pbCtx.insert(childMethod1)
+            pbCtx.insert(childMethod2)
             try? pbCtx.save()
 
-            let currentAll = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>())) ?? []
-            func filter(term: String, list: [PayBookContact]) -> [PayBookContact] {
-                let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                guard !trimmed.isEmpty else { return list }
-                return list.filter { $0.name.lowercased().contains(trimmed) }
-            }
+            let beforeProfCount = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>()))?.count ?? 0
+            let beforeMethodCount = (try? pbCtx.fetch(FetchDescriptor<PayBookPaymentMethod>()))?.count ?? 0
 
-            let ahMatches = filter(term: "ah", list: currentAll)
-            let sitiMatches = filter(term: "siti", list: currentAll)
-            let emptyMatches = filter(term: "", list: currentAll)
-            let noMatches = filter(term: "nonexistent", list: currentAll)
+            // Delete profile -> should cascade delete child methods
+            pbCtx.delete(persProfile)
+            try? pbCtx.save()
 
-            let searchPassed = ahMatches.count >= 3 && // Ahmad, Rahim, Ah Kow
-                               sitiMatches.count == 1 &&
-                               emptyMatches.count == currentAll.count &&
-                               noMatches.isEmpty
+            let afterProfCount = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>()))?.count ?? 0
+            let afterMethodCount = (try? pbCtx.fetch(FetchDescriptor<PayBookPaymentMethod>()))?.count ?? 0
+
+            let cascadePassed = (afterProfCount == beforeProfCount - 1) && (afterMethodCount == beforeMethodCount - 2)
             results.append(TestCaseResult(
-                testName: "PayBook: Name Search Filtering Logic",
-                passed: searchPassed,
-                expected: "ah matches >=3, siti matches 1, empty matches all, nonexistent matches 0",
-                actual: "ah=\(ahMatches.count), siti=\(sitiMatches.count), empty=\(emptyMatches.count), none=\(noMatches.count)",
-                details: "Tests case-insensitive name-based search and empty query fallback"
+                testName: "PayBook: Persistence Lifecycle & Cascade Delete",
+                passed: cascadePassed,
+                expected: "Profiles -1, Methods -2 on cascade delete",
+                actual: "Profs: \(beforeProfCount)->\(afterProfCount), Methods: \(beforeMethodCount)->\(afterMethodCount)",
+                details: "Deleting a person profile cascades to remove all associated payment accounts"
             ))
 
-            // Test 47: PayBook — Data Isolation from Expenses
+            // Test 47: PayBook — Search Filtering & Duplicate Person Names Allowed
+            let p1 = PayBookProfile(name: "Rahim Ali")
+            let p2 = PayBookProfile(name: "Rahim Ali") // Duplicate person name is explicitly allowed
+            let p3 = PayBookProfile(name: "Siti Nurhaliza")
+            pbCtx.insert(p1)
+            pbCtx.insert(p2)
+            pbCtx.insert(p3)
+
+            let p1Method = PayBookPaymentMethod(paymentType: .bankAccount, provider: "CIMB Bank", accountIdentifier: "77778888", profile: p1)
+            p1.paymentMethods.append(p1Method)
+            pbCtx.insert(p1Method)
+            try? pbCtx.save()
+
+            let allProfs = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>())) ?? []
+            func search(term: String, list: [PayBookProfile]) -> [PayBookProfile] {
+                let t = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard !t.isEmpty else { return list }
+                return list.filter { prof in
+                    prof.name.lowercased().contains(t) ||
+                    prof.paymentMethods.contains { $0.displayProvider.lowercased().contains(t) || $0.accountIdentifier.contains(t) }
+                }
+            }
+
+            let rahimMatches = search(term: "Rahim", list: allProfs)
+            let accountMatches = search(term: "77778888", list: allProfs)
+            let sitiMatches = search(term: "siti", list: allProfs)
+            let duplicateNamesAllowed = p1.id != p2.id && p1.name == p2.name
+
+            let searchPassed = rahimMatches.count >= 2 && accountMatches.count >= 1 && sitiMatches.count >= 1 && duplicateNamesAllowed
+            results.append(TestCaseResult(
+                testName: "PayBook: Search Filtering & Duplicate Person Names Allowed",
+                passed: searchPassed,
+                expected: "Search matches name/account; 2 Rahim profiles coexist with distinct IDs",
+                actual: "Rahim=\(rahimMatches.count), AccMatch=\(accountMatches.count), DupNamesAllowed=\(duplicateNamesAllowed)",
+                details: "Verifies search by person name and payment accounts, and permits duplicate person names"
+            ))
+
+            // Test 48: PayBook — Data Isolation from Expenses
             let expA = Expense(amount: 88.0, merchant: "PayBook Isolation Exp A", date: Date())
-            let expB = Expense(amount: 99.0, merchant: "PayBook Isolation Exp B", date: Date())
             pbCtx.insert(expA)
-            pbCtx.insert(expB)
             try? pbCtx.save()
 
             let expCountBefore = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
-            let pbCountBefore = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>()))?.count ?? 0
+            let profCountBefore = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>()))?.count ?? 0
 
-            // Delete one PayBook contact
-            if let firstPB = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>()))?.first {
-                pbCtx.delete(firstPB)
-                try? pbCtx.save()
-            }
-            let expCountAfterPBDelete = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
-            let pbCountAfterPBDelete = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>()))?.count ?? 0
+            // Delete an expense -> PayBook profiles unaffected
+            pbCtx.delete(expA)
+            try? pbCtx.save()
 
-            // Delete one Expense
-            if let firstExp = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.first {
-                pbCtx.delete(firstExp)
-                try? pbCtx.save()
-            }
-            let expCountAfterExpDelete = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
-            let pbCountAfterExpDelete = (try? pbCtx.fetch(FetchDescriptor<PayBookContact>()))?.count ?? 0
+            let expCountAfter = (try? pbCtx.fetch(FetchDescriptor<Expense>()))?.count ?? 0
+            let profCountAfter = (try? pbCtx.fetch(FetchDescriptor<PayBookProfile>()))?.count ?? 0
 
-            let isolationPassed = (expCountAfterPBDelete == expCountBefore) &&
-                                  (pbCountAfterPBDelete == pbCountBefore - 1) &&
-                                  (expCountAfterExpDelete == expCountBefore - 1) &&
-                                  (pbCountAfterExpDelete == pbCountAfterPBDelete)
+            let isolationPassed = (expCountAfter == expCountBefore - 1) && (profCountAfter == profCountBefore)
             results.append(TestCaseResult(
                 testName: "PayBook: Data Isolation from Expenses",
                 passed: isolationPassed,
-                expected: "Expense counts unaffected by PayBook deletion and vice versa",
-                actual: "ExpBefore=\(expCountBefore), AfterPBDel=\(expCountAfterPBDelete), AfterExpDel=\(expCountAfterExpDelete)",
-                details: "Guarantees complete table/model isolation between Expense and PayBookContact"
-            ))
-
-            // Test 48: PayBook — Required Field Trimming & Optional Phone Normalization
-            let whitespaceContact = PayBookContact(
-                name: "  John Doe  ",
-                bankName: "  RHB Bank  ",
-                accountHolderName: "  John Doe  ",
-                accountNumber: "  12345678  ",
-                phoneNumber: "    "
-            )
-            let trimmingPassed = whitespaceContact.name == "John Doe" &&
-                                 whitespaceContact.bankName == "RHB Bank" &&
-                                 whitespaceContact.accountHolderName == "John Doe" &&
-                                 whitespaceContact.accountNumber == "12345678" &&
-                                 whitespaceContact.phoneNumber == nil
-            results.append(TestCaseResult(
-                testName: "PayBook: Required Field Trimming & Optional Phone Normalization",
-                passed: trimmingPassed,
-                expected: "name='John Doe', bank='RHB Bank', holder='John Doe', acc='12345678', phone=nil",
-                actual: "name='\(whitespaceContact.name)', bank='\(whitespaceContact.bankName)', phone=\(whitespaceContact.phoneNumber ?? "nil")",
-                details: "Validates string sanitization and whitespace trimming on contact creation"
+                expected: "Expenses -1, PayBook profiles unaffected",
+                actual: "ExpBefore=\(expCountBefore), After=\(expCountAfter), Profs=\(profCountAfter)",
+                details: "Guarantees complete table/model isolation between Expense and PayBookProfile"
             ))
         }
 
