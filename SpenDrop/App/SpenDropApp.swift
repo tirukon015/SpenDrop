@@ -17,15 +17,17 @@ struct SpenDropApp: App {
             exit(passedCount == totalCount ? 0 : 1)
         }
 
-        // Idempotent initial seed of dummy data on first launch
-        ExpenseDataContainer.seedInitialDataIfNeeded()
-        ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
     }
 
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .task {
+                    // Safe, non-blocking initial data setup on scene presentation
+                    ExpenseDataContainer.migrateLegacyContactsIfNeeded(into: ExpenseDataContainer.shared.mainContext)
+                    ExpenseDataContainer.seedInitialDataIfNeeded()
+                    ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
+
                     if ProcessInfo.processInfo.arguments.contains("--run-image-diagnostics") {
                         let reports = await ImagePipelineDiagnostics.runAllTests()
                         for report in reports {

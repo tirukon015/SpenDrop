@@ -26,11 +26,6 @@
 	<string>SpenDrop needs camera access to photograph transaction receipts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SpenDrop needs access to your photos to analyze and import transaction screenshots.</string>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

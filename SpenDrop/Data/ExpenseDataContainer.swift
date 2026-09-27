@@ -42,13 +42,11 @@ public final class ExpenseDataContainer {
 
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            migrateLegacyContactsIfNeeded(into: container.mainContext)
             return container
         } catch {
             print("Failed to initialize App Group container: \(error). Falling back to default.")
             do {
                 let container = try ModelContainer(for: schema)
-                migrateLegacyContactsIfNeeded(into: container.mainContext)
                 return container
             } catch {
                 fatalError("Could not create ModelContainer: \(error)")
