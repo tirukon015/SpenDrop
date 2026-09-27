@@ -22,10 +22,28 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.spendrop.SpenDrop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>spendrop</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SpenDrop needs camera access to photograph transaction receipts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SpenDrop needs access to your photos to analyze and import transaction screenshots.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

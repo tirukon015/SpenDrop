@@ -4,6 +4,22 @@ import SwiftData
 @main
 struct SpenDropApp: App {
     init() {
+        print("[SPENDROP_BOOT] SpenDropApp.init started")
+        fflush(stdout)
+
+        NSSetUncaughtExceptionHandler { exception in
+            print("[SPENDROP_CRASH] Uncaught Exception: \(exception)")
+            print("[SPENDROP_CRASH] Reason: \(exception.reason ?? "none")")
+            print("[SPENDROP_CRASH] Stack: \(exception.callStackSymbols)")
+            fflush(stdout)
+        }
+
+        signal(SIGABRT) { sig in
+            print("[SPENDROP_CRASH] Signal SIGABRT: \(sig)")
+            fflush(stdout)
+            exit(1)
+        }
+
         if ProcessInfo.processInfo.arguments.contains("--run-tests") {
             let results = TransactionParserTests.runAllTests()
             for r in results {
@@ -16,7 +32,6 @@ struct SpenDropApp: App {
             fflush(stdout)
             exit(passedCount == totalCount ? 0 : 1)
         }
-
     }
 
     var body: some Scene {

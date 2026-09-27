@@ -33,26 +33,79 @@ public final class ExpenseDataContainer {
         }
     }
 
-    public static let shared: ModelContainer = {
-        migrateLegacyStoreIfNeeded()
-        let schema = Schema([Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self])
+    private static func createContainer() -> ModelContainer {
+        let fm = FileManager.default
+        let schema = Schema([
+            Expense.self,
+            PayBookProfile.self,
+            PayBookPaymentMethod.self,
+            PayBookContact.self
+        ])
 
-        // Store lives at <App Group>/Library/Application Support/default.store, shared by app and extension.
-        let modelConfiguration = ModelConfiguration(schema: schema, groupContainer: .identifier(appGroupIdentifier))
+        // 1. Check if App Group is actually accessible on this device
+        if let groupURL = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+            let appSupport = groupURL.appendingPathComponent("Library/Application Support", isDirectory: true)
+            try? fm.createDirectory(at: appSupport, withIntermediateDirectories: true)
 
-        do {
-            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            return container
-        } catch {
-            print("Failed to initialize App Group container: \(error). Falling back to default.")
+            migrateLegacyStoreIfNeeded()
+
+            let groupConfig = ModelConfiguration(schema: schema, groupContainer: .identifier(appGroupIdentifier))
             do {
-                let container = try ModelContainer(for: schema)
+                let container = try ModelContainer(for: schema, configurations: [groupConfig])
+                print("[ExpenseDataContainer] Successfully initialized App Group container.")
                 return container
             } catch {
-                fatalError("Could not create ModelContainer: \(error)")
+                print("[ExpenseDataContainer] Failed to initialize App Group container: \(error). Attempting recovery...")
+                // If the app group store is corrupted, clean up and retry
+                let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+                for f in storeFiles {
+                    try? fm.removeItem(at: appSupport.appendingPathComponent(f))
+                }
+
+                if let recoveredContainer = try? ModelContainer(for: schema, configurations: [groupConfig]) {
+                    print("[ExpenseDataContainer] Recovered App Group container after clearing corrupt store.")
+                    return recoveredContainer
+                }
             }
         }
-    }()
+
+        // 2. Fall back to standard sandbox store in Application Support
+        print("[ExpenseDataContainer] Falling back to standard sandbox store...")
+        let standardConfig = ModelConfiguration(schema: schema)
+        do {
+            let container = try ModelContainer(for: schema, configurations: [standardConfig])
+            print("[ExpenseDataContainer] Successfully initialized standard sandbox container.")
+            return container
+        } catch {
+            print("[ExpenseDataContainer] Standard container failed: \(error). Attempting sandbox store recovery...")
+            if let appSupportURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+                for f in storeFiles {
+                    try? fm.removeItem(at: appSupportURL.appendingPathComponent(f))
+                }
+            }
+            if let recovered = try? ModelContainer(for: schema, configurations: [standardConfig]) {
+                print("[ExpenseDataContainer] Recovered standard container after clearing corrupt store.")
+                return recovered
+            }
+        }
+
+        // 3. In-memory fallback: guarantees the app NEVER crashes with a black screen on launch
+        print("[ExpenseDataContainer] CRITICAL: Persisted stores failed. Initializing in-memory container.")
+        let inMemoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        if let inMemoryContainer = try? ModelContainer(for: schema, configurations: [inMemoryConfig]) {
+            return inMemoryContainer
+        }
+
+        // 4. Absolute fallback
+        do {
+            return try ModelContainer(for: schema)
+        } catch {
+            fatalError("Could not create any ModelContainer: \(error)")
+        }
+    }
+
+    public static let shared: ModelContainer = createContainer()
 
     public static let previewContainer: ModelContainer = {
         let schema = Schema([Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self])
@@ -68,18 +121,28 @@ public final class ExpenseDataContainer {
     }()
 
     public static func seedInitialDataIfNeeded() {
-        let defaults = UserDefaults.standard
-        let seededKey = "has_seeded_initial_sample_data_v1"
-        guard !defaults.bool(forKey: seededKey) else { return }
-
         let context = ExpenseDataContainer.shared.mainContext
-        var descriptor = FetchDescriptor<Expense>()
-        descriptor.fetchLimit = 1
-        let count = (try? context.fetchCount(descriptor)) ?? 0
-        if count == 0 {
-            SampleData.seed(into: context)
+        let defaults = UserDefaults.standard
+
+        // Seed Paybook if empty
+        var profileDescriptor = FetchDescriptor<PayBookProfile>()
+        profileDescriptor.fetchLimit = 1
+        let profileCount = (try? context.fetchCount(profileDescriptor)) ?? 0
+        if profileCount == 0 {
+            seedSamplePayBookContacts(into: context)
         }
-        defaults.set(true, forKey: seededKey)
+
+        // Seed Expenses if empty
+        let seededKey = "has_seeded_initial_sample_data_v1"
+        if !defaults.bool(forKey: seededKey) {
+            var descriptor = FetchDescriptor<Expense>()
+            descriptor.fetchLimit = 1
+            let count = (try? context.fetchCount(descriptor)) ?? 0
+            if count == 0 {
+                SampleData.seed(into: context)
+            }
+            defaults.set(true, forKey: seededKey)
+        }
     }
 
     /// Migrates any legacy PayBookContact records to PayBookProfile + PayBookPaymentMethod
@@ -88,6 +151,10 @@ public final class ExpenseDataContainer {
         guard let legacyContacts = try? context.fetch(desc), !legacyContacts.isEmpty else { return }
 
         let existingProfiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
+        var profilesByName: [String: PayBookProfile] = [:]
+        for prof in existingProfiles {
+            profilesByName[prof.name.lowercased()] = prof
+        }
 
         for contact in legacyContacts {
             let trimmedName = contact.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -98,11 +165,12 @@ public final class ExpenseDataContainer {
 
             // Find existing profile with the same name or create a new one
             let profile: PayBookProfile
-            if let found = existingProfiles.first(where: { $0.name.lowercased() == trimmedName.lowercased() }) {
+            if let found = profilesByName[trimmedName.lowercased()] {
                 profile = found
             } else {
                 let newProf = PayBookProfile(name: trimmedName)
                 context.insert(newProf)
+                profilesByName[trimmedName.lowercased()] = newProf
                 profile = newProf
             }
 
