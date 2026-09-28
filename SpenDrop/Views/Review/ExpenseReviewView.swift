@@ -248,13 +248,13 @@ public struct ExpenseReviewView: View {
 
                         Divider().padding(.leading, 48)
 
-                        // Funding Account field (Where money actually came from)
+                        // Funding Method field (Where money actually came from)
                         HStack(spacing: 12) {
                             Image(systemName: "building.columns.fill")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
 
-                            Text("Funding Account")
+                            Text("Funding Method")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 

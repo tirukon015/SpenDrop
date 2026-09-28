@@ -95,16 +95,16 @@ public struct EditExpenseView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
-                    // FUNDING ACCOUNT EDIT
+                    // FUNDING METHOD EDIT
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("FUNDING ACCOUNT (WHERE MONEY CAME FROM)")
+                        Text("FUNDING METHOD (WHERE MONEY CAME FROM)")
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
                             .tracking(0.8)
                             .padding(.horizontal, 4)
 
-                        Picker("Funding Account", selection: $fundingAccount) {
+                        Picker("Funding Method", selection: $fundingAccount) {
                             ForEach(commonFundingAccounts, id: \.self) { acc in
                                 Text(acc).tag(acc)
                             }

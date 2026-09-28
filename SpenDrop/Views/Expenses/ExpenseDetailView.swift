@@ -47,7 +47,7 @@ public struct ExpenseDetailView: View {
                         detailRow(title: "Category", value: expense.category.rawValue, icon: expense.category.icon, iconColor: expense.category.color)
                         Divider().padding(.leading, 48)
 
-                        detailRow(title: "Funding Account", value: expense.effectiveFundingAccount, icon: "building.columns.fill", iconColor: .blue)
+                        detailRow(title: "Funding Method", value: expense.effectiveFundingAccount, icon: "building.columns.fill", iconColor: .blue)
                         Divider().padding(.leading, 48)
 
                         detailRow(title: "Payment Channel", value: expense.paymentChannel.displayName, icon: expense.paymentChannel.iconName, iconColor: expense.paymentChannel.tintColor)
