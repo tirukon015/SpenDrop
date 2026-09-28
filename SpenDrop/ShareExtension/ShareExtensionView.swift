@@ -1,6 +1,35 @@
 import SwiftUI
 import SwiftData
 
+// Diagnostic logger that writes to stdout, system console, and shared App Group container
+public func shareLog(_ message: String) {
+    let timestamp = ISO8601DateFormatter().string(from: Date())
+    let formatted: String
+    if message.hasPrefix("[SpenDropShare]") {
+        formatted = "[\(timestamp)] \(message)"
+    } else {
+        formatted = "[\(timestamp)] [SpenDropShare] \(message)"
+    }
+    print(formatted)
+    NSLog("%@", formatted)
+
+    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ExpenseDataContainer.appGroupIdentifier) {
+        let logURL = containerURL.appendingPathComponent("share_extension_diagnostics.log")
+        let entry = formatted + "\n"
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logURL.path) {
+                if let fileHandle = try? FileHandle(forWritingTo: logURL) {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    try? fileHandle.close()
+                }
+            } else {
+                try? data.write(to: logURL, options: .atomic)
+            }
+        }
+    }
+}
+
 public enum ShareExtensionPhase {
     case receiving
     case processing(image: UIImage)
@@ -19,6 +48,9 @@ public final class ShareExtensionViewModel: ObservableObject {
     @Published public var amountText: String = ""
     @Published public var merchant: String = ""
     @Published public var selectedCategory: ExpenseCategory = .other
+    @Published public var fundingAccount: String = "Maybank"
+    @Published public var selectedPaymentChannel: PaymentChannel = .unknown
+    @Published public var fundingInstrument: String? = nil
     @Published public var selectedPaymentSource: PaymentSource = .unknown
     @Published public var date: Date = Date()
     @Published public var notes: String = ""
@@ -96,17 +128,7 @@ public final class ShareExtensionViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
 
             // Populate detected fields
-            if let amt = parsed.amount {
-                self.amountText = String(format: "%.2f", amt)
-            } else {
-                self.amountText = ""
-            }
-
-            self.merchant = parsed.merchant ?? ""
-            self.selectedCategory = parsed.category ?? .other
-            self.selectedPaymentSource = parsed.paymentSource ?? .unknown
-            self.date = parsed.date ?? Date()
-            self.transactionReference = parsed.transactionReference
+            self.applyParsedTransaction(parsed)
 
             // Duplicate detection executed safely
             do {
@@ -127,6 +149,27 @@ public final class ShareExtensionViewModel: ObservableObject {
         }
     }
 
+    /// Directly applies parsed transaction fields into the view model
+    public func applyParsedTransaction(_ parsed: ParsedTransaction) {
+        if let amt = parsed.amount {
+            self.amountText = String(format: "%.2f", amt)
+        } else {
+            self.amountText = ""
+        }
+
+        self.merchant = parsed.merchant ?? ""
+        self.selectedCategory = parsed.category ?? .other
+        self.fundingAccount = parsed.displayFundingAccount
+        self.selectedPaymentChannel = parsed.paymentChannel
+        self.fundingInstrument = parsed.fundingInstrument
+        self.selectedPaymentSource = parsed.paymentSource ?? .unknown
+        self.date = parsed.date ?? Date()
+        self.transactionReference = parsed.transactionReference
+        if let suggested = parsed.suggestedRemark, !suggested.isEmpty {
+            self.notes = suggested
+        }
+    }
+
     /// Prepares manual entry review screen when OCR finds no text or user chooses manual input
     public func enterManualDetails(image: UIImage) {
         cancelTask()
@@ -140,9 +183,13 @@ public final class ShareExtensionViewModel: ObservableObject {
         self.amountText = ""
         self.merchant = ""
         self.selectedCategory = .other
+        self.fundingAccount = "Maybank"
+        self.selectedPaymentChannel = .unknown
+        self.fundingInstrument = nil
         self.selectedPaymentSource = .unknown
         self.date = Date()
         self.transactionReference = nil
+        self.notes = ""
         self.duplicateResult = .none
         shareLog("[SpenDropShare][OCR] review/result UI presented (manual entry)")
         self.phase = .reviewing(image: image, parsed: manualParsed)
@@ -155,6 +202,7 @@ public struct ShareExtensionView: View {
     public let onCancel: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
     public init(
         viewModel: ShareExtensionViewModel,
@@ -496,26 +544,26 @@ public struct ShareExtensionView: View {
 
                     Divider().padding(.leading, 52)
 
-                    // Payment Method
+                    // Funding Account (Where money came from)
                     HStack(spacing: 12) {
-                        Image(systemName: viewModel.selectedPaymentSource.icon)
-                            .foregroundStyle(viewModel.selectedPaymentSource.brandColor)
+                        Image(systemName: "building.columns.fill")
+                            .foregroundStyle(.blue)
                             .frame(width: 24)
-                        Text("Payment")
+                        Text("Funding Account")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Menu {
-                            ForEach(PaymentSource.allCases) { src in
+                            ForEach(commonFundingAccounts, id: \.self) { acc in
                                 Button {
-                                    viewModel.selectedPaymentSource = src
+                                    viewModel.fundingAccount = acc
                                 } label: {
-                                    Label(src.rawValue, systemImage: src.icon)
+                                    Text(acc)
                                 }
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text(viewModel.selectedPaymentSource.rawValue)
+                                Text(viewModel.fundingAccount.isEmpty ? "Unknown" : viewModel.fundingAccount)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .foregroundStyle(.primary)
@@ -527,6 +575,61 @@ public struct ShareExtensionView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+
+                    Divider().padding(.leading, 52)
+
+                    // Payment Channel (How payment was made - ALWAYS VISIBLE)
+                    HStack(spacing: 12) {
+                        Image(systemName: viewModel.selectedPaymentChannel.iconName)
+                            .foregroundStyle(viewModel.selectedPaymentChannel.tintColor)
+                            .frame(width: 24)
+                        Text("Payment Channel")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Menu {
+                            ForEach(PaymentChannel.allCases) { ch in
+                                Button {
+                                    viewModel.selectedPaymentChannel = ch
+                                } label: {
+                                    Label(ch.displayName, systemImage: ch.iconName)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(viewModel.selectedPaymentChannel.displayName)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.primary)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+
+                    // Funding Instrument (if available)
+                    if let instrument = viewModel.fundingInstrument, !instrument.isEmpty {
+                        Divider().padding(.leading, 52)
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "creditcard")
+                                .foregroundStyle(.orange)
+                                .frame(width: 24)
+                            Text("Funding Instrument")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(instrument)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
 
                     Divider().padding(.leading, 52)
 
@@ -658,31 +761,59 @@ public struct ShareExtensionView: View {
     }
 
     private func saveToSwiftData() {
-        guard isValid, let image = viewModel.inputImage else { return }
+        guard isValid else { return }
 
-        let savedImagePath = ImageStorageService.shared.saveImage(image)
+        let savedImagePath = viewModel.inputImage.flatMap { ImageStorageService.shared.saveImage($0) }
         let trimmedMerchant = viewModel.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalMerchant = trimmedMerchant.isEmpty ? "Unknown" : trimmedMerchant
 
-        let expense = Expense(
-            amount: parsedAmount,
-            currency: "RM",
-            merchant: finalMerchant,
-            category: viewModel.selectedCategory,
-            paymentSource: viewModel.selectedPaymentSource,
-            date: viewModel.date,
-            notes: viewModel.notes,
-            transactionReference: viewModel.transactionReference,
-            imageRelativePath: savedImagePath,
-            sourceType: .shareExtension,
-            ocrText: nil,
-            confidence: 1.0
-        )
+        var resolvedSource = viewModel.selectedPaymentSource
+        if resolvedSource == .unknown {
+            resolvedSource = PaymentSource.from(string: viewModel.fundingAccount)
+        }
 
-        modelContext.insert(expense)
+        if let existing = viewModel.duplicateResult.matchedExpense {
+            let candidate = ReconcileCandidate(
+                amount: parsedAmount,
+                merchant: finalMerchant,
+                date: viewModel.date,
+                category: viewModel.selectedCategory,
+                fundingAccount: viewModel.fundingAccount,
+                paymentChannel: viewModel.selectedPaymentChannel,
+                reference: viewModel.transactionReference,
+                notes: viewModel.notes.isEmpty ? nil : viewModel.notes,
+                imageRelativePath: savedImagePath,
+                rawOCRText: nil,
+                fundingInstrument: viewModel.fundingInstrument
+            )
+            _ = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
+        } else {
+            let expense = Expense(
+                amount: parsedAmount,
+                currency: "RM",
+                merchant: finalMerchant,
+                category: viewModel.selectedCategory,
+                paymentSource: resolvedSource,
+                underlyingBank: resolvedSource == .applePay ? PaymentSource.from(string: viewModel.fundingAccount) : nil,
+                paymentMethod: resolvedSource.defaultPaymentMethod,
+                date: viewModel.date,
+                notes: viewModel.notes,
+                transactionReference: viewModel.transactionReference,
+                imageRelativePath: savedImagePath,
+                sourceType: .shareExtension,
+                ocrText: nil,
+                confidence: 1.0,
+                paymentChannel: viewModel.selectedPaymentChannel,
+                fundingAccount: viewModel.fundingAccount,
+                fundingInstrument: viewModel.fundingInstrument
+            )
+            modelContext.insert(expense)
+        }
+
         do {
             try modelContext.save()
-            shareLog("[SpenDropShare][OCR] expense saved successfully: \(finalMerchant) RM\(parsedAmount)")
+            modelContext.processPendingChanges()
+            shareLog("[SpenDropShare][OCR] expense saved successfully: \(finalMerchant) RM\(parsedAmount), channel: \(viewModel.selectedPaymentChannel.displayName), funding: \(viewModel.fundingAccount)")
         } catch {
             shareLog("[SpenDropShare][OCR][ERROR] failed to save expense: \(error.localizedDescription)")
         }

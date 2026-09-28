@@ -51,22 +51,34 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
 
     /// Conservative detection from OCR text or metadata.
     /// Never guesses: returns .unknown if clear evidence is absent.
-    public static func detect(from text: String, paymentSource: PaymentSource? = nil, paymentMethod: String? = nil) -> PaymentChannel {
-        let lower = text.lowercased()
-
-        // 1. Apple Pay evidence
-        if lower.contains("apple pay") || lower.contains("apple wallet") || lower.contains("pay with apple") || lower.contains("apple cash") {
+    /// Priority hierarchy:
+    ///   1. Apple Wallet provenance (detectedSource == .appleWallet) → .applePay
+    ///   2. Explicit channel text ("Apple Pay", "DuitNow QR", etc.)
+    ///   3. Explicit physical card text ("Card Purchase", "POS Card")
+    ///   4. Instrument alone (e.g. "Visa Debit" without source context) → .unknown
+    ///   5. Fallback → .unknown
+    public static func detect(from text: String, paymentSource: PaymentSource? = nil, paymentMethod: String? = nil, detectedSource: DetectedTransactionSource = .unknown) -> PaymentChannel {
+        // PRIORITY 1: Apple Wallet provenance
+        if detectedSource == .appleWallet {
             return .applePay
         }
 
-        // 2. QR payment evidence
+        let lower = text.lowercased()
+
+        // PRIORITY 2: Explicit channel text
+        // 2a. Apple Pay evidence
+        if lower.contains("apple pay") || lower.contains("pay with apple") || lower.contains("apple cash") {
+            return .applePay
+        }
+
+        // 2b. QR payment evidence
         if lower.contains("duitnow qr") || lower.contains("scan & pay") || lower.contains("scan and pay") ||
            lower.contains("qr pay") || lower.contains("paynet qr") || lower.contains("scan qr") ||
            lower.contains("via qr") || lower.contains("d-qr") || paymentMethod == "duitnow_qr" {
             return .qrPayment
         }
 
-        // 3. Bank transfer evidence
+        // 2c. Bank transfer evidence
         if lower.contains("duitnow transfer") || lower.contains("fund transfer") || lower.contains("funds transfer") ||
            lower.contains("interbank") || lower.contains("ibg") || lower.contains("fpx payment") ||
            lower.contains("fpx") || lower.contains("giro") || lower.contains("transferred to") ||
@@ -75,9 +87,9 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
             return .bankTransfer
         }
 
-        // 4. Card evidence (Physical/Virtual card)
-        if lower.contains("visa card") || lower.contains("mastercard") || lower.contains("credit card") ||
-           lower.contains("debit card") || (lower.contains("card ending") || lower.contains("card no")) ||
+        // PRIORITY 3: Explicit physical card text (POS / card purchase context)
+        if lower.contains("card purchase") || lower.contains("pos card") || lower.contains("card present") ||
+           lower.contains("contactless") || lower.contains("chip & pin") || lower.contains("chip and pin") ||
            paymentMethod == "card" {
             return .card
         }
@@ -101,6 +113,7 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
             return .card
         }
 
+        // PRIORITY 4 & 5: Instrument alone (e.g. "Visa Debit") without source context → .unknown
         return .unknown
     }
 }

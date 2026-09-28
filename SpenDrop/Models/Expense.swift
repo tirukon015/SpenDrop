@@ -25,6 +25,7 @@ public final class Expense {
     // MARK: - Transaction Intelligence V1 (Channels & Funding Accounts)
     public var paymentChannelRaw: String = PaymentChannel.unknown.rawValue
     public var fundingAccount: String = "Unknown"
+    public var fundingInstrument: String? = nil
     public var externalTransactionId: String? = nil
     public var matchingStatusRaw: String = "UNMATCHED"
     public var matchingConfidence: Double? = nil
@@ -35,7 +36,7 @@ public final class Expense {
         currency: String = "RM",
         merchant: String = "Unknown",
         category: ExpenseCategory = .other,
-        paymentSource: PaymentSource = .cash,
+        paymentSource: PaymentSource = .unknown,
         underlyingBank: PaymentSource? = nil,
         paymentMethod: String? = nil,
         date: Date = Date(),
@@ -50,6 +51,7 @@ public final class Expense {
         updatedAt: Date = Date(),
         paymentChannel: PaymentChannel = .unknown,
         fundingAccount: String? = nil,
+        fundingInstrument: String? = nil,
         externalTransactionId: String? = nil,
         matchingStatus: String = "UNMATCHED",
         matchingConfidence: Double? = nil
@@ -103,6 +105,7 @@ public final class Expense {
             self.paymentChannelRaw = PaymentChannel.unknown.rawValue
         }
 
+        self.fundingInstrument = fundingInstrument
         self.externalTransactionId = externalTransactionId
         self.matchingStatusRaw = matchingStatus
         self.matchingConfidence = matchingConfidence
@@ -135,10 +138,10 @@ public final class Expense {
 
     public var paymentChannel: PaymentChannel {
         get {
-            if let channel = PaymentChannel(rawValue: paymentChannelRaw), channel != .unknown {
+            if let channel = PaymentChannel(rawValue: paymentChannelRaw) {
                 return channel
             }
-            // Conservative fallback for older records
+            // Conservative fallback for older records without raw channel stored
             if paymentSourceRaw == PaymentSource.applePay.rawValue || paymentMethodRaw == "digital_wallet" {
                 return .applePay
             } else if paymentSourceRaw == PaymentSource.qrPayment.rawValue || paymentMethodRaw == "duitnow_qr" {
@@ -147,7 +150,7 @@ public final class Expense {
                 return .bankTransfer
             } else if paymentSourceRaw == PaymentSource.physicalCard.rawValue || paymentMethodRaw == "card" {
                 return .card
-            } else if paymentSourceRaw == PaymentSource.cash.rawValue || paymentMethodRaw == "cash" {
+            } else if paymentSourceRaw == PaymentSource.cash.rawValue && (paymentMethodRaw == "cash" || fundingAccount == "Cash") {
                 return .cash
             }
             return .unknown
@@ -180,15 +183,10 @@ public final class Expense {
     public var displayFundingAndChannel: String {
         let funding = effectiveFundingAccount
         let channel = paymentChannel
-        if funding != "Unknown" && channel != .unknown {
-            return "\(funding) • \(channel.displayName)"
-        } else if funding != "Unknown" {
-            return funding
-        } else if channel != .unknown {
-            return channel.displayName
-        } else {
+        if funding == "Unknown" && channel == .unknown {
             return "Unknown"
         }
+        return "\(funding) • \(channel.displayName)"
     }
 
     public var displayPaymentTitle: String {

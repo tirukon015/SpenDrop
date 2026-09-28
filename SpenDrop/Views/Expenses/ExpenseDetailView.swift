@@ -51,6 +51,12 @@ public struct ExpenseDetailView: View {
                         Divider().padding(.leading, 48)
 
                         detailRow(title: "Payment Channel", value: expense.paymentChannel.displayName, icon: expense.paymentChannel.iconName, iconColor: expense.paymentChannel.tintColor)
+
+                        if let instrument = expense.fundingInstrument, !instrument.isEmpty {
+                            Divider().padding(.leading, 48)
+                            detailRow(title: "Funding Instrument", value: instrument, icon: "creditcard", iconColor: .orange)
+                        }
+
                         Divider().padding(.leading, 48)
 
                         if expense.isReconciled {

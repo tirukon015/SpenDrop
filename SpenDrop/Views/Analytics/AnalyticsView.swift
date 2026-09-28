@@ -6,12 +6,14 @@ public struct AnalyticsView: View {
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
     @Bindable private var engine = TransactionFilterEngine.shared
 
+    @AppStorage("analytics_daily_spending_range") private var storedDailySpendingRange: String = DailySpendingRange.last7Days.rawValue
+
     public init() {}
 
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     // MARK: - Central Filter Bar
                     FilterBarView(engine: engine)
                         .padding(.vertical, 4)
@@ -20,19 +22,22 @@ public struct AnalyticsView: View {
                     if engine.filteredExpenses.isEmpty {
                         emptyStateView
                     } else {
-                        // MARK: - SUMMARY METRICS (Total, Count, Avg/Day, Previous Period)
+                        // MARK: - SUMMARY METRICS (Total, Count, Avg/Day)
                         metricsSummarySection
 
-                        // MARK: - DAILY SPENDING CHART (Last 7 Days / Selected Interval)
+                        // MARK: - PERIOD COMPARISON (Today vs Yesterday, Last 7 vs Prev 7, etc.)
+                        periodComparisonSection
+
+                        // MARK: - DAILY SPENDING CHART (Separate 7-Day or 30-Day Range)
                         dailySpendingSection
 
-                        // MARK: - CATEGORY BREAKDOWN (% of Total Spending)
+                        // MARK: - CATEGORY BREAKDOWN (Multi-Select Interactive)
                         categoryBreakdownSection
 
-                        // MARK: - PAYMENT CHANNEL BREAKDOWN (% of Total Spending)
+                        // MARK: - PAYMENT CHANNEL BREAKDOWN (Multi-Select Interactive)
                         paymentChannelBreakdownSection
 
-                        // MARK: - FUNDING ACCOUNT BREAKDOWN (% of Total Spending)
+                        // MARK: - FUNDING ACCOUNT BREAKDOWN (Multi-Select Interactive)
                         fundingAccountBreakdownSection
                     }
                 }
@@ -41,6 +46,9 @@ public struct AnalyticsView: View {
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Analytics")
             .onAppear {
+                if let savedRange = DailySpendingRange(rawValue: storedDailySpendingRange) {
+                    engine.dailySpendingRange = savedRange
+                }
                 engine.update(expenses: allExpenses)
             }
             .onChange(of: allExpenses) { _, newExpenses in
@@ -52,98 +60,76 @@ public struct AnalyticsView: View {
     // MARK: - Metrics Summary Grid
 
     private var metricsSummarySection: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                metricCard(
-                    title: "TOTAL SPENT",
-                    value: CurrencyFormatter.format(amount: engine.totalSpending),
-                    subtitle: "\(engine.transactionCount) transactions",
-                    color: .primary
-                )
+        HStack(spacing: 10) {
+            metricCard(
+                title: "TOTAL SPENT",
+                value: CurrencyFormatter.format(amount: engine.totalSpending),
+                subtitle: "\(engine.transactionCount) transaction\(engine.transactionCount == 1 ? "" : "s")",
+                color: .primary
+            )
 
-                metricCard(
-                    title: "AVG / DAY",
-                    value: CurrencyFormatter.format(amount: engine.averagePerDay),
-                    subtitle: "over \(engine.numberOfCalendarDays) calendar day\(engine.numberOfCalendarDays == 1 ? "" : "s")",
-                    color: .blue
-                )
-            }
-
-            let comparison = engine.previousPeriodComparison
-            HStack(spacing: 12) {
-                metricCard(
-                    title: "AVG / TRANSACTION",
-                    value: CurrencyFormatter.format(amount: engine.averagePerTransaction),
-                    subtitle: "per payment",
-                    color: .purple
-                )
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("VS PREVIOUS PERIOD")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary)
-                        .tracking(0.8)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: comparison.isIncreased ? "arrow.up.right" : "arrow.down.right")
-                            .font(.subheadline)
-                            .foregroundStyle(comparison.isIncreased ? .red : .green)
-
-                        Text(CurrencyFormatter.format(amount: abs(comparison.difference)))
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(comparison.isIncreased ? .red : .green)
-                            .lineLimit(1)
-                    }
-
-                    if let pct = comparison.percentageChange {
-                        Text("\(comparison.isIncreased ? "+" : "-")\(String(format: "%.1f%%", abs(pct))) vs \(comparison.previousPeriodSubtitle)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
+            metricCard(
+                title: "AVERAGE / DAY",
+                value: CurrencyFormatter.format(amount: engine.averagePerDay),
+                subtitle: "over \(engine.numberOfCalendarDays) day\(engine.numberOfCalendarDays == 1 ? "" : "s")",
+                color: .blue
+            )
         }
         .padding(.horizontal)
     }
 
-    // MARK: - Daily Spending Chart
+    // MARK: - Period Comparison Card (Section 19)
 
-    private var dailySpendingSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var periodComparisonSection: some View {
+        let comparison = engine.previousPeriodComparison
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
+                Text("\(engine.selectedDateFilter.displayName.uppercased()) COMPARISON")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(0.8)
+
+                Spacer()
+
+                Text(comparison.previousPeriodSubtitle)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Daily Spending")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    Text(engine.currentSubtitle)
-                        .font(.caption)
+                    Text(CurrencyFormatter.format(amount: engine.totalSpending))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(engine.selectedDateFilter.displayName)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Text("Avg \(CurrencyFormatter.format(amount: engine.averagePerDay))/day")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.blue)
-            }
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: comparison.isIncreased ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(comparison.isIncreased ? .red : .green)
 
-            Chart(engine.dailySpending) { point in
-                BarMark(
-                    x: .value("Day", point.dayLabel),
-                    y: .value("Amount", point.amount)
-                )
-                .foregroundStyle(Color.accentColor.gradient)
-                .cornerRadius(6)
+                        Text("\(comparison.isIncreased ? "+" : "-")\(CurrencyFormatter.format(amount: abs(comparison.difference)))")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(comparison.isIncreased ? .red : .green)
+                    }
+
+                    if let pct = comparison.percentageChange {
+                        Text("\(comparison.isIncreased ? "+" : "-")\(String(format: "%.1f%%", abs(pct))) \(comparison.previousPeriodSubtitle)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            .frame(height: 180)
-            .padding(.vertical, 4)
         }
         .padding()
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -151,7 +137,105 @@ public struct AnalyticsView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Category Breakdown
+    // MARK: - Daily Spending Section (Separate from Main Date Filter: 7 Days or 30 Days)
+
+    private var dailySpendingSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Daily Spending")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    Text("\(engine.dailySpendingSubtitle) • Avg \(CurrencyFormatter.format(amount: engine.dailySpendingAverage))/day")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Separate Range Selector: [ Last 7 Days ▾ ] / [ Last 30 Days ▾ ]
+                Menu {
+                    ForEach(DailySpendingRange.allCases) { range in
+                        Button {
+                            HapticFeedback.selection()
+                            engine.dailySpendingRange = range
+                            storedDailySpendingRange = range.rawValue
+                        } label: {
+                            HStack {
+                                Text(range.displayName)
+                                if engine.dailySpendingRange == range {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(engine.dailySpendingRange.displayName)
+                            .font(.system(size: 12, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.14))
+                    .foregroundStyle(Color.blue)
+                    .clipShape(Capsule())
+                }
+            }
+
+            // CHART RENDERING (7 Days Standard vs 30 Days Horizontal Scrollable)
+            if engine.dailySpendingRange == .last7Days {
+                // 7 Days: Clean 7-bar chart with Day of Week
+                Chart(engine.dailySpending) { point in
+                    BarMark(
+                        x: .value("Day", point.dayLabel),
+                        y: .value("Amount", point.amount)
+                    )
+                    .foregroundStyle(Color.accentColor.gradient)
+                    .cornerRadius(6)
+                }
+                .frame(height: 180)
+                .chartYAxis {
+                    AxisMarks(position: .leading)
+                }
+            } else {
+                // 30 Days: Full 30 calendar days scrollable without squeezing
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Chart(engine.dailySpending) { point in
+                            BarMark(
+                                x: .value("Day", point.dayLabel),
+                                y: .value("Amount", point.amount)
+                            )
+                            .foregroundStyle(Color.accentColor.gradient)
+                            .cornerRadius(4)
+                        }
+                        .frame(width: max(CGFloat(engine.dailySpending.count) * 32.0, 960), height: 180)
+                        .chartYAxis {
+                            AxisMarks(position: .leading)
+                        }
+                        .padding(.horizontal, 8)
+                        .id("chart_end_anchor")
+                    }
+                    .onAppear {
+                        proxy.scrollTo("chart_end_anchor", anchor: .trailing)
+                    }
+                }
+
+                Text("Showing all 30 days (scroll to explore) • Zero-spending days included")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal)
+    }
+
+    // MARK: - Category Breakdown (Multi-Select Interactive)
 
     private var categoryBreakdownSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -160,7 +244,7 @@ public struct AnalyticsView: View {
                     .font(.headline)
                     .fontWeight(.bold)
                 Spacer()
-                Text("Tap to filter")
+                Text("Tap to multi-select")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -176,14 +260,15 @@ public struct AnalyticsView: View {
                     .cornerRadius(5)
                     .foregroundStyle(item.category.color)
                 }
-                .frame(height: 180)
+                .frame(height: 170)
                 .padding(.vertical, 4)
             }
 
             // Breakdown Rows
             VStack(spacing: 8) {
                 ForEach(engine.categoryBreakdown) { item in
-                    let isFiltered = engine.selectedCategory == item.category
+                    let isFiltered = engine.selectedCategories.contains(item.category)
+
                     Button {
                         HapticFeedback.selection()
                         engine.toggleCategory(item.category)
@@ -253,7 +338,7 @@ public struct AnalyticsView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Payment Channel Breakdown
+    // MARK: - Payment Channel Breakdown (Multi-Select Interactive)
 
     private var paymentChannelBreakdownSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -262,14 +347,15 @@ public struct AnalyticsView: View {
                     .font(.headline)
                     .fontWeight(.bold)
                 Spacer()
-                Text("Tap to filter")
+                Text("Tap to multi-select")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 8) {
                 ForEach(engine.paymentChannelBreakdown) { item in
-                    let isFiltered = engine.selectedPaymentChannel == item.channel
+                    let isFiltered = engine.selectedPaymentChannels.contains(item.channel)
+
                     Button {
                         HapticFeedback.selection()
                         engine.toggleChannel(item.channel)
@@ -339,7 +425,7 @@ public struct AnalyticsView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Funding Account Breakdown
+    // MARK: - Funding Account Breakdown (Multi-Select Interactive)
 
     private var fundingAccountBreakdownSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -348,14 +434,15 @@ public struct AnalyticsView: View {
                     .font(.headline)
                     .fontWeight(.bold)
                 Spacer()
-                Text("Tap to filter")
+                Text("Tap to multi-select")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 8) {
                 ForEach(engine.fundingAccountBreakdown) { item in
-                    let isFiltered = engine.selectedFundingAccount == item.name
+                    let isFiltered = engine.selectedFundingAccounts.contains(where: { $0.caseInsensitiveCompare(item.name) == .orderedSame })
+
                     Button {
                         HapticFeedback.selection()
                         engine.toggleFundingAccount(item.name)
@@ -461,18 +548,18 @@ public struct AnalyticsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 40)
 
-            Text("No transactions in this period")
+            Text("No transactions match current filters")
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            Text("Try changing the date filter or clearing active filters.")
+            Text("Try choosing another date filter or resetting your account/category filters.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
             if engine.hasActiveFilters {
-                Button("Clear All Filters") {
+                Button("Reset All Filters") {
                     HapticFeedback.selection()
                     engine.clearAllFilters()
                 }

@@ -12,6 +12,7 @@ public struct ReconcileCandidate {
     public let notes: String?
     public let imageRelativePath: String?
     public let rawOCRText: String?
+    public let fundingInstrument: String?
 
     public init(
         amount: Double,
@@ -23,7 +24,8 @@ public struct ReconcileCandidate {
         reference: String? = nil,
         notes: String? = nil,
         imageRelativePath: String? = nil,
-        rawOCRText: String? = nil
+        rawOCRText: String? = nil,
+        fundingInstrument: String? = nil
     ) {
         self.amount = amount
         self.merchant = merchant
@@ -35,6 +37,7 @@ public struct ReconcileCandidate {
         self.notes = notes
         self.imageRelativePath = imageRelativePath
         self.rawOCRText = rawOCRText
+        self.fundingInstrument = fundingInstrument
     }
 }
 
@@ -156,6 +159,12 @@ public struct TransactionReconciliationEngine {
         // 2. Reconcile Funding Account: if existing is unknown, upgrade to candidate's funding account
         if existing.fundingAccount == "Unknown" && candidate.fundingAccount != "Unknown" && !candidate.fundingAccount.isEmpty {
             existing.fundingAccount = candidate.fundingAccount
+        }
+
+        // 2b. Reconcile Funding Instrument: if existing is empty, upgrade to candidate's instrument
+        if (existing.fundingInstrument == nil || existing.fundingInstrument?.isEmpty == true),
+           let inst = candidate.fundingInstrument, !inst.isEmpty {
+            existing.fundingInstrument = inst
         }
 
         // 3. Reconcile Merchant: if existing is "Unknown" or generic, use candidate's merchant

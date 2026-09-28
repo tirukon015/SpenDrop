@@ -2,35 +2,6 @@ import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Diagnostic logger that writes to stdout, system console, and shared App Group container
-public func shareLog(_ message: String) {
-    let timestamp = ISO8601DateFormatter().string(from: Date())
-    let formatted: String
-    if message.hasPrefix("[SpenDropShare]") {
-        formatted = "[\(timestamp)] \(message)"
-    } else {
-        formatted = "[\(timestamp)] [SpenDropShare] \(message)"
-    }
-    print(formatted)
-    NSLog("%@", formatted)
-
-    if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ExpenseDataContainer.appGroupIdentifier) {
-        let logURL = containerURL.appendingPathComponent("share_extension_diagnostics.log")
-        let entry = formatted + "\n"
-        if let data = entry.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logURL.path) {
-                if let fileHandle = try? FileHandle(forWritingTo: logURL) {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    try? fileHandle.close()
-                }
-            } else {
-                try? data.write(to: logURL, options: .atomic)
-            }
-        }
-    }
-}
-
 @objc(ShareViewController)
 public class ShareViewController: UIViewController {
 

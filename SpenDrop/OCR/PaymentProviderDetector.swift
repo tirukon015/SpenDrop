@@ -1,5 +1,13 @@
 import Foundation
 
+/// Identifies the source/provenance of an OCR text (e.g. Apple Wallet UI vs bank app receipt)
+public enum DetectedTransactionSource: String {
+    case appleWallet = "APPLE_WALLET"
+    case bankApp = "BANK_APP"
+    case physicalReceipt = "PHYSICAL_RECEIPT"
+    case unknown = "UNKNOWN"
+}
+
 public struct ProviderDetectionResult {
     public let provider: PaymentSource
     public let normalizedId: String
@@ -8,6 +16,8 @@ public struct ProviderDetectionResult {
     public let underlyingBank: PaymentSource?
     public let underlyingBankNormalizedId: String?
     public let paymentMethod: String
+    public let fundingInstrument: String?
+    public let detectedSource: DetectedTransactionSource
 
     public init(
         provider: PaymentSource,
@@ -16,7 +26,9 @@ public struct ProviderDetectionResult {
         displayName: String,
         underlyingBank: PaymentSource? = nil,
         underlyingBankNormalizedId: String? = nil,
-        paymentMethod: String? = nil
+        paymentMethod: String? = nil,
+        fundingInstrument: String? = nil,
+        detectedSource: DetectedTransactionSource = .unknown
     ) {
         self.provider = provider
         self.normalizedId = normalizedId
@@ -25,6 +37,8 @@ public struct ProviderDetectionResult {
         self.underlyingBank = underlyingBank
         self.underlyingBankNormalizedId = underlyingBankNormalizedId
         self.paymentMethod = paymentMethod ?? provider.defaultPaymentMethod
+        self.fundingInstrument = fundingInstrument
+        self.detectedSource = detectedSource
     }
 }
 
@@ -32,8 +46,47 @@ public struct PaymentProviderDetector {
     public static func detect(lines: [String], fullText: String) -> ProviderDetectionResult {
         let lowerFull = fullText.lowercased()
 
-        // 1. Check for Apple Pay (Payment interface / Digital wallet)
-        let applePayKeywords = ["apple pay", "apple wallet", "pay with apple", "apple cash"]
+        // PRIORITY 1: Apple Wallet Provenance Detection (structural UI markers)
+        // Apple Wallet transaction detail screens contain distinctive markers:
+        //   - "Wallet uses Maps to provide merchant name, category and location"
+        //   - "Report Incorrect Merchant Info"
+        //   - "Status: Approved" + "Contact <Bank>"
+        let hasWalletMaps = lowerFull.contains("wallet uses maps")
+        let hasReportMerchant = lowerFull.contains("report incorrect merchant info")
+        let hasStatusApproved = lowerFull.contains("status: approved") || lowerFull.contains("status:approved")
+        let hasContactBank = lowerFull.contains("contact maybank") || lowerFull.contains("contact cimb") ||
+                              lowerFull.contains("contact rhb") || lowerFull.contains("contact public bank") ||
+                              lowerFull.contains("contact bank islam") || lowerFull.contains("contact ambank") ||
+                              lowerFull.contains("contact hong leong") || lowerFull.contains("contact wise")
+
+        let isAppleWalletUI = hasWalletMaps || (hasReportMerchant && hasStatusApproved) || (hasStatusApproved && hasContactBank)
+
+        if isAppleWalletUI {
+            // Extract funding instrument from card line (e.g. "Maybank Visa Debit")
+            let (walletBank, walletBankId, walletInstrument) = extractFundingInstrumentFromLines(lines: lines, lowerFull: lowerFull)
+
+            let displayName: String
+            if let bank = walletBank {
+                displayName = "Apple Pay • \(bank.rawValue)"
+            } else {
+                displayName = "Apple Pay"
+            }
+
+            return ProviderDetectionResult(
+                provider: walletBank ?? .applePay,
+                normalizedId: walletBankId ?? "apple_pay",
+                confidence: 0.99,
+                displayName: displayName,
+                underlyingBank: walletBank,
+                underlyingBankNormalizedId: walletBankId,
+                paymentMethod: "digital_wallet",
+                fundingInstrument: walletInstrument,
+                detectedSource: .appleWallet
+            )
+        }
+
+        // PRIORITY 2: Explicit Apple Pay text (e.g. "Apple Pay", "Apple Wallet" in non-Wallet-UI contexts)
+        let applePayKeywords = ["apple pay", "pay with apple", "apple cash"]
         let hasApplePay = applePayKeywords.contains(where: { lowerFull.contains($0) })
 
         if hasApplePay {
@@ -60,6 +113,8 @@ public struct PaymentProviderDetector {
                 underlyingId = "wise"
             }
 
+            let (_, _, instrument) = extractFundingInstrumentFromLines(lines: lines, lowerFull: lowerFull)
+
             let displayName: String
             if let bank = detectedUnderlyingBank {
                 displayName = "Apple Pay • \(bank.rawValue)"
@@ -74,7 +129,8 @@ public struct PaymentProviderDetector {
                 displayName: displayName,
                 underlyingBank: detectedUnderlyingBank,
                 underlyingBankNormalizedId: underlyingId,
-                paymentMethod: "digital_wallet"
+                paymentMethod: "digital_wallet",
+                fundingInstrument: instrument
             )
         }
 
@@ -196,7 +252,9 @@ public struct PaymentProviderDetector {
                               (lowerFull.contains("mae") && (lowerFull.contains("scan & pay") || lowerFull.contains("duitnow") || lowerFull.contains("transfer")))
 
         if isMaybankSender {
-            let method = detectedMethod ?? "bank_transfer"
+            let (_, _, instrument) = extractFundingInstrumentFromLines(lines: lines, lowerFull: lowerFull)
+            let isCard = instrument != nil || lowerFull.contains("debit card") || lowerFull.contains("credit card")
+            let method = detectedMethod ?? (isCard ? "unknown" : "bank_transfer")
             return ProviderDetectionResult(
                 provider: .maybank,
                 normalizedId: "maybank",
@@ -204,7 +262,8 @@ public struct PaymentProviderDetector {
                 displayName: "Maybank / MAE",
                 underlyingBank: .maybank,
                 underlyingBankNormalizedId: "maybank",
-                paymentMethod: method
+                paymentMethod: method,
+                fundingInstrument: instrument
             )
         }
 
@@ -400,5 +459,90 @@ public struct PaymentProviderDetector {
             return "bank_transfer"
         }
         return nil
+    }
+
+    /// Extracts funding instrument details from OCR lines (e.g. "Maybank Visa Debit")
+    /// Returns: (bank: PaymentSource?, bankId: String?, instrumentName: String?)
+    public static func extractFundingInstrumentFromLines(lines: [String], lowerFull: String) -> (PaymentSource?, String?, String?) {
+        // Known card type patterns
+        let cardTypePatterns = [
+            "visa debit", "visa credit", "mastercard debit", "mastercard credit",
+            "debit card", "credit card", "visa", "mastercard", "amex",
+            "american express", "jcb", "unionpay"
+        ]
+
+        // Bank name mapping
+        let bankMapping: [(keywords: [String], bank: PaymentSource, bankId: String)] = [
+            (["maybank", "mae"], .maybank, "maybank"),
+            (["cimb", "octo"], .cimb, "cimb"),
+            (["rhb"], .rhb, "rhb"),
+            (["public bank", "pb engage"], .publicBank, "public_bank"),
+            (["bank islam", "bimb"], .bankIslam, "bank_islam"),
+            (["hong leong", "hlb"], .unknown, "hong_leong"),
+            (["ambank"], .unknown, "ambank"),
+            (["wise", "transferwise"], .wise, "wise"),
+        ]
+
+        // Scan each line for instrument patterns like "Maybank Visa Debit"
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lower = trimmed.lowercased()
+
+            // Check if this line contains a card type keyword
+            for cardType in cardTypePatterns {
+                if lower.contains(cardType) {
+                    // This line likely contains the funding instrument
+                    let instrumentName = trimmed
+
+                    // Try to extract the bank from this same line
+                    for (keywords, bank, bankId) in bankMapping {
+                        if keywords.contains(where: { lower.contains($0) }) {
+                            return (bank, bankId, instrumentName)
+                        }
+                    }
+
+                    // Card type found but no bank in this line — check full text for bank
+                    for (keywords, bank, bankId) in bankMapping {
+                        if keywords.contains(where: { lowerFull.contains($0) }) {
+                            return (bank, bankId, instrumentName)
+                        }
+                    }
+
+                    return (nil, nil, instrumentName)
+                }
+            }
+        }
+
+        // Also try regex for patterns like "Maybank Debit Card Visa **** 9034"
+        let instrumentRegex = try? NSRegularExpression(
+            pattern: #"((?:Maybank|CIMB|RHB|Public Bank|Bank Islam|Hong Leong|AmBank|Wise)\s+(?:Visa|Mastercard|Debit Card|Credit Card|Debit|Credit)[\w\s*]*)"#,
+            options: [.caseInsensitive]
+        )
+        if let regex = instrumentRegex {
+            let range = NSRange(lowerFull.startIndex..<lowerFull.endIndex, in: lowerFull)
+            if let match = regex.firstMatch(in: lowerFull, options: [], range: range),
+               let captureRange = Range(match.range(at: 1), in: lowerFull) {
+                let captured = String(lowerFull[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Remove trailing card number mask (e.g. "**** 9034")
+                let cleanedInstrument = captured.replacingOccurrences(of: #"\s*\*+\s*\d+$"#, with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Capitalize words
+                let displayInstrument = cleanedInstrument.split(separator: " ").map { word in
+                    word.prefix(1).uppercased() + word.dropFirst().lowercased()
+                }.joined(separator: " ")
+
+                for (keywords, bank, bankId) in bankMapping {
+                    if keywords.contains(where: { cleanedInstrument.contains($0) }) {
+                        return (bank, bankId, displayInstrument)
+                    }
+                }
+
+                return (nil, nil, displayInstrument)
+            }
+        }
+
+        return (nil, nil, nil)
     }
 }

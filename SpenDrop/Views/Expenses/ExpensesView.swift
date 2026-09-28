@@ -11,101 +11,256 @@ public struct ExpensesView: View {
     @State private var selectedExpense: Expense?
     @State private var showingAddExpense = false
 
+    // Secondary controls state (moved inside ⋯)
+    @State private var showingCustomDatePicker = false
+    @State private var showingAccountsSheet = false
+    @State private var showingCategoriesSheet = false
+    @State private var showingPaymentChannelsSheet = false
+
+    public enum ExpenseSortOrder: String, CaseIterable {
+        case newestFirst = "Newest First"
+        case oldestFirst = "Oldest First"
+    }
+    @State private var sortOrder: ExpenseSortOrder = .newestFirst
+
     public init() {}
 
-    // Group filtered expenses by day
-    private var groupedExpenses: [(dateString: String, expenses: [Expense])] {
+    // Group filtered expenses by calendar day
+    private var groupedExpenses: [(dateHeader: String, dateSubtitle: String?, date: Date, expenses: [Expense])] {
         let calendar = Calendar.current
         let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .none
+        dateFormatter.dateFormat = "d MMM yyyy"
 
-        let grouped = Dictionary(grouping: engine.filteredExpenses) { (expense: Expense) -> String in
-            if calendar.isDateInToday(expense.date) {
-                return "Today"
-            } else if calendar.isDateInYesterday(expense.date) {
-                return "Yesterday"
-            } else {
-                return dateFormatter.string(from: expense.date)
-            }
+        let sortedList = engine.filteredExpenses.sorted { exp1, exp2 in
+            sortOrder == .newestFirst ? exp1.date > exp2.date : exp1.date < exp2.date
         }
 
-        return grouped.map { (dateString: $0.key, expenses: $0.value.sorted(by: { $0.date > $1.date })) }
-            .sorted { (group1, group2) -> Bool in
-                guard let d1 = group1.expenses.first?.date, let d2 = group2.expenses.first?.date else { return false }
-                return d1 > d2
+        let grouped = Dictionary(grouping: sortedList) { (expense: Expense) -> String in
+            dateFormatter.string(from: expense.date)
+        }
+
+        return grouped.compactMap { (dateKey: String, expenses: [Expense]) in
+            guard let firstDate = expenses.first?.date else { return nil }
+            let dayStart = calendar.startOfDay(for: firstDate)
+
+            let header: String
+            let subtitle: String?
+
+            if calendar.isDateInToday(firstDate) {
+                header = "Today"
+                subtitle = dateKey
+            } else if calendar.isDateInYesterday(firstDate) {
+                header = "Yesterday"
+                subtitle = dateKey
+            } else {
+                header = dateKey
+                subtitle = nil
             }
+
+            return (dateHeader: header, dateSubtitle: subtitle, date: dayStart, expenses: expenses)
+        }
+        .sorted { g1, g2 in
+            sortOrder == .newestFirst ? g1.date > g2.date : g1.date < g2.date
+        }
+    }
+
+    private var activeDimensionSummary: String? {
+        var parts: [String] = []
+        if !engine.selectedFundingAccounts.isEmpty {
+            parts.append(engine.accountsSummaryLabel)
+        }
+        if !engine.selectedCategories.isEmpty {
+            parts.append(engine.categoriesSummaryLabel)
+        }
+        if !engine.selectedPaymentChannels.isEmpty {
+            parts.append(engine.paymentChannelsSummaryLabel)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
     }
 
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Filter bar with 10 Quick Date Filters and active tags
-                FilterBarView(engine: engine)
-                    .padding(.vertical, 8)
-                    .background(Color(uiColor: .systemBackground))
+                // MARK: - COMPACT CONTROL BAR: [ Last 7 Days ▾ ] ... [ ⋯ ]
+                HStack(spacing: 8) {
+                    // Date range compact dropdown (Default: Last 7 Days)
+                    Menu {
+                        Section("Date Range") {
+                            compactDateButton(.last7Days)
+                            compactDateButton(.last30Days)
+                            compactDateButton(.thisMonth)
+                            compactDateButton(.today)
+                            compactDateButton(.yesterday)
+                            compactDateButton(.thisWeek)
+                            compactDateButton(.lastWeek)
+                            compactDateButton(.lastMonth)
 
-                // Summary KPI Ribbon
-                if !engine.filteredExpenses.isEmpty {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("TOTAL SPENT")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .tracking(0.5)
-                            Text(CurrencyFormatter.format(amount: engine.totalSpending))
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
+                            Button {
+                                showingCustomDatePicker = true
+                            } label: {
+                                HStack {
+                                    Text("Custom Range...")
+                                    if engine.selectedDateFilter == .custom {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(engine.selectedDateFilter.displayName)
+                                .font(.system(size: 13, weight: .bold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                                .opacity(0.7)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color(uiColor: .tertiarySystemFill))
+                        .foregroundStyle(Color.primary)
+                        .clipShape(Capsule())
+                    }
+
+                    // Active dimension filters badge (if any active)
+                    if let summary = activeDimensionSummary {
+                        HStack(spacing: 4) {
+                            Text(summary)
+                                .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
+
+                            Button {
+                                HapticFeedback.selection()
+                                engine.clearDimensionFilters()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 11))
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.blue.opacity(0.12))
+                        .foregroundStyle(Color.blue)
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+
+                    // THREE-DOT ⋯ MENU: Filter, Sort, Reset
+                    Menu {
+                        // Multi-select Filters Section
+                        Section("Filter") {
+                            Button {
+                                showingAccountsSheet = true
+                            } label: {
+                                Label(
+                                    engine.selectedFundingAccounts.isEmpty ? "Accounts" : "Accounts (\(engine.selectedFundingAccounts.count))",
+                                    systemImage: "building.columns"
+                                )
+                            }
+
+                            Button {
+                                showingCategoriesSheet = true
+                            } label: {
+                                Label(
+                                    engine.selectedCategories.isEmpty ? "Categories" : "Categories (\(engine.selectedCategories.count))",
+                                    systemImage: "tag"
+                                )
+                            }
+
+                            Button {
+                                showingPaymentChannelsSheet = true
+                            } label: {
+                                Label(
+                                    engine.selectedPaymentChannels.isEmpty ? "Payment Channels" : "Payment (\(engine.selectedPaymentChannels.count))",
+                                    systemImage: "creditcard"
+                                )
+                            }
+
+                            if engine.hasActiveDimensionFilters {
+                                Button(role: .destructive) {
+                                    HapticFeedback.notification(.warning)
+                                    engine.clearDimensionFilters()
+                                } label: {
+                                    Label("Reset Dimension Filters", systemImage: "xmark.circle")
+                                }
+                            }
                         }
 
-                        Divider()
-                            .frame(height: 28)
+                        // Sorting Section
+                        Section("Sort") {
+                            Button {
+                                HapticFeedback.selection()
+                                sortOrder = .newestFirst
+                            } label: {
+                                HStack {
+                                    Text("Newest First")
+                                    if sortOrder == .newestFirst {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("COUNT")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .tracking(0.5)
-                            Text("\(engine.transactionCount) txns")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary)
+                            Button {
+                                HapticFeedback.selection()
+                                sortOrder = .oldestFirst
+                            } label: {
+                                HStack {
+                                    Text("Oldest First")
+                                    if sortOrder == .oldestFirst {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
                         }
 
-                        Spacer()
+                        // Reset All Section
+                        if engine.hasActiveFilters {
+                            Section {
+                                Button(role: .destructive) {
+                                    HapticFeedback.notification(.warning)
+                                    engine.clearAllFilters()
+                                } label: {
+                                    Label("Reset All Filters", systemImage: "arrow.counterclockwise")
+                                }
+                            }
+                        }
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14, weight: .bold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(engine.hasActiveDimensionFilters ? Color.accentColor.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
+                                .foregroundStyle(engine.hasActiveDimensionFilters ? Color.accentColor : Color.primary)
+                                .clipShape(Capsule())
 
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("AVG / DAY")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .tracking(0.5)
-                            Text("\(CurrencyFormatter.format(amount: engine.averagePerDay)) / day")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.blue)
+                            if engine.hasActiveDimensionFilters {
+                                Circle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 2, y: -2)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
 
-                Divider()
-
+                // MARK: - EXPENSE LIST (Starts high on screen)
                 if allExpenses.isEmpty {
                     emptyState(
-                        icon: "tray",
                         title: "No expenses recorded",
                         message: "Add your first cash expense or drop a transaction screenshot."
                     )
                 } else if engine.filteredExpenses.isEmpty {
                     emptyState(
-                        icon: "magnifyingglass",
-                        title: "No matching expenses",
-                        message: "No transactions match '\(engine.selectedDateFilter.displayName)' with the current filters."
+                        title: "No expenses yet",
+                        message: "Your expenses from \(engine.selectedDateFilter.displayName) will appear here."
                     )
                 } else {
                     List {
-                        ForEach(groupedExpenses, id: \.dateString) { group in
-                            Section(header: Text(group.dateString).font(.subheadline).fontWeight(.semibold)) {
+                        ForEach(groupedExpenses, id: \.dateHeader) { group in
+                            Section {
                                 ForEach(group.expenses) { expense in
                                     Button(action: {
                                         selectedExpense = expense
@@ -119,6 +274,18 @@ public struct ExpensesView: View {
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
+                                    }
+                                }
+                            } header: {
+                                HStack(spacing: 6) {
+                                    Text(group.dateHeader.uppercased())
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.secondary)
+                                    if let sub = group.dateSubtitle {
+                                        Text("• \(sub)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -148,6 +315,18 @@ public struct ExpensesView: View {
                 AddExpenseView()
                     .environment(\.modelContext, modelContext)
             }
+            .sheet(isPresented: $showingAccountsSheet) {
+                AccountsMultiSelectSheet(engine: engine)
+            }
+            .sheet(isPresented: $showingCategoriesSheet) {
+                CategoriesMultiSelectSheet(engine: engine)
+            }
+            .sheet(isPresented: $showingPaymentChannelsSheet) {
+                PaymentChannelsMultiSelectSheet(engine: engine)
+            }
+            .sheet(isPresented: $showingCustomDatePicker) {
+                CustomDateRangeSheet(engine: engine, isPresented: $showingCustomDatePicker)
+            }
             .onAppear {
                 engine.update(expenses: allExpenses)
             }
@@ -160,19 +339,36 @@ public struct ExpensesView: View {
         }
     }
 
+    @ViewBuilder
+    private func compactDateButton(_ filter: QuickDateFilter) -> some View {
+        Button {
+            HapticFeedback.selection()
+            engine.selectedDateFilter = filter
+        } label: {
+            HStack {
+                Text(filter.displayName)
+                if engine.selectedDateFilter == filter {
+                    Image(systemName: "checkmark")
+                }
+            }
+        }
+    }
+
     private func delete(expense: Expense) {
         HapticFeedback.notification(.warning)
         modelContext.delete(expense)
         try? modelContext.save()
         modelContext.processPendingChanges()
-        engine.update(expenses: allExpenses)
+        if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
+            engine.update(expenses: all)
+        }
     }
 
-    private func emptyState(icon: String, title: String, message: String) -> some View {
+    private func emptyState(title: String, message: String) -> some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: icon)
-                .font(.system(size: 48))
+            Image(systemName: "tray")
+                .font(.system(size: 44))
                 .foregroundStyle(.secondary)
 
             Text(title)
@@ -185,14 +381,23 @@ public struct ExpensesView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
 
+            Button {
+                showingAddExpense = true
+            } label: {
+                Label("Add Expense", systemImage: "plus.circle.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+            .padding(.top, 4)
+
             if engine.hasActiveFilters {
                 Button("Reset Filters") {
                     HapticFeedback.selection()
                     engine.clearAllFilters()
                 }
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .padding(.top, 4)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
             }
 
             Spacer()

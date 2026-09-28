@@ -55,6 +55,7 @@ public final class UserDataBackupService {
         public let createdAt: Date
         public let paymentChannelRaw: String?
         public let fundingAccount: String?
+        public let fundingInstrument: String?
         public let matchingStatusRaw: String?
 
         public init(from expense: Expense) {
@@ -75,6 +76,7 @@ public final class UserDataBackupService {
             self.createdAt = expense.createdAt
             self.paymentChannelRaw = expense.paymentChannelRaw
             self.fundingAccount = expense.effectiveFundingAccount
+            self.fundingInstrument = expense.fundingInstrument
             self.matchingStatusRaw = expense.matchingStatusRaw
         }
 
@@ -96,6 +98,7 @@ public final class UserDataBackupService {
             createdAt: Date = Date(),
             paymentChannelRaw: String? = nil,
             fundingAccount: String? = nil,
+            fundingInstrument: String? = nil,
             matchingStatusRaw: String? = nil
         ) {
             self.id = id
@@ -115,6 +118,7 @@ public final class UserDataBackupService {
             self.createdAt = createdAt
             self.paymentChannelRaw = paymentChannelRaw
             self.fundingAccount = fundingAccount
+            self.fundingInstrument = fundingInstrument
             self.matchingStatusRaw = matchingStatusRaw
         }
     }
@@ -1001,6 +1005,7 @@ public final class UserDataBackupService {
                 isSampleData: dto.isSampleData,
                 paymentChannel: channel,
                 fundingAccount: funding,
+                fundingInstrument: dto.fundingInstrument,
                 matchingStatus: matching
             )
             context.insert(expense)

@@ -20,6 +20,7 @@ public struct ExpenseReviewView: View {
     // Funding Account & Payment Channel
     @State private var fundingAccount: String
     @State private var selectedPaymentChannel: PaymentChannel
+    @State private var fundingInstrument: String?
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
     // Duplicate Check State
@@ -39,6 +40,7 @@ public struct ExpenseReviewView: View {
         _selectedPaymentSource = State(initialValue: parsed.paymentSource ?? .unknown)
         _fundingAccount = State(initialValue: parsed.displayFundingAccount)
         _selectedPaymentChannel = State(initialValue: parsed.paymentChannel)
+        _fundingInstrument = State(initialValue: parsed.fundingInstrument)
         _date = State(initialValue: parsed.date ?? Date())
         _notes = State(initialValue: parsed.suggestedRemark ?? "")
         _transactionReference = State(initialValue: parsed.transactionReference)
@@ -320,6 +322,29 @@ public struct ExpenseReviewView: View {
 
                         Divider().padding(.leading, 48)
 
+                        // Funding Instrument field (if present)
+                        if let instrument = fundingInstrument, !instrument.isEmpty {
+                            HStack(spacing: 12) {
+                                Image(systemName: "creditcard")
+                                    .foregroundStyle(.orange)
+                                    .frame(width: 24)
+
+                                Text("Funding Instrument")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                Spacer()
+
+                                Text(instrument)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding()
+
+                            Divider().padding(.leading, 48)
+                        }
+
                         // Date & Time field
                         HStack(spacing: 12) {
                             Image(systemName: "calendar")
@@ -568,7 +593,8 @@ public struct ExpenseReviewView: View {
             reference: transactionReference,
             notes: notes.isEmpty ? nil : notes,
             imageRelativePath: savedImagePath,
-            rawOCRText: initialParsed.rawOCRText
+            rawOCRText: initialParsed.rawOCRText,
+            fundingInstrument: fundingInstrument
         )
 
         let reconciled = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
@@ -610,7 +636,8 @@ public struct ExpenseReviewView: View {
             ocrText: initialParsed.rawOCRText,
             confidence: initialParsed.confidence == .high ? 1.0 : (initialParsed.confidence == .medium ? 0.7 : 0.4),
             paymentChannel: selectedPaymentChannel,
-            fundingAccount: fundingAccount
+            fundingAccount: fundingAccount,
+            fundingInstrument: fundingInstrument
         )
 
         modelContext.insert(expense)

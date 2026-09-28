@@ -18,6 +18,14 @@ public enum QuickDateFilter: String, CaseIterable, Identifiable {
     public var displayName: String { rawValue }
 }
 
+public enum DailySpendingRange: String, CaseIterable, Identifiable {
+    case last7Days = "Last 7 Days"
+    case last30Days = "Last 30 Days"
+
+    public var id: String { rawValue }
+    public var displayName: String { rawValue }
+}
+
 public struct DailySpendingPoint: Identifiable {
     public let id: String
     public let date: Date
@@ -74,23 +82,116 @@ public struct PeriodComparison {
 public final class TransactionFilterEngine {
     public static let shared = TransactionFilterEngine()
 
-    // MARK: - Filter States
+    // MARK: - Primary Date Filter State
     public var selectedDateFilter: QuickDateFilter = .last7Days
     public var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
     public var customEndDate: Date = Date()
 
-    public var selectedCategory: ExpenseCategory? = nil
-    public var selectedPaymentChannel: PaymentChannel? = nil
-    public var selectedFundingAccount: String? = nil
+    // MARK: - Multi-Select Dimension Filters
+    public var selectedCategories: Set<ExpenseCategory> = []
+    public var selectedPaymentChannels: Set<PaymentChannel> = []
+    public var selectedFundingAccounts: Set<String> = []
+
+    // Backward compatibility single-select computed accessors
+    public var selectedCategory: ExpenseCategory? {
+        get { selectedCategories.count == 1 ? selectedCategories.first : nil }
+        set {
+            if let val = newValue {
+                selectedCategories = [val]
+            } else {
+                selectedCategories = []
+            }
+        }
+    }
+
+    public var selectedPaymentChannel: PaymentChannel? {
+        get { selectedPaymentChannels.count == 1 ? selectedPaymentChannels.first : nil }
+        set {
+            if let val = newValue {
+                selectedPaymentChannels = [val]
+            } else {
+                selectedPaymentChannels = []
+            }
+        }
+    }
+
+    public var selectedFundingAccount: String? {
+        get { selectedFundingAccounts.count == 1 ? selectedFundingAccounts.first : nil }
+        set {
+            if let val = newValue {
+                selectedFundingAccounts = [val]
+            } else {
+                selectedFundingAccounts = []
+            }
+        }
+    }
+
+    // MARK: - Daily Spending Separate Date Range
+    public var dailySpendingRange: DailySpendingRange = .last7Days
+
+    // MARK: - Search
     public var searchText: String = ""
 
-    // Raw transaction cache from database
+    // Raw transaction cache from SwiftData store
     private var allExpenses: [Expense] = []
 
     public init() {}
 
     public func update(expenses: [Expense]) {
         self.allExpenses = expenses
+    }
+
+    // MARK: - Dynamic Available Funding Accounts
+    public var availableFundingAccounts: [String] {
+        let standard = ["Maybank", "Wise", "CIMB", "RHB", "Touch 'n Go", "Cash"]
+        let existing = Set(allExpenses.map { $0.effectiveFundingAccount }.filter { $0 != "Unknown" && !$0.isEmpty })
+        var accounts = standard
+        for acc in existing.sorted() {
+            if !accounts.contains(where: { $0.caseInsensitiveCompare(acc) == .orderedSame }) {
+                accounts.append(acc)
+            }
+        }
+        return accounts
+    }
+
+    // MARK: - Filter Summary Button Labels
+    public var accountsSummaryLabel: String {
+        if selectedFundingAccounts.isEmpty {
+            return "Accounts"
+        } else if selectedFundingAccounts.count == 1 {
+            return selectedFundingAccounts.first!
+        } else if selectedFundingAccounts.count == 2 {
+            let arr = Array(selectedFundingAccounts).sorted()
+            return "\(arr[0]) + \(arr[1])"
+        } else {
+            return "Accounts (\(selectedFundingAccounts.count))"
+        }
+    }
+
+    public var categoriesSummaryLabel: String {
+        if selectedCategories.isEmpty {
+            return "Categories"
+        } else if selectedCategories.count == 1 {
+            return selectedCategories.first!.rawValue
+        } else if selectedCategories.count == 2 {
+            let arr = Array(selectedCategories).map { $0.rawValue }.sorted()
+            return "\(arr[0]) + \(arr[1])"
+        } else {
+            return "Categories (\(selectedCategories.count))"
+        }
+    }
+
+    public var paymentChannelsSummaryLabel: String {
+        if selectedPaymentChannels.isEmpty {
+            return "Payment"
+        } else if selectedPaymentChannels.count == 1 {
+            return selectedPaymentChannels.first!.displayName
+        } else if selectedPaymentChannels.count == 2 {
+            let arr = Array(selectedPaymentChannels).map { $0.displayName }.sorted()
+            return "\(arr[0]) + \(arr[1])"
+        } else {
+            return "Payment (\(selectedPaymentChannels.count))"
+        }
     }
 
     // MARK: - Date Interval Resolution
@@ -139,7 +240,7 @@ public final class TransactionFilterEngine {
             comps.weekOfYear = (comps.weekOfYear ?? 1) - 1
             comps.weekday = 2
             let startOfLastWeek = calendar.date(from: comps) ?? calendar.date(byAdding: .day, value: -7, to: startOfToday)!
-            let endOfLastWeek = calendar.date(byAdding: .day, value: 6, to: startOfLastLastDay(startOfLastWeek)).flatMap {
+            let endOfLastWeek = calendar.date(byAdding: .day, value: 6, to: startOfLastWeek).flatMap {
                 calendar.date(bySettingHour: 23, minute: 59, second: 59, of: $0)
             } ?? calendar.date(byAdding: .day, value: -1, to: startOfToday)!
             return (startOfLastWeek, endOfLastWeek)
@@ -166,10 +267,6 @@ public final class TransactionFilterEngine {
             let e = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) ?? customEndDate
             return (min(s, e), max(s, e))
         }
-    }
-
-    private func startOfLastLastDay(_ date: Date) -> Date {
-        Calendar.current.startOfDay(for: date)
     }
 
     /// Formats explicit date range subtitle e.g. "22 Sep — 28 Sep"
@@ -205,76 +302,86 @@ public final class TransactionFilterEngine {
     // MARK: - Active Filter State Flags
 
     public var hasActiveFilters: Bool {
-        selectedCategory != nil ||
-        selectedPaymentChannel != nil ||
-        selectedFundingAccount != nil ||
-        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        selectedDateFilter != .last7Days
+        hasActiveDimensionFilters || selectedDateFilter != .last7Days
     }
 
-    public func clearAllFilters() {
-        selectedCategory = nil
-        selectedPaymentChannel = nil
-        selectedFundingAccount = nil
+    public var hasActiveDimensionFilters: Bool {
+        !selectedCategories.isEmpty ||
+        !selectedPaymentChannels.isEmpty ||
+        !selectedFundingAccounts.isEmpty ||
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public func clearDimensionFilters() {
+        selectedCategories.removeAll()
+        selectedPaymentChannels.removeAll()
+        selectedFundingAccounts.removeAll()
         searchText = ""
-        selectedDateFilter = .last7Days
+    }
+
+    public func clearAllFilters(keepDateFilter: Bool = true) {
+        clearDimensionFilters()
+        if !keepDateFilter {
+            selectedDateFilter = .last7Days
+        }
     }
 
     public func toggleCategory(_ category: ExpenseCategory) {
-        if selectedCategory == category {
-            selectedCategory = nil
+        if selectedCategories.contains(category) {
+            selectedCategories.remove(category)
         } else {
-            selectedCategory = category
+            selectedCategories.insert(category)
         }
     }
 
     public func toggleChannel(_ channel: PaymentChannel) {
-        if selectedPaymentChannel == channel {
-            selectedPaymentChannel = nil
+        if selectedPaymentChannels.contains(channel) {
+            selectedPaymentChannels.remove(channel)
         } else {
-            selectedPaymentChannel = channel
+            selectedPaymentChannels.insert(channel)
         }
     }
 
     public func toggleFundingAccount(_ account: String) {
-        if selectedFundingAccount == account {
-            selectedFundingAccount = nil
+        if let existing = selectedFundingAccounts.first(where: { $0.caseInsensitiveCompare(account) == .orderedSame }) {
+            selectedFundingAccounts.remove(existing)
         } else {
-            selectedFundingAccount = account
+            selectedFundingAccounts.insert(account)
         }
     }
 
-    // MARK: - Filtered Transactions Engine
+    // MARK: - Filtered Transactions Engine (Single Source of Truth)
 
     public var filteredExpenses: [Expense] {
         let (startDate, endDate) = dateInterval(for: selectedDateFilter)
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         return allExpenses.filter { expense in
-            // Date Filter
+            // 1. Date Filter (Strict Calendar Boundaries)
             guard expense.date >= startDate && expense.date <= endDate else {
                 return false
             }
 
-            // Category Filter
-            if let cat = selectedCategory, expense.category != cat {
+            // 2. Multi-Select Category Filter (OR logic within categories)
+            if !selectedCategories.isEmpty && !selectedCategories.contains(expense.category) {
                 return false
             }
 
-            // Payment Channel Filter
-            if let channel = selectedPaymentChannel, expense.paymentChannel != channel {
+            // 3. Multi-Select Payment Channel Filter (OR logic within channels)
+            if !selectedPaymentChannels.isEmpty && !selectedPaymentChannels.contains(expense.paymentChannel) {
                 return false
             }
 
-            // Funding Account Filter
-            if let funding = selectedFundingAccount {
+            // 4. Multi-Select Funding Account Filter (OR logic within accounts)
+            if !selectedFundingAccounts.isEmpty {
                 let expenseFunding = expense.effectiveFundingAccount
-                if expenseFunding.caseInsensitiveCompare(funding) != .orderedSame {
+                let match = selectedFundingAccounts.contains { $0.caseInsensitiveCompare(expenseFunding) == .orderedSame }
+                if !match {
                     return false
                 }
             }
 
-            // Search Text Filter
+            // 5. Search Text Filter
             if !term.isEmpty {
                 let matchMerchant = expense.merchant.lowercased().contains(term)
                 let matchCategory = expense.category.rawValue.lowercased().contains(term)
@@ -319,31 +426,102 @@ public final class TransactionFilterEngine {
         transactionCount > 0 ? totalSpending / Double(transactionCount) : 0.0
     }
 
-    // MARK: - Daily Spending (Vital for Last 7 Days & Charts)
+    // MARK: - Daily Spending (Separate from Main Date Filter: 7 Days or 30 Days)
+
+    public var dailySpendingSubtitle: String {
+        let cal = Calendar.current
+        let now = Date()
+        let startOfToday = cal.startOfDay(for: now)
+        let df = DateFormatter()
+        df.dateFormat = "d MMM"
+
+        switch dailySpendingRange {
+        case .last7Days:
+            let start = cal.date(byAdding: .day, value: -6, to: startOfToday)!
+            return "\(df.string(from: start)) — \(df.string(from: now))"
+        case .last30Days:
+            let start = cal.date(byAdding: .day, value: -29, to: startOfToday)!
+            return "\(df.string(from: start)) — \(df.string(from: now))"
+        }
+    }
 
     public var dailySpending: [DailySpendingPoint] {
-        let (startDate, endDate) = dateInterval(for: selectedDateFilter)
         let cal = Calendar.current
+        let now = Date()
+        let startOfToday = cal.startOfDay(for: now)
+        let endOfToday = cal.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+
+        let startDate: Date
+        let endDate: Date = endOfToday
+
+        switch dailySpendingRange {
+        case .last7Days:
+            // Today + previous 6 calendar days = 7 days
+            startDate = cal.date(byAdding: .day, value: -6, to: startOfToday)!
+        case .last30Days:
+            // Today + previous 29 calendar days = 30 days
+            startDate = cal.date(byAdding: .day, value: -29, to: startOfToday)!
+        }
+
         let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "EEE" // e.g. Mon, Tue
         let fullFormatter = DateFormatter()
         fullFormatter.dateFormat = "yyyy-MM-dd"
+
+        // Filter transactions within the daily spending interval respecting dimension filters
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let matchingExpenses = allExpenses.filter { expense in
+            guard expense.date >= startDate && expense.date <= endDate else {
+                return false
+            }
+            if !selectedCategories.isEmpty && !selectedCategories.contains(expense.category) {
+                return false
+            }
+            if !selectedPaymentChannels.isEmpty && !selectedPaymentChannels.contains(expense.paymentChannel) {
+                return false
+            }
+            if !selectedFundingAccounts.isEmpty {
+                let expenseFunding = expense.effectiveFundingAccount
+                let match = selectedFundingAccounts.contains { $0.caseInsensitiveCompare(expenseFunding) == .orderedSame }
+                if !match {
+                    return false
+                }
+            }
+            if !term.isEmpty {
+                let matchMerchant = expense.merchant.lowercased().contains(term)
+                let matchCategory = expense.category.rawValue.lowercased().contains(term)
+                let matchFunding = expense.effectiveFundingAccount.lowercased().contains(term)
+                let matchChannel = expense.paymentChannel.displayName.lowercased().contains(term)
+                let matchNotes = expense.notes?.lowercased().contains(term) ?? false
+                let matchAmount = String(format: "%.2f", expense.amount).contains(term)
+                if !(matchMerchant || matchCategory || matchFunding || matchChannel || matchNotes || matchAmount) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        let expensesByDay = Dictionary(grouping: matchingExpenses) { expense in
+            fullFormatter.string(from: expense.date)
+        }
 
         var points: [DailySpendingPoint] = []
         var currentDate = cal.startOfDay(for: startDate)
         let finalDate = cal.startOfDay(for: endDate)
-
-        // Pre-group transactions by day
-        let expensesByDay = Dictionary(grouping: filteredExpenses) { expense in
-            fullFormatter.string(from: expense.date)
-        }
 
         while currentDate <= finalDate {
             let key = fullFormatter.string(from: currentDate)
             let dayExpenses = expensesByDay[key] ?? []
             let sum = dayExpenses.reduce(0.0) { $0 + $1.amount }
             let count = dayExpenses.count
-            let label = dayFormatter.string(from: currentDate)
+
+            let label: String
+            if dailySpendingRange == .last7Days {
+                dayFormatter.dateFormat = "EEE" // e.g. Mon, Tue
+                label = dayFormatter.string(from: currentDate)
+            } else {
+                dayFormatter.dateFormat = "d" // e.g. 1, 2, ... 28
+                label = dayFormatter.string(from: currentDate)
+            }
 
             points.append(DailySpendingPoint(
                 date: currentDate,
@@ -358,6 +536,13 @@ public final class TransactionFilterEngine {
         }
 
         return points
+    }
+
+    public var dailySpendingAverage: Double {
+        let count = dailySpending.count
+        guard count > 0 else { return 0.0 }
+        let total = dailySpending.reduce(0.0) { $0 + $1.amount }
+        return total / Double(count)
     }
 
     // MARK: - Breakdown Calculations (% of Total Spending)
@@ -393,7 +578,7 @@ public final class TransactionFilterEngine {
         }.sorted { $0.total > $1.total }
     }
 
-    // MARK: - Previous Period Comparison
+    // MARK: - Previous Period Comparison (Respects Accounts, Categories, Channels)
 
     public var previousPeriodComparison: PeriodComparison {
         let (startDate, endDate) = dateInterval(for: selectedDateFilter)
@@ -404,7 +589,39 @@ public final class TransactionFilterEngine {
         let prevEnd = startDate.addingTimeInterval(-1)
         let prevStart = prevEnd.addingTimeInterval(-duration)
 
-        let prevExpenses = allExpenses.filter { $0.date >= prevStart && $0.date <= prevEnd }
+        // Filter preceding expenses by the EXACT SAME multi-select dimensions!
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prevExpenses = allExpenses.filter { expense in
+            guard expense.date >= prevStart && expense.date <= prevEnd else {
+                return false
+            }
+            if !selectedCategories.isEmpty && !selectedCategories.contains(expense.category) {
+                return false
+            }
+            if !selectedPaymentChannels.isEmpty && !selectedPaymentChannels.contains(expense.paymentChannel) {
+                return false
+            }
+            if !selectedFundingAccounts.isEmpty {
+                let expenseFunding = expense.effectiveFundingAccount
+                let match = selectedFundingAccounts.contains { $0.caseInsensitiveCompare(expenseFunding) == .orderedSame }
+                if !match {
+                    return false
+                }
+            }
+            if !term.isEmpty {
+                let matchMerchant = expense.merchant.lowercased().contains(term)
+                let matchCategory = expense.category.rawValue.lowercased().contains(term)
+                let matchFunding = expense.effectiveFundingAccount.lowercased().contains(term)
+                let matchChannel = expense.paymentChannel.displayName.lowercased().contains(term)
+                let matchNotes = expense.notes?.lowercased().contains(term) ?? false
+                let matchAmount = String(format: "%.2f", expense.amount).contains(term)
+                if !(matchMerchant || matchCategory || matchFunding || matchChannel || matchNotes || matchAmount) {
+                    return false
+                }
+            }
+            return true
+        }
+
         let prevTotal = prevExpenses.reduce(0.0) { $0 + $1.amount }
         let currentTotal = totalSpending
         let diff = currentTotal - prevTotal
@@ -418,9 +635,32 @@ public final class TransactionFilterEngine {
             pctChange = 0.0
         }
 
-        let df = DateFormatter()
-        df.dateFormat = "d MMM"
-        let sub = "\(df.string(from: prevStart)) — \(df.string(from: prevEnd))"
+        // Contextual previous period subtitle matching Section 19
+        let sub: String
+        switch selectedDateFilter {
+        case .today:
+            sub = "vs Yesterday"
+        case .yesterday:
+            sub = "vs Previous Day"
+        case .last3Days:
+            sub = "vs Previous 3 Days"
+        case .last7Days:
+            sub = "vs Previous 7 Days"
+        case .last30Days:
+            sub = "vs Previous 30 Days"
+        case .thisWeek:
+            sub = "vs Previous Week"
+        case .lastWeek:
+            sub = "vs Prior Week"
+        case .thisMonth:
+            sub = "vs Previous Month"
+        case .lastMonth:
+            sub = "vs Prior Month"
+        case .custom:
+            let df = DateFormatter()
+            df.dateFormat = "d MMM"
+            sub = "vs \(df.string(from: prevStart)) — \(df.string(from: prevEnd))"
+        }
 
         return PeriodComparison(
             currentTotal: currentTotal,

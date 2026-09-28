@@ -82,6 +82,20 @@ public enum PaymentSource: String, CaseIterable, Codable, Identifiable {
         return .unknown
     }
 
+    public static func from(string: String) -> PaymentSource {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let exact = PaymentSource(rawValue: trimmed) {
+            return exact
+        }
+        for source in PaymentSource.allCases {
+            if source.rawValue.caseInsensitiveCompare(trimmed) == .orderedSame ||
+               source.shortName.caseInsensitiveCompare(trimmed) == .orderedSame {
+                return source
+            }
+        }
+        return from(normalizedIdentifier: trimmed.lowercased())
+    }
+
     public var shortName: String {
         switch self {
         case .touchNGo: return "TNG"

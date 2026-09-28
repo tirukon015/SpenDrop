@@ -13,7 +13,7 @@ public struct ExpenseRowView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             // Category Icon Badge
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -25,8 +25,8 @@ public struct ExpenseRowView: View {
                     .foregroundStyle(expense.category.color)
             }
 
-            // Merchant & Details
-            VStack(alignment: .leading, spacing: 4) {
+            // Merchant, Category, and Funding • Channel
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(expense.merchant)
                         .font(.body)
@@ -41,48 +41,51 @@ public struct ExpenseRowView: View {
                     }
                 }
 
-                HStack(spacing: 6) {
-                    // Payment badge: Funding Account • Payment Channel
-                    HStack(spacing: 4) {
+                HStack(spacing: 5) {
+                    Text(expense.category.rawValue)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(expense.category.color)
+
+                    Text("•")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    // Funding Account · Payment Channel
+                    HStack(spacing: 3) {
                         if let src = fundingSource {
-                            ProviderLogoView(source: src, size: 12)
+                            ProviderLogoView(source: src, size: 10)
                         } else {
                             Image(systemName: expense.paymentChannel.iconName)
-                                .font(.system(size: 10))
+                                .font(.system(size: 9))
                         }
 
                         Text(expense.displayFundingAndChannel)
                             .font(.caption2)
                             .fontWeight(.medium)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(uiColor: .tertiarySystemFill))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-
-                    if let notes = expense.notes, !notes.isEmpty {
-                        Text("•")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(notes)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                    .foregroundStyle(.secondary)
+                }
+
+                if let notes = expense.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
             Spacer()
 
-            // Amount & Time
-            VStack(alignment: .trailing, spacing: 4) {
+            // Amount & Date
+            VStack(alignment: .trailing, spacing: 3) {
                 Text(expense.formattedAmount)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
 
-                Text(expense.date, style: .time)
+                Text(expense.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

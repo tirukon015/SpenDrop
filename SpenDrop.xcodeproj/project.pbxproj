@@ -62,6 +62,7 @@
 		5DF085C89F59DE191C56E9E3 /* sample_camera.heic in App Resources */ = {isa = PBXBuildFile; fileRef = 22633D08D6F18490DDC8C43F /* sample_camera.heic */; };
 		17E031F6B7202B96A0198B34 /* ShareViewController.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = EC0527D198B5E800BBD73E29 /* ShareViewController.swift */; };
 		8ED799939EDE35DE97AC491C /* ShareExtensionView.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = D450754B03FB3BD4BC2259CE /* ShareExtensionView.swift */; };
+		8ED799939EDE35DE97AC491D /* ShareExtensionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D450754B03FB3BD4BC2259CE /* ShareExtensionView.swift */; };
 		295A20E1A19F189085D0C2DA /* Expense.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 6009BF3B1B3CBAD064B86162 /* Expense.swift */; };
 		87FC1BAA5EC3DA0D50350599 /* ExpenseCategory.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 979772E99B2131718BE41F35 /* ExpenseCategory.swift */; };
 		F575C78810F461473FFBAF3A /* PaymentSource.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 410A564B608B8339A682785D /* PaymentSource.swift */; };
@@ -601,6 +602,7 @@
 				97F61DD9FC1E0A96B1F0323B /* AnalyticsView.swift in Sources */,
 				3F38B9902B59A3CD4C5FE100 /* SettingsView.swift in Sources */,
 				26F647A81937EE1AB08548E2 /* ParserSelfTestView.swift in Sources */,
+				8ED799939EDE35DE97AC491D /* ShareExtensionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

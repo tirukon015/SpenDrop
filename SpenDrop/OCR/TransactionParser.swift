@@ -28,16 +28,18 @@ public final class TransactionParser {
 
         // 1. Automatic Bank / Payment Provider Detection (Issue 2)
         let providerResult = PaymentProviderDetector.detect(lines: lines, fullText: fullText)
-        let detectedSource = providerResult.provider != .unknown ? providerResult.provider : detectPaymentSource(lowerFull: lowerFull)
+        let detectedPaymentSource = providerResult.provider != .unknown ? providerResult.provider : detectPaymentSource(lowerFull: lowerFull)
         let normalizedProvider = providerResult.normalizedId
         let providerConfidence = providerResult.confidence
         let paymentMethod = providerResult.paymentMethod
         let underlyingBank = providerResult.underlyingBank
         let underlyingBankNormalizedId = providerResult.underlyingBankNormalizedId
+        let fundingInstrument = providerResult.fundingInstrument
+        let transactionSource = providerResult.detectedSource
 
         // Structured remark suggestion (Section 6)
         var suggestedRemark: String? = nil
-        if providerResult.provider == .applePay {
+        if providerResult.provider == .applePay || transactionSource == .appleWallet {
             if let bank = underlyingBank {
                 suggestedRemark = "Paid via Apple Pay • \(bank.rawValue)"
             } else {
@@ -57,7 +59,7 @@ public final class TransactionParser {
         )
 
         // 4. Detect Merchant & Suggested Category
-        let (detectedMerchant, merchantCategory) = MerchantDetector.detect(lines: lines, fullText: fullText)
+        let (detectedMerchant, merchantCategory) = MerchantDetector.detect(lines: lines, fullText: fullText, recognizedLines: ocrResult.lines)
         let finalCategory = CategoryDetector.detect(text: fullText, detectedMerchant: detectedMerchant, merchantCategory: merchantCategory)
 
         // 5. Detect Date & Time with Normalized String Representations
@@ -75,7 +77,7 @@ public final class TransactionParser {
         if isBalanceOrLimit || isFailed {
             confidence = .low
         } else if isCompleted && selectedAmount != nil && selectedAmount! > 0 {
-            if amountConfidence >= 0.85 && (detectedMerchant != nil || detectedSource != nil) {
+            if amountConfidence >= 0.85 && (detectedMerchant != nil || detectedPaymentSource != nil) {
                 confidence = .high
             } else if amountConfidence >= 0.60 {
                 confidence = .medium
@@ -95,8 +97,8 @@ public final class TransactionParser {
             statusDisplayText = "Possible Expense"
         }
 
-        let detectedChannel = PaymentChannel.detect(from: fullText, paymentSource: detectedSource, paymentMethod: paymentMethod)
-        let detectedFunding: String = underlyingBank?.rawValue ?? (detectedSource != .applePay && detectedSource != .qrPayment && detectedSource != .bankTransfer && detectedSource != .physicalCard && detectedSource != .unknown && detectedSource != nil ? detectedSource!.rawValue : "Unknown")
+        let detectedChannel = PaymentChannel.detect(from: fullText, paymentSource: detectedPaymentSource, paymentMethod: paymentMethod, detectedSource: transactionSource)
+        let detectedFunding: String = underlyingBank?.rawValue ?? (detectedPaymentSource != .applePay && detectedPaymentSource != .qrPayment && detectedPaymentSource != .bankTransfer && detectedPaymentSource != .physicalCard && detectedPaymentSource != .unknown && detectedPaymentSource != nil ? detectedPaymentSource!.rawValue : "Unknown")
 
         return ParsedTransaction(
             amount: selectedAmount,
@@ -106,12 +108,13 @@ public final class TransactionParser {
             date: detectedDate,
             dateString: dateString,
             timeString: timeString,
-            paymentSource: detectedSource,
+            paymentSource: detectedPaymentSource,
             provider: normalizedProvider,
             providerConfidence: providerConfidence,
             paymentMethod: paymentMethod,
             paymentChannel: detectedChannel,
             fundingAccount: detectedFunding,
+            fundingInstrument: fundingInstrument,
             underlyingBank: underlyingBank,
             underlyingBankNormalizedId: underlyingBankNormalizedId,
             suggestedRemark: suggestedRemark,
