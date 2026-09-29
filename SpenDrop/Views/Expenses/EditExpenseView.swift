@@ -4,6 +4,7 @@ import SwiftData
 public struct EditExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Account.sortIndex) private var accounts: [Account]
 
     @Bindable public var expense: Expense
 
@@ -15,6 +16,9 @@ public struct EditExpenseView: View {
     @State private var selectedPaymentSource: PaymentSource = .maybank
     @State private var date: Date = Date()
     @State private var notes: String = ""
+    // Split (Phase 4): loaded from the expense; nil = not shared.
+    @State private var splitDraft: SplitDraft?
+    @State private var showingSplitEditor = false
 
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
@@ -27,7 +31,7 @@ public struct EditExpenseView: View {
     }
 
     private var isValid: Bool {
-        parsedAmount > 0
+        parsedAmount > 0 && (splitDraft?.isValid(totalMinor: Money.minorUnits(from: parsedAmount)) ?? true)
     }
 
     public var body: some View {
@@ -105,7 +109,7 @@ public struct EditExpenseView: View {
                             .padding(.horizontal, 4)
 
                         Picker("Funding Method", selection: $fundingAccount) {
-                            ForEach(commonFundingAccounts, id: \.self) { acc in
+                            ForEach(AccountLinker.fundingOptions(base: commonFundingAccounts, accounts: accounts), id: \.self) { acc in
                                 Text(acc).tag(acc)
                             }
                         }
@@ -168,6 +172,18 @@ public struct EditExpenseView: View {
                             .background(Color(uiColor: .secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
+
+                    // SPLIT (Equal/Parts follow the new amount; Amounts must be corrected before saving)
+                    Button {
+                        showingSplitEditor = true
+                    } label: {
+                        SplitSummaryRow(draft: splitDraft, totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("editExpense.split")
                 }
                 .padding()
             }
