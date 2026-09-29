@@ -225,3 +225,25 @@ public struct MoneyMovementCreateSheet: View {
     }
 }
 
+/// Sheet wrapper for editing an existing Money In / Money Out / Transfer record.
+public struct MoneyMovementEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let movement: MoneyMovement
+
+    public init(movement: MoneyMovement) {
+        self.movement = movement
+    }
+
+    public var body: some View {
+        NavigationStack {
+            MoneyMovementFormView(editing: movement) { dismiss() }
+                .navigationTitle(TransactionEntryType(kind: movement.kind).title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+        }
+    }
+}
