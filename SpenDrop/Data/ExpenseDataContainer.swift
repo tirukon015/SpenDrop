@@ -36,16 +36,65 @@ public final class ExpenseDataContainer {
         }
     }
 
+    // MARK: - Store Status
+
+    /// Whether SpenDrop is running on the user's real database or in safe mode.
+    public enum StoreStatus: Equatable {
+        /// The on-disk database opened normally.
+        case persistent(storeURL: URL)
+        /// The on-disk database could not be opened. It was left untouched on disk and the app
+        /// is running on a temporary in-memory store; nothing written now is saved.
+        case safeMode(reason: String, storeURL: URL?)
+    }
+
+    public private(set) static var storeStatus: StoreStatus = .safeMode(reason: "Not opened yet", storeURL: nil)
+
+    /// True only when changes are being written to the user's on-disk database.
+    public static var isPersistentStoreHealthy: Bool {
+        if case .persistent = storeStatus { return true }
+        return false
+    }
+
+    /// True when the on-disk database exists but could not be opened (the app is in safe mode).
+    public static var didFailToOpenStore: Bool {
+        if case .safeMode(_, .some) = storeStatus { return true }
+        return false
+    }
+
+    public static var currentSchema: Schema {
+        Schema(versionedSchema: SpenDropSchemaV3.self)
+    }
+
+    private static let schemaFingerprintKey = "SpenDrop.lastOpenedSchemaFingerprint"
+    private static let storeFileSuffixes = ["", "-shm", "-wal"]
+    private static let maxPreUpgradeSnapshots = 3
+
+    private static var safetyDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+    }
+
+    // MARK: - Container Creation
+
+    /// UI tests launch the app with `--ui-testing`: a fresh temporary database each launch, no seeding, no
+    /// backup files written. The user's database and backups are never touched in this mode.
+    public static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+
     private static func createContainer() -> ModelContainer {
         let fm = FileManager.default
-        let schema = Schema([
-            Expense.self,
-            PayBookProfile.self,
-            PayBookPaymentMethod.self,
-            PayBookContact.self
-        ])
+        let schema = currentSchema
 
-        // 1. Check if App Group is actually accessible on this device
+        if isUITesting {
+            let dir = fm.temporaryDirectory.appendingPathComponent("SpenDropUITestStore", isDirectory: true)
+            try? fm.removeItem(at: dir)
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let config = ModelConfiguration(schema: schema, url: dir.appendingPathComponent("default.store"))
+            if let container = try? openPersistentContainer(configuration: config) {
+                storeStatus = .persistent(storeURL: config.url)
+                return container
+            }
+        }
+
+        // 1. App Group store (shared with the Share Extension)
         if let groupURL = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
             let appSupport = groupURL.appendingPathComponent("Library/Application Support", isDirectory: true)
             try? fm.createDirectory(at: appSupport, withIntermediateDirectories: true)
