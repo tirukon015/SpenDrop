@@ -105,3 +105,52 @@ public struct FinancialModelTests {
             check("Split: validation errors", errors == expectedErrors, expected: "\(expectedErrors)", actual: "\(errors)")
         }
 
+        // MARK: Accounts and the linker
+        do {
+            let ctx = context()
+            let a = Account(name: "Maybank", type: .bank)
+            let b = Account(name: "Maybank", type: .bank)
+            ctx.insert(a); ctx.insert(b)
+            check("Account: each account has its own identity", a.id != b.id && a.nameKey == b.nameKey && a.nameKey == "maybank",
+                  expected: "different ids, same name key", actual: "idsDiffer=\(a.id != b.id) key=\(a.nameKey ?? "nil")")
+        }
+        do {
+            let ctx = context()
+            let e1 = Expense(amount: 10, merchant: "A", fundingAccount: "Maybank")
+            let e2 = Expense(amount: 20, merchant: "B", fundingAccount: " MAYBANK ")
+            let e3 = Expense(amount: 30, merchant: "C", fundingAccount: "CIMB")
+            let e4 = Expense(amount: 40, merchant: "D", fundingAccount: "Unknown")
+            let e5 = Expense(amount: 50, merchant: "E", fundingAccount: "Other")
+            let e6 = Expense(amount: 60, merchant: "F", fundingAccount: "Touch 'n Go")
+            let e7 = Expense(amount: 70, merchant: "G", fundingAccount: "Cash")
+            [e1, e2, e3, e4, e5, e6, e7].forEach { ctx.insert($0) }
+            let first = AccountLinker.linkUnlinkedExpenses(in: ctx)
+            try? ctx.save()
+            let second = AccountLinker.linkUnlinkedExpenses(in: ctx)
+            let accounts = fetch(Account.self, in: ctx)
+            let names = accounts.sorted { $0.sortIndex < $1.sortIndex }.map(\.name)
+            let passed = first.accountsCreated == 4 && first.expensesLinked == 5 && second.accountsCreated == 0 && second.expensesLinked == 0 &&
+                e1.account === e2.account && e1.account?.name == "Maybank" && e3.account?.name == "CIMB" &&
+                e4.account == nil && e5.account == nil &&
+                e2.fundingAccount == " MAYBANK " && e4.fundingAccount == "Unknown"
+            check("Account migration: one account per distinct value, unknowns unlinked, text preserved", passed,
+                  expected: "4 accounts, 5 linked, rerun adds 0, Unknown/Other nil",
+                  actual: "created=\(first.accountsCreated) linked=\(first.expensesLinked) rerun=\(second.accountsCreated)/\(second.expensesLinked) names=\(names) unknownLinked=\(e4.account != nil)")
+            let types = [e1, e6, e7, e3].map { $0.account?.type }
+            check("Account: type inferred (bank / e-wallet / cash)", types == [.bank, .eWallet, .cash, .bank],
+                  expected: "[bank, eWallet, cash, bank]", actual: "\(types)")
+            check("Account: inverse relationship lists expenses", e1.account?.expenses.count == 2,
+                  expected: "Maybank has 2 expenses", actual: "\(e1.account?.expenses.count ?? -1)")
+        }
+        do {
+            let ctx = context()
+            let existing = Account(name: "Maybank", type: .bank)
+            ctx.insert(existing)
+            let manual = Expense(amount: 5, merchant: "Kept", fundingAccount: "CIMB")
+            ctx.insert(manual)
+            manual.account = existing
+            AccountLinker.linkUnlinkedExpenses(in: ctx)
+            check("Account linker never changes an existing link", manual.account === existing && count(Account.self, in: ctx) == 1,
+                  expected: "link unchanged, no new account", actual: "account=\(manual.account?.name ?? "nil") accounts=\(count(Account.self, in: ctx))")
+        }
+
