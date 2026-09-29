@@ -163,3 +163,25 @@ public final class MoneyMovement {
         return "\(expense.merchant) · \(expense.currency) \(String(format: "%.2f", expense.amount)) · \(formatter.string(from: expense.date))"
     }
 
+    public enum ValidationIssue: Equatable {
+        case nonPositiveAmount
+        case missingPerson
+        case missingTransferAccounts
+        case sameTransferAccount
+    }
+
+    /// Problems that make this record unusable for calculations. Future UI must not save a record with issues.
+    public var validationIssues: [ValidationIssue] {
+        var issues: [ValidationIssue] = []
+        if amountMinor <= 0 { issues.append(.nonPositiveAmount) }
+        if kind.requiresPerson && person == nil && (personNameSnapshot ?? "").isEmpty { issues.append(.missingPerson) }
+        if kind == .ownTransfer {
+            if account == nil || counterAccount == nil {
+                issues.append(.missingTransferAccounts)
+            } else if account?.id == counterAccount?.id {
+                issues.append(.sameTransferAccount)
+            }
+        }
+        return issues
+    }
+}
