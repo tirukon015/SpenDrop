@@ -43,3 +43,25 @@ public enum PersonLedger {
         return expenses
     }
 
+    /// Currency → balance with this person. Zero balances are omitted.
+    public static func balances(for person: PayBookProfile) -> [String: Int] {
+        let expenses = relatedExpenses(person)
+        let movements = person.movements
+        let currencies = Set(expenses.map(\.currency) + movements.map(\.currency))
+        var result: [String: Int] = [:]
+        for currency in currencies {
+            let value = FinancialCalculator.personBalances(expenses: expenses, movements: movements, currency: currency)[person.id] ?? 0
+            if value != 0 { result[currency] = value }
+        }
+        return result
+    }
+
+    public static func hasHistory(_ person: PayBookProfile) -> Bool {
+        !person.shares.isEmpty || !person.paidExpenses.isEmpty || !person.movements.isEmpty
+    }
+
+    /// Deleting is only allowed when nothing is owed either way. History survives through snapshots.
+    public static func canDelete(_ person: PayBookProfile) -> Bool {
+        balances(for: person).isEmpty
+    }
+
