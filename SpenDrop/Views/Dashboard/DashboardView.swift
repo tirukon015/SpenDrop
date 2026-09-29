@@ -5,6 +5,8 @@ import PhotosUI
 public struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var allMovements: [MoneyMovement]
+    @Query private var people: [PayBookProfile]
 
     @State private var showingAddExpense = false
     @State private var initialAddPaymentSource: PaymentSource = .cash
@@ -26,7 +28,7 @@ public struct DashboardView: View {
     }
 
     private var todayTotal: Double {
-        todayExpenses.reduce(0) { $0 + $1.amount }
+        todayExpenses.reduce(0) { $0 + $1.spendingAmount }
     }
 
     // This week's spend
@@ -36,7 +38,7 @@ public struct DashboardView: View {
     }
 
     private var thisWeekTotal: Double {
-        thisWeekExpenses.reduce(0) { $0 + $1.amount }
+        thisWeekExpenses.reduce(0) { $0 + $1.spendingAmount }
     }
 
     // This month's spend
@@ -46,7 +48,23 @@ public struct DashboardView: View {
     }
 
     private var thisMonthTotal: Double {
-        thisMonthExpenses.reduce(0) { $0 + $1.amount }
+        thisMonthExpenses.reduce(0) { $0 + $1.spendingAmount }
+    }
+
+    // Cash flow this month (own transfers excluded). Only shown once money in/out has been recorded.
+    private var thisMonthMovements: [MoneyMovement] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: now) else { return [] }
+        return allMovements.filter { monthInterval.contains($0.date) }
+    }
+
+    private var monthCashFlow: FinancialCalculator.Summary {
+        FinancialCalculator.summary(expenses: thisMonthExpenses, movements: thisMonthMovements)
+    }
+
+    private var sharedThisMonth: [Expense] { thisMonthExpenses.filter(\.isShared) }
+
+    private func formatMinor(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor))
     }
 
     private var currentMonthYearString: String {
