@@ -409,6 +409,101 @@ public struct PayBookDetailView: View {
         methodToDelete = nil
     }
 
+    // MARK: - Balance & History (Phase 5)
+
+    @ViewBuilder
+    private var balanceSection: some View {
+        let balances = PersonLedger.balances(for: profile)
+        if !balances.isEmpty || PersonLedger.hasHistory(profile) {
+            VStack(alignment: .leading, spacing: 10) {
+                if balances.isEmpty {
+                    Label("Settled — nothing owed either way", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                } else {
+                    ForEach(balances.sorted { $0.key < $1.key }, id: \.key) { currency, value in
+                        HStack {
+                            Image(systemName: value > 0 ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
+                                .foregroundStyle(value > 0 ? .green : .orange)
+                            Text(PersonLedger.directionText(name: profile.name, balanceMinor: value, currency: currency))
+                                .font(.headline)
+                            Spacer()
+                        }
+                        Button {
+                            if let draft = PersonLedger.repaymentDraft(for: profile, currency: currency) {
+                                repayment = PrefilledMovement(draft: draft)
+                            }
+                        } label: {
+                            Label(value > 0 ? "Record Repayment Received" : "Record Repayment Made", systemImage: "banknote")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .accessibilityIdentifier("person.recordRepayment")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var historySection: some View {
+        let entries = PersonLedger.entries(for: profile)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("HISTORY")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(1.0)
+                    .padding(.horizontal, 4)
+
+                VStack(spacing: 0) {
+                    ForEach(entries) { entry in
+                        Button {
+                            switch entry.source {
+                            case .expense(let expense): selectedExpense = expense
+                            case .movement(let movement): selectedMovement = movement
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.title).font(.subheadline.weight(.semibold))
+                                    Text("\(entry.date.formatted(date: .abbreviated, time: .omitted)) · \(entry.detail)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                if entry.effectMinor != 0 {
+                                    Text((entry.effectMinor > 0 ? "+" : "−") + PersonLedger.format(abs(entry.effectMinor), entry.currency))
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(entry.effectMinor > 0 ? .green : .orange)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if entry.id != entries.last?.id {
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                Text("+ means \(profile.name) owes you more; − means you owe \(profile.name) more (or they owe you less).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+
     private func deleteProfile() {
         HapticFeedback.notification(.warning)
         modelContext.delete(profile)
