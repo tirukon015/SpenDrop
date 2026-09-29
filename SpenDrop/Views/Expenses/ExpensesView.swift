@@ -339,7 +339,7 @@ public struct ExpensesView: View {
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Expenses")
+            .navigationTitle("Transactions")
             .searchable(text: $searchText, prompt: "Search merchant, amount, category...")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -353,6 +353,10 @@ public struct ExpensesView: View {
             }
             .sheet(item: $selectedExpense) { expense in
                 ExpenseDetailView(expense: expense)
+                    .environment(\.modelContext, modelContext)
+            }
+            .sheet(item: $selectedMovement) { movement in
+                MoneyMovementEditSheet(movement: movement)
                     .environment(\.modelContext, modelContext)
             }
             .sheet(isPresented: $showingAddExpense) {
@@ -373,9 +377,13 @@ public struct ExpensesView: View {
             }
             .onAppear {
                 engine.update(expenses: allExpenses)
+                engine.update(movements: allMovements)
             }
             .onChange(of: allExpenses) { _, newExpenses in
                 engine.update(expenses: newExpenses)
+            }
+            .onChange(of: allMovements) { _, newMovements in
+                engine.update(movements: newMovements)
             }
             .onChange(of: searchText) { _, newText in
                 engine.searchText = newText
