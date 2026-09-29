@@ -121,6 +121,17 @@ public final class UserDataBackupService {
             self.fundingAccount = expense.effectiveFundingAccount
             self.fundingInstrument = expense.fundingInstrument
             self.matchingStatusRaw = expense.matchingStatusRaw
+            self.imageRelativePath = expense.imageRelativePath
+            self.confidence = expense.confidence
+            self.externalTransactionId = expense.externalTransactionId
+            self.matchingConfidence = expense.matchingConfidence
+            self.updatedAt = expense.updatedAt
+            self.accountId = expense.account?.id
+            self.paidByMe = expense.paidByMe
+            self.payerId = expense.payer?.id
+            self.payerNameSnapshot = expense.payerNameSnapshot
+            self.splitMethodRaw = expense.splitMethodRaw
+            self.shares = expense.shares.sorted { $0.sortIndex < $1.sortIndex }.map { ExpenseShareDTO(from: $0) }
         }
 
         public init(
@@ -174,6 +185,8 @@ public final class UserDataBackupService {
         public let accountIdentifier: String
         public let label: String?
         public let notes: String?
+        public var createdAt: Date? = nil
+        public var updatedAt: Date? = nil
 
         public init(from method: PayBookPaymentMethod) {
             self.id = method.id
@@ -183,6 +196,8 @@ public final class UserDataBackupService {
             self.accountIdentifier = method.accountIdentifier
             self.label = method.label
             self.notes = method.notes
+            self.createdAt = method.createdAt
+            self.updatedAt = method.updatedAt
         }
 
         public init(
@@ -209,12 +224,20 @@ public final class UserDataBackupService {
         public let name: String
         public let notes: String?
         public let paymentMethods: [PayBookMethodDTO]
+        public var createdAt: Date? = nil
+        public var updatedAt: Date? = nil
+        public var isFrequent: Bool? = nil
+        public var isArchived: Bool? = nil
 
         public init(from profile: PayBookProfile) {
             self.id = profile.id
             self.name = profile.name
             self.notes = profile.notes
             self.paymentMethods = profile.paymentMethods.map { PayBookMethodDTO(from: $0) }
+            self.createdAt = profile.createdAt
+            self.updatedAt = profile.updatedAt
+            self.isFrequent = profile.isFrequent
+            self.isArchived = profile.isArchived
         }
 
         public init(
