@@ -1225,97 +1225,183 @@ public final class UserDataBackupService {
         }
     }
 
+    /// Result of applying a backup file. Records are matched by `id` only.
+    public struct ImportSummary: Equatable {
+        public var expensesAdded = 0
+        public var expensesUpdated = 0
+        public var expensesKeptNewer = 0
+        public var possibleDuplicateExpenses = 0
+        public var profilesAdded = 0
+        public var profilesUpdated = 0
+        public var profilesKeptNewer = 0
+        public var profilesSharingName = 0
+        public var methodsAdded = 0
+        public var methodsUpdated = 0
+        public var accountsAdded = 0
+        public var accountsMatchedByName = 0
+        public var sharesRestored = 0
+        public var movementsAdded = 0
+        public var movementsUpdated = 0
+        public var movementsKeptNewer = 0
+        public var rulesRestored = 0
+        /// Relationship ids in the backup that point to records missing from both the backup and this device.
+        /// The link is left empty; name snapshots keep the history readable.
+        public var missingReferences = 0
+
+        public var message: String {
+            var lines = [
+                "Expenses: \(expensesAdded) added, \(expensesUpdated) updated.",
+                "PayBook people: \(profilesAdded) added, \(profilesUpdated) updated."
+            ]
+            if movementsAdded + movementsUpdated > 0 {
+                lines.append("Money movements: \(movementsAdded) added, \(movementsUpdated) updated.")
+            }
+            if accountsAdded > 0 {
+                lines.append("Accounts: \(accountsAdded) added.")
+            }
+            let keptNewer = expensesKeptNewer + profilesKeptNewer + movementsKeptNewer
+            if keptNewer > 0 {
+                lines.append("\(keptNewer) records on this device were newer and were kept.")
+            }
+            if possibleDuplicateExpenses > 0 {
+                lines.append("\(possibleDuplicateExpenses) imported expenses look similar to existing ones. They were imported, not skipped. Please review them.")
+            }
+            if profilesSharingName > 0 {
+                lines.append("\(profilesSharingName) imported people share a name with an existing person. They were kept separate.")
+            }
+            if missingReferences > 0 {
+                lines.append("\(missingReferences) links pointed to records that no longer exist and were left empty.")
+            }
+            return lines.joined(separator: "\n")
+        }
+    }
+
     /// Imports backup JSON file from an external URL (e.g. from Files picker)
     @discardableResult
-    public static func importFromJSON(at url: URL, into context: ModelContext) throws -> (expensesAdded: Int, profilesAdded: Int) {
+    public static func importFromJSON(at url: URL, into context: ModelContext) throws -> ImportSummary {
+        let targetIsInMemory = context.container.configurations.allSatisfy { $0.isStoredInMemoryOnly }
+        guard !(ExpenseDataContainer.didFailToOpenStore && targetIsInMemory) else {
+            throw NSError(domain: "SpenDropBackup", code: 2, userInfo: [NSLocalizedDescriptionKey: "SpenDrop is in safe mode because your database could not be opened. Import is disabled so nothing is lost."])
+        }
         guard url.startAccessingSecurityScopedResource() || true else {
             throw NSError(domain: "SpenDropBackup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Permission denied accessing backup file"])
         }
         defer { url.stopAccessingSecurityScopedResource() }
 
         let data = try Data(contentsOf: url)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let payload = try decoder.decode(BackupPayload.self, from: data)
+        let payload = try makeDecoder().decode(BackupPayload.self, from: data)
+        guard BackupPayload.supportedVersions.contains(payload.version) else {
+            throw NSError(domain: "SpenDropBackup", code: 3, userInfo: [NSLocalizedDescriptionKey: "This backup was made by a newer version of SpenDrop (format \(payload.version)). Please update the app before importing it. Nothing was imported."])
+        }
         let result = applyBackupPayload(payload, into: context)
         try context.save()
         saveAutoBackup(from: context)
         return result
     }
 
+    /// Applies a backup using `id` as the only identity:
+    /// - existing id: the record is updated from the backup (unless the device copy is newer)
+    /// - new id: the record is imported, even if it looks like an existing one (reported, never skipped)
+    /// - people are never merged because their names match
+    /// - accounts are matched by id, then by name (one "Maybank" account per user)
+    /// - version-2 fields are only applied from version-2 files; a version-1 file never clears them
     @discardableResult
-    private static func applyBackupPayload(_ payload: BackupPayload, into context: ModelContext) -> (expensesAdded: Int, profilesAdded: Int) {
-        let existingExpenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
-        var existingRefs = Set<String>()
-        var existingSignatures = Set<String>()
+    static func applyBackupPayload(_ payload: BackupPayload, into context: ModelContext) -> ImportSummary {
+        var summary = ImportSummary()
+        let isV2 = payload.version >= 2
 
-        for exp in existingExpenses {
-            if let ref = exp.transactionReference, !ref.isEmpty { existingRefs.insert(ref) }
-            let sig = "\(exp.merchant.lowercased())_\(exp.amount)_\(Calendar.current.component(.day, from: exp.date))"
-            existingSignatures.insert(sig)
+        // 1. Accounts
+        let existingAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        var accountsById = Dictionary(existingAccounts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var accountsByKey: [String: Account] = [:]
+        for account in existingAccounts {
+            if let key = account.nameKey, accountsByKey[key] == nil { accountsByKey[key] = account }
+        }
+        for aDTO in payload.accounts ?? [] {
+            if let found = accountsById[aDTO.id] {
+                found.name = aDTO.name
+                found.typeRaw = aDTO.typeRaw
+                found.currency = aDTO.currency
+                found.icon = aDTO.icon
+                found.isArchived = aDTO.isArchived
+                found.sortIndex = aDTO.sortIndex
+            } else if let key = AccountLinker.normalizedKey(aDTO.name), let sameName = accountsByKey[key] {
+                accountsById[aDTO.id] = sameName
+                summary.accountsMatchedByName += 1
+            } else {
+                let account = Account(id: aDTO.id, name: aDTO.name, type: AccountType(rawValue: aDTO.typeRaw) ?? .other,
+                                      currency: aDTO.currency, icon: aDTO.icon, isArchived: aDTO.isArchived,
+                                      createdAt: aDTO.createdAt, sortIndex: aDTO.sortIndex)
+                context.insert(account)
+                accountsById[aDTO.id] = account
+                if let key = account.nameKey { accountsByKey[key] = account }
+                summary.accountsAdded += 1
+            }
+        }
+        func account(_ id: UUID?) -> Account? {
+            guard let id else { return nil }
+            if let found = accountsById[id] { return found }
+            summary.missingReferences += 1
+            return nil
         }
 
-        var expensesAdded = 0
-        for dto in payload.expenses {
-            if let ref = dto.transactionReference, existingRefs.contains(ref) { continue }
-            let sig = "\(dto.merchant.lowercased())_\(dto.amount)_\(Calendar.current.component(.day, from: dto.date))"
-            if existingSignatures.contains(sig) { continue }
-
-            let cat = ExpenseCategory(rawValue: dto.categoryRaw) ?? .personal
-            let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
-            let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
-            let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
-            let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
-            let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
-            let matching = dto.matchingStatusRaw ?? "UNMATCHED"
-
-            let expense = Expense(
-                id: dto.id,
-                amount: dto.amount,
-                currency: dto.currency,
-                merchant: dto.merchant,
-                category: cat,
-                paymentSource: src,
-                underlyingBank: bank,
-                paymentMethod: dto.paymentMethodRaw,
-                date: dto.date,
-                notes: dto.notes,
-                transactionReference: dto.transactionReference,
-                sourceType: sType,
-                ocrText: dto.ocrText,
-                isSampleData: dto.isSampleData,
-                paymentChannel: channel,
-                fundingAccount: funding,
-                fundingInstrument: dto.fundingInstrument,
-                matchingStatus: matching
-            )
-            context.insert(expense)
-            expensesAdded += 1
-        }
-
+        // 2. People and their payment methods
         let existingProfiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
-        var existingProfNames = Set(existingProfiles.map { $0.name.lowercased() })
-        var profilesAdded = 0
+        var profilesById = Dictionary(existingProfiles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let existingNames = Set(existingProfiles.map { $0.name.lowercased() })
+        let existingMethods = (try? context.fetch(FetchDescriptor<PayBookPaymentMethod>())) ?? []
+        var methodsById = Dictionary(existingMethods.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         for pDTO in payload.paybookProfiles {
             let prof: PayBookProfile
-            if let found = existingProfiles.first(where: { $0.name.lowercased() == pDTO.name.lowercased() }) {
+            if let found = profilesById[pDTO.id] {
                 prof = found
+                if let backupDate = pDTO.updatedAt, found.updatedAt > backupDate {
+                    summary.profilesKeptNewer += 1
+                } else {
+                    found.name = pDTO.name
+                    found.notes = pDTO.notes
+                    if let frequent = pDTO.isFrequent { found.isFrequent = frequent }
+                    if let archived = pDTO.isArchived { found.isArchived = archived }
+                    if let updated = pDTO.updatedAt { found.updatedAt = updated }
+                    summary.profilesUpdated += 1
+                }
             } else {
-                prof = PayBookProfile(id: pDTO.id, name: pDTO.name, notes: pDTO.notes)
+                if existingNames.contains(pDTO.name.lowercased()) {
+                    summary.profilesSharingName += 1
+                }
+                prof = PayBookProfile(
+                    id: pDTO.id,
+                    name: pDTO.name,
+                    notes: pDTO.notes,
+                    createdAt: pDTO.createdAt ?? Date(),
+                    updatedAt: pDTO.updatedAt ?? Date()
+                )
+                prof.isFrequent = pDTO.isFrequent ?? false
+                prof.isArchived = pDTO.isArchived ?? false
                 context.insert(prof)
-                existingProfNames.insert(pDTO.name.lowercased())
-                profilesAdded += 1
+                profilesById[pDTO.id] = prof
+                summary.profilesAdded += 1
             }
 
             for mDTO in pDTO.paymentMethods {
-                let hasMethod = prof.paymentMethods.contains {
-                    $0.displayProvider.lowercased() == mDTO.provider.lowercased() &&
-                    $0.normalizedIdentifier == mDTO.accountIdentifier.filter { $0.isNumber || $0.isLetter }.lowercased()
-                }
-                if !hasMethod {
-                    let pType = PayBookPaymentType(rawValue: mDTO.paymentTypeRaw) ?? .bankAccount
+                let pType = PayBookPaymentType(rawValue: mDTO.paymentTypeRaw) ?? .bankAccount
+                if let method = methodsById[mDTO.id] {
+                    if let backupDate = mDTO.updatedAt, method.updatedAt > backupDate { continue }
+                    method.paymentType = pType
+                    method.provider = mDTO.provider
+                    method.customProviderName = mDTO.customProviderName
+                    method.accountIdentifier = mDTO.accountIdentifier
+                    method.label = mDTO.label
+                    method.notes = mDTO.notes
+                    if let updated = mDTO.updatedAt { method.updatedAt = updated }
+                    if method.profile?.id != prof.id {
+                        method.profile?.paymentMethods.removeAll { $0.id == method.id }
+                        method.profile = prof
+                        prof.paymentMethods.append(method)
+                    }
+                    summary.methodsUpdated += 1
+                } else {
                     let method = PayBookPaymentMethod(
                         id: mDTO.id,
                         paymentType: pType,
