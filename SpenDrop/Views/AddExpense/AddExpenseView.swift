@@ -635,9 +635,11 @@ public struct AddExpenseView: View {
         do {
             ocrResult = try await OCRService.shared.recognizeText(from: uiImage)
             print("[SpenDrop][IMAGE] OCR completed: SUCCESS (lines: \(ocrResult.lines.count), avgConfidence: \(ocrResult.averageConfidence), textLength: \(ocrResult.fullText.count))")
+            #if DEBUG
             for (idx, line) in ocrResult.lines.prefix(5).enumerated() {
                 print("[SpenDrop][IMAGE] Line \(idx + 1): \"\(line.text)\" (conf: \(line.confidence))")
             }
+            #endif
         } catch {
             print("[SpenDrop][IMAGE] OCR FAILED: \(error)")
             handleImportFailure(stage: "Vision OCR", error: error)
@@ -647,7 +649,9 @@ public struct AddExpenseView: View {
         // Stage 8: Parser
         print("[SpenDrop][IMAGE] Parser started")
         let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: uiImage)
+        #if DEBUG
         print("[SpenDrop][IMAGE] Parser completed: amount: \(parsed.amount != nil ? "RM\(parsed.amount!)" : "nil"), merchant: \(parsed.merchant ?? "nil"), source: \(parsed.paymentSource?.rawValue ?? "nil"), category: \(parsed.category?.rawValue ?? "nil"), confidence: \(parsed.confidence.rawValue), isBalance: \(parsed.isBalanceOrLimitOnly), isFailed: \(parsed.isFailedTransaction)")
+        #endif
 
         isProcessingOCR = false
         selectedPhotoItem = nil
@@ -695,6 +699,11 @@ public struct AddExpenseView: View {
         )
 
         modelContext.insert(expense)
+        AccountLinker.relink(expense, in: modelContext)
+        if let splitDraft {
+            splitDraft.apply(to: expense, in: modelContext)
+        }
+        TransactionClassifier.learn(merchant: trimmedMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
         try? modelContext.save()
         modelContext.processPendingChanges()
 
