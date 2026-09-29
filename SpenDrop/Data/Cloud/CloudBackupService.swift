@@ -86,3 +86,46 @@ public final class CloudBackupService {
         makeSafetyBackup: { context in CloudBackupService.writeLocalSafetyBackup(from: context) }
     )
 
+    public struct Device {
+        public let id: String
+        public let name: String
+        public let appVersion: String
+
+        @MainActor
+        public static var current: Device {
+            let defaults = UserDefaults.standard
+            let key = "SpenDrop.cloudDeviceID"
+            let id = defaults.string(forKey: key) ?? {
+                let new = UUID().uuidString
+                defaults.set(new, forKey: key)
+                return new
+            }()
+            let info = Bundle.main.infoDictionary ?? [:]
+            let version = "\(info["CFBundleShortVersionString"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?"))"
+            return Device(id: id, name: UIDevice.current.model, appVersion: version)
+        }
+    }
+
+    public private(set) var status: Status
+    public private(set) var lastBackupDate: Date?
+    public var isOnline = true {
+        didSet {
+            if isOnline && !oldValue && pendingBackup { scheduleBackup(delay: .seconds(2)) }
+        }
+    }
+
+    @ObservationIgnored private let auth: AuthService
+    @ObservationIgnored private let transport: HTTPTransport
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let device: Device
+    @ObservationIgnored private let contextProvider: () -> ModelContext
+    @ObservationIgnored private let canUseLocalStore: () -> Bool
+    @ObservationIgnored private let makeSafetyBackup: (ModelContext) -> Bool
+    @ObservationIgnored private var pendingBackup = false
+    @ObservationIgnored private var pendingTask: Task<Void, Never>?
+    @ObservationIgnored private var didSaveObserver: NSObjectProtocol?
+    @ObservationIgnored private var monitor: NWPathMonitor?
+
+    private static let lastBackupKey = "SpenDrop.cloudLastBackupDate"
+    private static let lastHashKey = "SpenDrop.cloudLastBackupHash"
+
