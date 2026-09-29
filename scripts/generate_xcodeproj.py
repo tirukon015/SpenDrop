@@ -133,7 +133,12 @@ share_source_paths = [
     "SpenDrop/Models/PayBookProfile.swift",
     "SpenDrop/Models/PayBookPaymentMethod.swift",
     "SpenDrop/Models/PayBookContact.swift",
+    "SpenDrop/Models/Account.swift",
+    "SpenDrop/Models/ExpenseShare.swift",
+    "SpenDrop/Models/MoneyMovement.swift",
     "SpenDrop/Data/ExpenseDataContainer.swift",
+    "SpenDrop/Data/SchemaVersions.swift",
+    "SpenDrop/Data/AccountLinker.swift",
     "SpenDrop/Data/DuplicateDetector.swift",
     "SpenDrop/Data/TransactionReconciliationEngine.swift",
     "SpenDrop/Data/SampleData.swift",
@@ -148,6 +153,11 @@ share_source_paths = [
     "SpenDrop/OCR/ImageStorageService.swift",
     "SpenDrop/Utils/CurrencyFormatter.swift",
     "SpenDrop/Utils/HapticFeedback.swift",
+    "SpenDrop/Models/ClassificationRule.swift",
+    "SpenDrop/Data/TransactionClassifier.swift",
+    "SpenDrop/Data/MovementDuplicateDetector.swift",
+    "SpenDrop/OCR/DirectionDetector.swift",
+    "SpenDrop/Data/Money.swift",
 ]
 
 # IDs for Main App Target
