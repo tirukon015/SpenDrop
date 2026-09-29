@@ -73,3 +73,20 @@ public final class AuthService {
         case signedIn(AuthUser)
     }
 
+    public enum SignUpResult: Equatable {
+        case signedIn
+        /// The project requires email confirmation; the user must tap the link, then sign in.
+        case confirmationRequired
+    }
+
+    public static let shared = AuthService(config: SupabaseConfig.load(), transport: URLSessionTransport(),
+                                           store: KeychainStore(service: "com.spendrop.SpenDrop.auth"))
+
+    public private(set) var state: State
+    public let config: SupabaseConfig?
+    @ObservationIgnored private let transport: HTTPTransport
+    @ObservationIgnored private let store: SecureStore
+    @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private var session: AuthSession?
+    @ObservationIgnored private static let sessionKey = "session"
+
