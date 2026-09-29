@@ -49,3 +49,25 @@ public enum TransactionClassifier {
         return (.other, .unknown)
     }
 
+    /// Records what the user confirmed when saving. Agreement strengthens the rule; a different choice
+    /// (a correction) replaces the suggestion and restarts its count.
+    @discardableResult
+    public static func learn(merchant: String?, category: ExpenseCategory?, type: String = "expense", accountId: UUID? = nil,
+                             in context: ModelContext, now: Date = Date()) -> ClassificationRule? {
+        guard let key = merchantKey(merchant) else { return nil }
+        if let rule = rule(for: merchant, in: context) {
+            let sameCategory = rule.categoryRaw == category?.rawValue
+            let sameType = rule.suggestedTypeRaw == type
+            rule.hitCount = (sameCategory && sameType) ? rule.hitCount + 1 : 1
+            rule.categoryRaw = category?.rawValue
+            rule.suggestedTypeRaw = type
+            if let accountId { rule.accountId = accountId }
+            rule.updatedAt = now
+            return rule
+        }
+        let rule = ClassificationRule(merchantKey: key, categoryRaw: category?.rawValue, suggestedTypeRaw: type,
+                                      accountId: accountId, createdAt: now, updatedAt: now)
+        context.insert(rule)
+        return rule
+    }
+}
