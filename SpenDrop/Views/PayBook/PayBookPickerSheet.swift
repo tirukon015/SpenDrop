@@ -147,6 +147,40 @@ public struct PayBookPickerSheet: View {
                         }
                     }
 
+                case .selectPerson:
+                    Section {
+                        Button(action: {
+                            newPersonName = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            showingNewPersonAlert = true
+                        }) {
+                            Label("New Person", systemImage: "person.badge.plus")
+                                .font(.headline)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+
+                    Section {
+                        ForEach(filteredProfiles.filter { !$0.isArchived }) { profile in
+                            Button(action: {
+                                HapticFeedback.selection()
+                                onSelectPerson?(profile)
+                                dismiss()
+                            }) {
+                                HStack(spacing: 12) {
+                                    avatarView(profile: profile, size: 36)
+                                    Text(profile.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("PEOPLE")
+                    }
+
                 case .saveRecipient(let name, let provider, let account):
                     // Summary of current payment details being saved
                     Section {
