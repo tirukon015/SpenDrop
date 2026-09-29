@@ -204,7 +204,14 @@ public struct EditExpenseView: View {
                     .disabled(!isValid)
                 }
             }
+            .sheet(isPresented: $showingSplitEditor) {
+                SplitEditorView(totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency, merchant: merchant,
+                                initial: splitDraft, editingExpenseID: expense.id) { result in
+                    splitDraft = result
+                }
+            }
             .onAppear {
+                splitDraft = SplitDraft(expense: expense)
                 amountText = String(format: "%.2f", expense.amount)
                 merchant = expense.merchant
                 selectedCategory = expense.category
@@ -228,6 +235,16 @@ public struct EditExpenseView: View {
         expense.date = date
         expense.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes
         expense.updatedAt = Date()
+        // Keep the account link in step with the edited funding account.
+        AccountLinker.relink(expense, in: modelContext)
+        // The user's edit is a confirmation/correction for this merchant.
+        TransactionClassifier.learn(merchant: expense.merchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
+        // Split: re-apply against the (possibly new) amount, or remove it if the user removed the split.
+        if let splitDraft {
+            splitDraft.apply(to: expense, in: modelContext)
+        } else if expense.isShared {
+            SplitDraft.removeSplit(from: expense, in: modelContext)
+        }
 
         try? modelContext.save()
         modelContext.processPendingChanges()
