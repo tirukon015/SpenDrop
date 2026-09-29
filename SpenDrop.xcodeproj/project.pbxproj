@@ -600,6 +600,7 @@
 			isa = PBXGroup;
 			children = (
 				8F803C7948C35DE410150A16,
+				B0275F4D6564C4D51A461F3A,
 				89FF344A7E1E8EA604374D82,
 				7238871D72A2D28B41E6FE91,
 				578BDDC9627BC9A02BE7B385,
@@ -641,14 +642,25 @@
 			children = (
 				722EEF2C23540B0737FCA2D1,
 				08D9AD5D69593B13C044F950,
+				E293400F4A8286F093BE1139,
 			);
 			name = "Products";
+			sourceTree = "<group>";
+		};
+		947DD8F7B2E3394AF1D2B54D = {
+			isa = PBXGroup;
+			children = (
+				E9B7C6AEE7EBF28871CBF0F3,
+			);
+			name = "SpenDropUITests";
+			path = "SpenDropUITests";
 			sourceTree = "<group>";
 		};
 		D9E78B506B77BAA938FA1D1B = {
 			isa = PBXGroup;
 			children = (
 				D4F14DB27434A0FA425660E0,
+				947DD8F7B2E3394AF1D2B54D,
 				7FF56120FDE7D75FE4FEA536,
 			);
 			sourceTree = "<group>";
