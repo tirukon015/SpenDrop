@@ -149,3 +149,24 @@ public struct HardeningTests {
                     expected: "[-500, nil, 0, 101, 1235], rejected", actual: "\(parsed)")
         }
 
+        // MARK: Money In variety and person effects
+        do {
+            let ctx = TestKit.context()
+            let riyad = PayBookProfile(name: "Riyad"); ctx.insert(riyad)
+            let items = [
+                MoneyMovement(kind: .otherIn, amountMinor: 1000),
+                MoneyMovement(kind: .loanReceived, amountMinor: 5000, person: riyad),
+                MoneyMovement(kind: .otherOut, amountMinor: 700),
+                MoneyMovement(kind: .income, amountMinor: 200000)
+            ]
+            items.forEach { ctx.insert($0) }
+            try? ctx.save()
+            let s = FinancialCalculator.summary(expenses: [], movements: items)
+            t.check("Money In/Out kinds: other in, loan received (I owe Riyad), other out, income; spending stays 0",
+                    s.moneyInMinor == 206000 && s.moneyOutMinor == 700 && s.spendingMinor == 0 && PersonLedger.balances(for: riyad)["RM"] == -5000,
+                    expected: "in 206000, out 700, spending 0, Riyad -5000", actual: "\(s) riyad=\(PersonLedger.balances(for: riyad))")
+        }
+
+        return results
+    }
+}
