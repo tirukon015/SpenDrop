@@ -50,3 +50,35 @@ public enum TransactionEntryType: String, CaseIterable, Identifiable {
 /// Editable, validated form state for a Money In / Money Out / Transfer record.
 /// Keeps validation out of the view so it can be tested.
 public struct MoneyMovementDraft {
+    public enum Issue: Equatable {
+        case invalidAmount
+        case missingPerson
+        case missingFromAccount
+        case missingToAccount
+        case sameAccount
+
+        public var message: String {
+            switch self {
+            case .invalidAmount: return "Enter an amount above RM0.00."
+            case .missingPerson: return "Choose who this money is with."
+            case .missingFromAccount: return "Choose the account the money left."
+            case .missingToAccount: return "Choose the account the money went to."
+            case .sameAccount: return "From and To must be different accounts."
+            }
+        }
+    }
+
+    public var entryType: TransactionEntryType
+    public var kind: MoneyMovementKind
+    public var amountText: String = ""
+    public var currency: String = "RM"
+    public var date: Date = Date()
+    public var person: PayBookProfile?
+    public var account: Account?
+    public var counterAccount: Account?
+    public var note: String = ""
+    // Carried over from scans/imports so the saved record keeps its provenance.
+    public var transactionReference: String?
+    public var sourceType: ExpenseSourceType = .manual
+    public var paymentChannel: PaymentChannel = .unknown
+
