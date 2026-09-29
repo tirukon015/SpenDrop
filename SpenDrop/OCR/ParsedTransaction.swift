@@ -38,6 +38,11 @@ public struct ParsedTransaction: Identifiable {
     public var amountCandidates: [MonetaryCandidate]
     public var originalImage: UIImage?
 
+    /// Suggested non-expense type from clear wording (money received, refund, top-up). nil = expense / unsure.
+    /// Only a suggestion: the review screen asks the user to confirm.
+    public var suggestedMovementKind: MoneyMovementKind? = nil
+    public var directionReason: String? = nil
+
     // Contextual flags
     public var isCompletedTransaction: Bool
     public var isFailedTransaction: Bool
