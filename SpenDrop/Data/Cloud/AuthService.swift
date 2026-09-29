@@ -198,3 +198,19 @@ public final class AuthService {
         }
     }
 
+    public func signOut() async {
+        if let token = session?.accessToken {
+            _ = try? await request(method: "POST", path: "/auth/v1/logout", token: token, body: nil)
+        }
+        clearSession(message: "Signed out. Local data remains on this iPhone.")
+    }
+
+    /// Deletes the cloud account through the server-side `delete_my_account` function (it can only delete the
+    /// caller's own user). Cloud backups are removed first by `deleteCloudData`. Local data is NOT touched.
+    public func deleteAccount(deleteCloudData: () async throws -> Void) async throws {
+        let token = try await validAccessToken()
+        try await deleteCloudData()
+        _ = try await request(method: "POST", path: "/rest/v1/rpc/delete_my_account", token: token, body: Data("{}".utf8))
+        clearSession(message: "Your cloud account was deleted. Local data remains on this iPhone.")
+    }
+
