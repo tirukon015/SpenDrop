@@ -115,6 +115,17 @@ public struct PayBookView: View {
                     }
                 }
             }
+            .alert("\(blockedDeleteProfile?.name ?? "This person") still has a balance",
+                   isPresented: Binding(get: { blockedDeleteProfile != nil }, set: { if !$0 { blockedDeleteProfile = nil } })) {
+                Button("Archive Instead") {
+                    blockedDeleteProfile?.isArchived = true
+                    try? modelContext.save()
+                    blockedDeleteProfile = nil
+                }
+                Button("Cancel", role: .cancel) { blockedDeleteProfile = nil }
+            } message: {
+                Text("Settle up first, or archive to hide them while keeping the balance and history.")
+            }
             .alert("Delete \(profileToDelete?.name ?? "Profile")?", isPresented: $showingDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     if let profile = profileToDelete {
