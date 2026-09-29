@@ -16,3 +16,19 @@ public struct MoneyMovementFormView: View {
     @State private var showingDeleteConfirmation = false
     @FocusState private var amountFocused: Bool
 
+    /// New record of the given type.
+    public init(entryType: TransactionEntryType, onFinished: @escaping () -> Void) {
+        self.entryType = entryType
+        self.existing = nil
+        self.onFinished = onFinished
+        _draft = State(initialValue: MoneyMovementDraft(entryType: entryType))
+    }
+
+    /// New record from a prefilled draft (e.g. Record Repayment from PayBook, or a scanned screenshot).
+    public init(draft: MoneyMovementDraft, onFinished: @escaping () -> Void) {
+        self.entryType = draft.entryType
+        self.existing = nil
+        self.onFinished = onFinished
+        _draft = State(initialValue: draft)
+    }
+
