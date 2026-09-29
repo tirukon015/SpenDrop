@@ -1,5 +1,8 @@
+import CoreData
 import Foundation
 import SwiftData
+
+// Schema versions and the migration plan live in SchemaVersions.swift.
 
 @MainActor
 public final class ExpenseDataContainer {
