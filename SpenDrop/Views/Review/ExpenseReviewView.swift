@@ -530,7 +530,24 @@ public struct ExpenseReviewView: View {
             } message: {
                 Text(duplicateResult.reason ?? "This transaction matches an existing record. Reconciling will link them into one single expense without double-counting.")
             }
+            .sheet(item: $pendingMovement) { item in
+                MoneyMovementCreateSheet(draft: item.draft) {
+                    dismiss()
+                }
+            }
+            .alert("Possible duplicate", isPresented: Binding(get: { movementDuplicateMessage != nil },
+                                                               set: { if !$0 { movementDuplicateMessage = nil } })) {
+                Button("Continue Anyway") { presentMovementDraft() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(movementDuplicateMessage ?? "")
+            }
             .onAppear {
+                // Learned rule > parser rule > generic; never overrides a category the user picked.
+                if !categoryTouched {
+                    selectedCategory = TransactionClassifier.suggestCategory(
+                        merchant: merchant, deterministic: initialParsed.category, in: modelContext).category
+                }
                 duplicateResult = DuplicateDetector.shared.checkDuplicate(
                     amount: parsedAmount,
                     merchant: merchant,
