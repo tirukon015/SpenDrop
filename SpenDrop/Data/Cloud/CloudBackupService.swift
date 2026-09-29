@@ -257,3 +257,22 @@ public final class CloudBackupService {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    private func pruneOldBackups(config: SupabaseConfig, token: String) async {
+        let query = "rest/v1/backups?select=id,object_path&device_id=eq.\(device.id)&order=created_at.desc&offset=\(Self.keepPerDevice)"
+        guard let data = try? await send(config: config, method: "GET", path: query, token: token),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !rows.isEmpty else { return }
+        let paths = rows.compactMap { $0["object_path"] as? String }
+        let ids = rows.compactMap { $0["id"] as? String }
+        _ = try? await deleteObjects(paths, config: config, token: token)
+        _ = try? await send(config: config, method: "DELETE", path: "rest/v1/backups?id=in.(\(ids.joined(separator: ",")))", token: token)
+    }
+
+    // MARK: Restore
+
+    public func listBackups() async throws -> [CloudBackupRecord] {
+        guard let config = auth.config else { throw CloudError.notConfigured }
+        let token = try await auth.validAccessToken()
+        let data = try await send(config: config, method: "GET", path: "rest/v1/backups?select=*&order=created_at.desc&limit=30", token: token)
+        return try CloudJSON.decoder().decode([CloudBackupRecord].self, from: data)
+    }
+
