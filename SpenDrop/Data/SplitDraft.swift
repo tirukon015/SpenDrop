@@ -194,3 +194,31 @@ public struct SplitDraft: Equatable {
 
     // MARK: Same as last time
 
+    /// The people (and method) of the most recent shared expense — preferring one at the same merchant.
+    /// Only people that still exist and are not archived are suggested. nil when there is no useful history.
+    public static func lastTimeSuggestion(merchant: String?, excluding expenseID: UUID? = nil, in context: ModelContext) -> SplitDraft? {
+        var descriptor = FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = 200
+        let recent = ((try? context.fetch(descriptor)) ?? []).filter { $0.isShared && $0.id != expenseID }
+        let merchantKey = merchant.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let source = recent.first { merchantKey != nil && !merchantKey!.isEmpty && $0.merchant.lowercased() == merchantKey } ?? recent.first
+        guard let source else { return nil }
+
+        var draft = SplitDraft()
+        draft.method = source.splitMethod == .parts ? .parts : .equal
+        let people = source.shares
+            .sorted { $0.sortIndex < $1.sortIndex }
+            .compactMap { $0.isMe ? nil : $0.person }
+            .filter { !$0.isArchived }
+        for person in people {
+            draft.add(person)
+            if draft.method == .parts, let parts = source.shares.first(where: { $0.person?.id == person.id })?.parts {
+                draft.setParts(parts, for: draft.participants.last!.id)
+            }
+        }
+        if draft.method == .parts, let myParts = source.shares.first(where: \.isMe)?.parts {
+            draft.setParts(myParts, for: draft.participants[0].id)
+        }
+        return draft.others.isEmpty ? nil : draft
+    }
+
