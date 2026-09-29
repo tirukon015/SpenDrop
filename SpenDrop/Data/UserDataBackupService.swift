@@ -1410,14 +1410,224 @@ public final class UserDataBackupService {
                         accountIdentifier: mDTO.accountIdentifier,
                         label: mDTO.label,
                         notes: mDTO.notes,
+                        createdAt: mDTO.createdAt ?? Date(),
+                        updatedAt: mDTO.updatedAt ?? Date(),
                         profile: prof
                     )
                     context.insert(method)
                     prof.paymentMethods.append(method)
+                    methodsById[mDTO.id] = method
+                    summary.methodsAdded += 1
                 }
             }
         }
+        func person(_ id: UUID?) -> PayBookProfile? {
+            guard let id else { return nil }
+            if let found = profilesById[id] { return found }
+            summary.missingReferences += 1
+            return nil
+        }
 
-        return (expensesAdded, profilesAdded)
+        // 3. Expenses, with account, payer and split
+        let existingExpenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
+        var expensesById = Dictionary(existingExpenses.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var existingRefs = Set<String>()
+        var existingSignatures = Set<String>()
+        for exp in existingExpenses {
+            if let ref = exp.transactionReference, !ref.isEmpty { existingRefs.insert(ref) }
+            existingSignatures.insert(expenseSignature(merchant: exp.merchant, amount: exp.amount, date: exp.date))
+        }
+        let existingShares = (try? context.fetch(FetchDescriptor<ExpenseShare>())) ?? []
+        var sharesById = Dictionary(existingShares.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        for dto in payload.expenses {
+            let expense: Expense
+            if let existing = expensesById[dto.id] {
+                if let backupDate = dto.updatedAt, existing.updatedAt > backupDate {
+                    summary.expensesKeptNewer += 1
+                    continue
+                }
+                apply(dto, to: existing)
+                expense = existing
+                summary.expensesUpdated += 1
+            } else {
+                let sameRef = dto.transactionReference.map { !$0.isEmpty && existingRefs.contains($0) } ?? false
+                if sameRef || existingSignatures.contains(expenseSignature(merchant: dto.merchant, amount: dto.amount, date: dto.date)) {
+                    summary.possibleDuplicateExpenses += 1
+                }
+                expense = makeExpense(from: dto)
+                context.insert(expense)
+                expensesById[dto.id] = expense
+                summary.expensesAdded += 1
+            }
+
+            guard isV2 else { continue }
+            expense.account = account(dto.accountId)
+            expense.paidByMe = dto.paidByMe ?? true
+            expense.payer = person(dto.payerId)
+            expense.payerNameSnapshot = dto.payerNameSnapshot
+            expense.splitMethodRaw = dto.splitMethodRaw
+
+            // The backup's share list is the truth for this expense: update/insert by id, remove the rest.
+            let backupShares = dto.shares ?? []
+            let keepIds = Set(backupShares.map(\.id))
+            for stale in expense.shares where !keepIds.contains(stale.id) {
+                context.delete(stale)
+            }
+            for sDTO in backupShares {
+                let share = sharesById[sDTO.id] ?? {
+                    let created = ExpenseShare(id: sDTO.id, nameSnapshot: sDTO.nameSnapshot, amountMinor: sDTO.amountMinor)
+                    context.insert(created)
+                    sharesById[sDTO.id] = created
+                    return created
+                }()
+                share.expense = expense
+                share.person = sDTO.isMe ? nil : person(sDTO.personId)
+                share.isMe = sDTO.isMe
+                share.nameSnapshot = sDTO.nameSnapshot
+                share.amountMinor = sDTO.amountMinor
+                share.parts = sDTO.parts
+                share.enteredMinor = sDTO.enteredMinor
+                share.sortIndex = sDTO.sortIndex
+                summary.sharesRestored += 1
+            }
+        }
+
+        // 4. Money movements
+        let existingMovements = (try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []
+        var movementsById = Dictionary(existingMovements.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for mDTO in payload.moneyMovements ?? [] {
+            let movement: MoneyMovement
+            if let found = movementsById[mDTO.id] {
+                if found.updatedAt > mDTO.updatedAt {
+                    summary.movementsKeptNewer += 1
+                    continue
+                }
+                movement = found
+                summary.movementsUpdated += 1
+            } else {
+                movement = MoneyMovement(id: mDTO.id, kind: MoneyMovementKind(rawValue: mDTO.kindRaw) ?? .otherOut, amountMinor: mDTO.amountMinor)
+                context.insert(movement)
+                movementsById[mDTO.id] = movement
+                summary.movementsAdded += 1
+            }
+            movement.directionRaw = mDTO.directionRaw
+            movement.kindRaw = mDTO.kindRaw
+            movement.amountMinor = mDTO.amountMinor
+            movement.currency = mDTO.currency
+            movement.date = mDTO.date
+            movement.person = person(mDTO.personId)
+            movement.personNameSnapshot = mDTO.personNameSnapshot
+            if let expenseId = mDTO.linkedExpenseId {
+                movement.linkedExpense = expensesById[expenseId]
+                if movement.linkedExpense == nil { summary.missingReferences += 1 }
+            } else {
+                movement.linkedExpense = nil
+            }
+            movement.linkedExpenseSnapshot = mDTO.linkedExpenseSnapshot
+            movement.account = account(mDTO.accountId)
+            movement.counterAccount = account(mDTO.counterAccountId)
+            movement.note = mDTO.note
+            movement.transactionReference = mDTO.transactionReference
+            movement.sourceTypeRaw = mDTO.sourceTypeRaw
+            movement.paymentChannelRaw = mDTO.paymentChannelRaw
+            movement.createdAt = mDTO.createdAt
+            movement.updatedAt = mDTO.updatedAt
+        }
+
+        // 5. Learned classification rules (version 3): by id, then by merchant key (one rule per merchant)
+        let existingRules = (try? context.fetch(FetchDescriptor<ClassificationRule>())) ?? []
+        var rulesById = Dictionary(existingRules.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var rulesByKey = Dictionary(existingRules.map { ($0.merchantKey, $0) }, uniquingKeysWith: { first, _ in first })
+        for rDTO in payload.classificationRules ?? [] {
+            let rule = rulesById[rDTO.id] ?? rulesByKey[rDTO.merchantKey]
+            if let rule {
+                guard rDTO.updatedAt >= rule.updatedAt else { continue }
+                rule.categoryRaw = rDTO.categoryRaw
+                rule.suggestedTypeRaw = rDTO.suggestedTypeRaw
+                rule.accountId = rDTO.accountId
+                rule.hitCount = rDTO.hitCount
+                rule.updatedAt = rDTO.updatedAt
+            } else {
+                let created = ClassificationRule(id: rDTO.id, merchantKey: rDTO.merchantKey, categoryRaw: rDTO.categoryRaw,
+                                                 suggestedTypeRaw: rDTO.suggestedTypeRaw, accountId: rDTO.accountId,
+                                                 hitCount: rDTO.hitCount, createdAt: rDTO.createdAt, updatedAt: rDTO.updatedAt)
+                context.insert(created)
+                rulesById[rDTO.id] = created
+                rulesByKey[rDTO.merchantKey] = created
+            }
+            summary.rulesRestored += 1
+        }
+
+        return summary
+    }
+
+    private static func expenseSignature(merchant: String, amount: Double, date: Date) -> String {
+        "\(merchant.lowercased())_\(amount)_\(Calendar.current.component(.day, from: date))"
+    }
+
+    private static func makeExpense(from dto: ExpenseDTO) -> Expense {
+        let cat = ExpenseCategory(rawValue: dto.categoryRaw) ?? .personal
+        let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
+        let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
+        let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
+        let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
+        let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
+        let matching = dto.matchingStatusRaw ?? "UNMATCHED"
+
+        return Expense(
+            id: dto.id,
+            amount: dto.amount,
+            currency: dto.currency,
+            merchant: dto.merchant,
+            category: cat,
+            paymentSource: src,
+            underlyingBank: bank,
+            paymentMethod: dto.paymentMethodRaw,
+            date: dto.date,
+            notes: dto.notes,
+            transactionReference: dto.transactionReference,
+            imageRelativePath: dto.imageRelativePath,
+            sourceType: sType,
+            ocrText: dto.ocrText,
+            confidence: dto.confidence,
+            isSampleData: dto.isSampleData,
+            createdAt: dto.createdAt,
+            updatedAt: dto.updatedAt ?? dto.createdAt,
+            paymentChannel: channel,
+            fundingAccount: funding,
+            fundingInstrument: dto.fundingInstrument,
+            externalTransactionId: dto.externalTransactionId,
+            matchingStatus: matching,
+            matchingConfidence: dto.matchingConfidence
+        )
+    }
+
+    /// Updates an existing expense from a backup record. Fields added after backup version 1 are only
+    /// applied when the backup contains them, so an older file never clears newer data.
+    private static func apply(_ dto: ExpenseDTO, to expense: Expense) {
+        expense.amount = dto.amount
+        expense.currency = dto.currency
+        expense.merchant = dto.merchant
+        expense.categoryRaw = dto.categoryRaw
+        expense.paymentSourceRaw = dto.paymentSourceRaw
+        expense.underlyingBankRaw = dto.underlyingBankRaw
+        expense.paymentMethodRaw = dto.paymentMethodRaw
+        expense.date = dto.date
+        expense.notes = dto.notes
+        expense.transactionReference = dto.transactionReference
+        expense.sourceTypeRaw = dto.sourceTypeRaw
+        expense.ocrText = dto.ocrText
+        expense.isSampleData = dto.isSampleData
+        expense.createdAt = dto.createdAt
+        if let channel = dto.paymentChannelRaw { expense.paymentChannelRaw = channel }
+        if let funding = dto.fundingAccount { expense.fundingAccount = funding }
+        expense.fundingInstrument = dto.fundingInstrument
+        if let matching = dto.matchingStatusRaw { expense.matchingStatusRaw = matching }
+        if let path = dto.imageRelativePath { expense.imageRelativePath = path }
+        if let confidence = dto.confidence { expense.confidence = confidence }
+        if let externalId = dto.externalTransactionId { expense.externalTransactionId = externalId }
+        if let matchingConfidence = dto.matchingConfidence { expense.matchingConfidence = matchingConfidence }
+        if let updated = dto.updatedAt { expense.updatedAt = updated }
     }
 }
