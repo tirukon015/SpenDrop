@@ -124,3 +124,26 @@ public enum SpenDropSchemaV1: VersionedSchema {
     }
 }
 
+// MARK: - Schema V2
+
+/// Adds Account, ExpenseShare, MoneyMovement, the payer/split/account fields on Expense and
+/// isFrequent/isArchived on PayBookProfile. Every new field is optional or has a default.
+/// V2 lists the live model types, so those types must not change while V2 is supported; a test checks
+/// V2's fingerprint against the shipped V2 model. A future change to any of them must first freeze
+/// copies here, exactly as V1 does.
+public enum SpenDropSchemaV2: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(2, 0, 0)
+
+    public static var models: [any PersistentModel.Type] {
+        [
+            Expense.self,
+            PayBookProfile.self,
+            PayBookPaymentMethod.self,
+            PayBookContact.self,
+            Account.self,
+            ExpenseShare.self,
+            MoneyMovement.self
+        ]
+    }
+}
+
