@@ -76,3 +76,28 @@ public enum SpenDropSchemaV1: VersionedSchema {
         }
     }
 
+    @Model
+    public final class PayBookPaymentMethod {
+        @Attribute(.unique) public var id: UUID
+        public var paymentTypeRaw: String
+        public var provider: String
+        public var customProviderName: String?
+        public var accountIdentifier: String
+        public var label: String?
+        public var notes: String?
+        public var createdAt: Date
+        public var updatedAt: Date
+
+        public var profile: PayBookProfile?
+
+        public init(id: UUID = UUID(), provider: String, accountIdentifier: String, profile: PayBookProfile? = nil) {
+            self.id = id
+            self.paymentTypeRaw = "Bank Account"
+            self.provider = provider
+            self.accountIdentifier = accountIdentifier
+            self.createdAt = Date()
+            self.updatedAt = Date()
+            self.profile = profile
+        }
+    }
+
