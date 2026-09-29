@@ -113,3 +113,23 @@ public enum PersonLedger {
         return entries.sorted { $0.date > $1.date }
     }
 
+    // MARK: Record payment
+
+    /// Prefilled repayment for settling a balance: Repayment Received when they owe me, Repayment Made when I owe them.
+    public static func repaymentDraft(for person: PayBookProfile, currency: String) -> MoneyMovementDraft? {
+        guard let balance = balances(for: person)[currency], balance != 0 else { return nil }
+        var draft = MoneyMovementDraft(entryType: balance > 0 ? .moneyIn : .moneyOut)
+        draft.kind = balance > 0 ? .repaymentReceived : .repaymentMade
+        draft.person = person
+        draft.currency = currency
+        draft.amountText = String(format: "%.2f", Money.majorAmount(fromMinor: abs(balance)))
+        return draft
+    }
+
+    /// Human sentence with explicit direction, e.g. "Shadin owes you RM 100.00" / "You owe Bijoy RM 7.50".
+    public static func directionText(name: String, balanceMinor: Int, currency: String) -> String {
+        if balanceMinor > 0 { return "\(name) owes you \(format(balanceMinor, currency))" }
+        if balanceMinor < 0 { return "You owe \(name) \(format(-balanceMinor, currency))" }
+        return "Settled with \(name)"
+    }
+
