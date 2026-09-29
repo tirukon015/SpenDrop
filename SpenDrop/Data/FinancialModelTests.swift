@@ -167,3 +167,34 @@ public struct FinancialModelTests {
                   expected: "paidByMe, no split, spending=cashOut=2500", actual: "spending=\(plain.spendingMinor) cashOut=\(plain.cashOutMinor) shared=\(plain.isShared)")
         }
 
+        // MARK: Money movements
+        do {
+            let kinds = MoneyMovementKind.allCases.map { "\($0.rawValue)=\($0.direction.rawValue)" }
+            let passed = MoneyMovementKind.income.direction == .moneyIn && MoneyMovementKind.refund.direction == .moneyIn &&
+                MoneyMovementKind.loanGiven.direction == .moneyOut && MoneyMovementKind.repaymentMade.direction == .moneyOut &&
+                MoneyMovementKind.ownTransfer.direction == .internal && MoneyMovementKind.allCases.count == 9
+            check("MoneyMovement: kind -> direction", passed, expected: "in/out/internal as specified", actual: kinds.joined(separator: ","))
+        }
+        do {
+            let ctx = context()
+            let maybank = Account(name: "Maybank", type: .bank)
+            let tng = Account(name: "Touch 'n Go", type: .eWallet)
+            let shadin = PayBookProfile(name: "Shadin")
+            [maybank, tng].forEach { ctx.insert($0) }
+            ctx.insert(shadin)
+            let transfer = MoneyMovement(kind: .ownTransfer, amountMinor: 20000, account: maybank, counterAccount: tng)
+            let loan = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: shadin, account: maybank)
+            let badTransfer = MoneyMovement(kind: .ownTransfer, amountMinor: 100, account: maybank, counterAccount: maybank)
+            let noPerson = MoneyMovement(kind: .loanGiven, amountMinor: 100)
+            let zero = MoneyMovement(kind: .income, amountMinor: 0)
+            [transfer, loan, badTransfer, noPerson, zero].forEach { ctx.insert($0) }
+            try? ctx.save()
+            let relOK = transfer.account === maybank && transfer.counterAccount === tng && tng.incomingTransfers.contains { $0 === transfer } &&
+                maybank.movements.contains { $0 === loan } && shadin.movements.contains { $0 === loan } && loan.personNameSnapshot == "Shadin"
+            check("MoneyMovement: account, counter-account and person relationships", relOK,
+                  expected: "links and inverses set, name snapshot", actual: "transferIn=\(tng.incomingTransfers.count) personMovements=\(shadin.movements.count) snapshot=\(loan.personNameSnapshot ?? "nil")")
+            let issues = [transfer.validationIssues, loan.validationIssues, badTransfer.validationIssues, noPerson.validationIssues, zero.validationIssues]
+            let expected: [[MoneyMovement.ValidationIssue]] = [[], [], [.sameTransferAccount], [.missingPerson], [.nonPositiveAmount]]
+            check("MoneyMovement: validation", issues == expected, expected: "\(expected)", actual: "\(issues)")
+        }
+
