@@ -64,3 +64,25 @@ public enum SplitCalculator {
         }
     }
 
+    /// Floor of each proportional share, then the leftover sen one by one to the largest fractional remainders.
+    /// Ties: Me first (when I paid), then list order. Deterministic for the same input.
+    private static func largestRemainder(totalMinor: Int, weights: [Int], participants: [Participant], iPaid: Bool) -> [Int] {
+        let weightSum = weights.reduce(0, +)
+        var shares = weights.map { totalMinor * $0 / weightSum }
+        let remainders = weights.map { (totalMinor * $0) % weightSum }
+        var leftover = totalMinor - shares.reduce(0, +)
+
+        let order = participants.indices.sorted { a, b in
+            if remainders[a] != remainders[b] { return remainders[a] > remainders[b] }
+            if iPaid && participants[a].isMe != participants[b].isMe { return participants[a].isMe }
+            return a < b
+        }
+        var position = 0
+        while leftover > 0 {
+            shares[order[position % order.count]] += 1
+            leftover -= 1
+            position += 1
+        }
+        return shares
+    }
+}
