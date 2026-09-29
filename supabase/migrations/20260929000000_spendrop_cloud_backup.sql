@@ -60,3 +60,21 @@ create policy "backup files: owner can delete" on storage.objects
     using (bucket_id = 'backups' and (storage.foldername(name))[1] = (select auth.uid())::text);
 -- no UPDATE policy: files are never overwritten.
 
+-- 3. Account deletion: a signed-in user may delete ONLY their own account.
+--    The app deletes the backup files through the Storage API first; the metadata rows cascade.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if auth.uid() is null then
+        raise exception 'not signed in';
+    end if;
+    delete from auth.users where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
