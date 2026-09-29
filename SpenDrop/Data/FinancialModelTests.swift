@@ -154,3 +154,16 @@ public struct FinancialModelTests {
                   expected: "link unchanged, no new account", actual: "account=\(manual.account?.name ?? "nil") accounts=\(count(Account.self, in: ctx))")
         }
 
+        // MARK: Existing expenses keep working
+        do {
+            let ctx = context()
+            let plain = Expense(amount: 25, merchant: "McDonald's", paymentSource: .maybank, fundingAccount: "Maybank")
+            ctx.insert(plain)
+            try? ctx.save()
+            let passed = plain.paidByMe && plain.payer == nil && plain.splitMethod == nil && plain.shares.isEmpty &&
+                plain.amountMinor == 2500 && plain.spendingMinor == 2500 && plain.cashOutMinor == 2500 && plain.myShareMinor == 2500 &&
+                plain.fundingAccount == "Maybank" && plain.paymentSourceRaw == "Maybank"
+            check("Expense: defaults keep a normal expense unchanged", passed,
+                  expected: "paidByMe, no split, spending=cashOut=2500", actual: "spending=\(plain.spendingMinor) cashOut=\(plain.cashOutMinor) shared=\(plain.isShared)")
+        }
+
