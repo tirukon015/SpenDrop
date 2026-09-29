@@ -145,3 +145,17 @@ public final class CloudBackupService {
 
     // MARK: Automatic backups
 
+    /// Backs up (debounced) after local saves and when connectivity returns. Safe to call more than once.
+    public func startAutomaticBackups() {
+        guard didSaveObserver == nil, auth.config != nil else { return }
+        didSaveObserver = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.scheduleBackup() }
+        }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in self?.isOnline = path.status == .satisfied }
+        }
+        monitor.start(queue: DispatchQueue(label: "SpenDrop.network"))
+        self.monitor = monitor
+    }
+
