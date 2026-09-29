@@ -352,3 +352,17 @@ public struct FinancialModelTests {
                   expected: "expense + movements kept, text 'Maybank'", actual: "expenses=\(count(Expense.self, in: ctx)) text=\(other.fundingAccount)")
         }
 
+        // MARK: Duplicate cleanup never merges records with financial relationships
+        do {
+            let ctx = context()
+            let bijoy = PayBookProfile(name: "Bijoy")
+            ctx.insert(bijoy)
+            let a = sharedExpense(ctx, amount: 30, payer: nil, people: [bijoy], merchant: "Nasi Kandar")
+            let b = Expense(amount: 30, merchant: "Nasi Kandar", date: a.date)
+            ctx.insert(b)
+            try? ctx.save()
+            let merged = TransactionReconciliationEngine.shared.consolidateExistingDuplicates(in: ctx)
+            check("Duplicate cleanup skips shared expenses", merged == 0 && count(Expense.self, in: ctx) == 2 && count(ExpenseShare.self, in: ctx) == 2,
+                  expected: "0 merged, both kept", actual: "merged=\(merged) expenses=\(count(Expense.self, in: ctx))")
+        }
+
