@@ -4,11 +4,14 @@ import SwiftData
 public struct ExpensesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var allMovements: [MoneyMovement]
 
     @Bindable private var engine = TransactionFilterEngine.shared
 
     @State private var searchText = ""
     @State private var selectedExpense: Expense?
+    @State private var selectedMovement: MoneyMovement?
+    @State private var activityFilter: ActivityFilter = .all
     @State private var showingAddExpense = false
 
     // Secondary controls state (moved inside ⋯)
@@ -25,27 +28,25 @@ public struct ExpensesView: View {
 
     public init() {}
 
-    // Group filtered expenses by calendar day
-    private var groupedExpenses: [(dateHeader: String, dateSubtitle: String?, date: Date, expenses: [Expense])] {
+    // Unified timeline (expenses + money movements), grouped by calendar day
+    private var timelineItems: [ActivityItem] {
+        ActivityFeed.items(expenses: engine.filteredExpenses, movements: engine.filteredMovements,
+                           filter: activityFilter, newestFirst: sortOrder == .newestFirst)
+    }
+
+    private var groupedItems: [(dateHeader: String, dateSubtitle: String?, date: Date, items: [ActivityItem])] {
         let calendar = Calendar.current
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "d MMM yyyy"
 
-        let sortedList = engine.filteredExpenses.sorted { exp1, exp2 in
-            sortOrder == .newestFirst ? exp1.date > exp2.date : exp1.date < exp2.date
-        }
+        let grouped = Dictionary(grouping: timelineItems) { dateFormatter.string(from: $0.date) }
 
-        let grouped = Dictionary(grouping: sortedList) { (expense: Expense) -> String in
-            dateFormatter.string(from: expense.date)
-        }
-
-        return grouped.compactMap { (dateKey: String, expenses: [Expense]) in
-            guard let firstDate = expenses.first?.date else { return nil }
+        return grouped.compactMap { (dateKey: String, items: [ActivityItem]) in
+            guard let firstDate = items.first?.date else { return nil }
             let dayStart = calendar.startOfDay(for: firstDate)
 
             let header: String
             let subtitle: String?
-
             if calendar.isDateInToday(firstDate) {
                 header = "Today"
                 subtitle = dateKey
