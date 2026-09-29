@@ -714,6 +714,8 @@ public struct ExpenseReviewView: View {
         )
 
         modelContext.insert(expense)
+        AccountLinker.relink(expense, in: modelContext)
+        TransactionClassifier.learn(merchant: finalMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
         try? modelContext.save()
         modelContext.processPendingChanges()
 
