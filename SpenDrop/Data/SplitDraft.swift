@@ -41,3 +41,27 @@ public struct SplitDraft: Equatable {
         lhs.method == rhs.method && lhs.participants == rhs.participants && lhs.payer?.id == rhs.payer?.id
     }
 
+    /// Loads the split stored on an expense (nil when the expense is not shared).
+    public init?(expense: Expense) {
+        guard !expense.shares.isEmpty else { return nil }
+        method = expense.splitMethod ?? .amounts
+        payer = expense.paidByMe ? nil : expense.payer
+        let ordered = expense.shares.sorted { a, b in
+            if a.isMe != b.isMe { return a.isMe }
+            return a.sortIndex < b.sortIndex
+        }
+        participants = ordered.map { share in
+            Participant(
+                id: share.id,
+                person: share.person,
+                isMe: share.isMe,
+                name: share.isMe ? "Me" : (share.person?.name ?? share.nameSnapshot),
+                parts: share.parts ?? 1,
+                amountText: Self.text(fromMinor: share.enteredMinor ?? share.amountMinor)
+            )
+        }
+        if !participants.contains(where: \.isMe) {
+            participants.insert(Participant(isMe: true, name: "Me"), at: 0)
+        }
+    }
+
