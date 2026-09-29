@@ -167,3 +167,17 @@ public struct AccountView: View {
         if !expenses.isEmpty { offerFirstBackup = true }
     }
 
+    private func deleteAccount() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await auth.deleteAccount { try await cloud.deleteAllCloudData() }
+            cloud.refreshStatus()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+}
+
+/// Email sign-in / account creation form.
+struct EmailAuthView: View {
