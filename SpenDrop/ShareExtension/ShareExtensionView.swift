@@ -60,6 +60,16 @@ public final class ShareExtensionViewModel: ObservableObject {
     @Published public var duplicateResult: DuplicateCheckResult = .none
     @Published public var showingDuplicateConfirmation: Bool = false
 
+    // Save as Expense / Money In / Money Out (suggested only from clear wording; the user confirms)
+    public enum SaveType: String, CaseIterable, Identifiable {
+        case expense = "Expense", moneyIn = "Money In", moneyOut = "Money Out"
+        public var id: String { rawValue }
+    }
+    @Published public var saveAs: SaveType = .expense
+    @Published public var suggestedMovementKind: MoneyMovementKind?
+    @Published public var directionReason: String?
+    @Published public var movementDuplicateMessage: String?
+
     // Asynchronous OCR Task reference
     private var ocrTask: Task<Void, Never>?
     private var isProcessingOCR: Bool = false
@@ -129,6 +139,9 @@ public final class ShareExtensionViewModel: ObservableObject {
 
             // Populate detected fields
             self.applyParsedTransaction(parsed)
+            // Learned rule > parser rule > generic suggestion (local only).
+            self.selectedCategory = TransactionClassifier.suggestCategory(
+                merchant: parsed.merchant, deterministic: parsed.category, in: ExpenseDataContainer.shared.mainContext).category
 
             // Duplicate detection executed safely
             do {
@@ -159,6 +172,13 @@ public final class ShareExtensionViewModel: ObservableObject {
 
         self.merchant = parsed.merchant ?? ""
         self.selectedCategory = parsed.category ?? .other
+        self.suggestedMovementKind = parsed.suggestedMovementKind
+        self.directionReason = parsed.directionReason
+        switch parsed.suggestedMovementKind?.direction {
+        case .moneyIn?: self.saveAs = .moneyIn
+        case .moneyOut?: self.saveAs = .moneyOut
+        default: self.saveAs = .expense   // own transfers are recorded in the app (they need two accounts)
+        }
         self.fundingAccount = parsed.displayFundingAccount
         self.selectedPaymentChannel = parsed.paymentChannel
         self.fundingInstrument = parsed.fundingInstrument
