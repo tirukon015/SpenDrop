@@ -172,3 +172,21 @@ public final class KeychainStore: SecureStore {
          kSecAttrAccount as String: key]
     }
 
+    public func read(_ key: String) -> Data? {
+        var q = query(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    @discardableResult
+    public func write(_ data: Data, for key: String) -> Bool {
+        SecItemDelete(query(key) as CFDictionary)
+        var q = query(key)
+        q[kSecValueData as String] = data
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
+    }
+
