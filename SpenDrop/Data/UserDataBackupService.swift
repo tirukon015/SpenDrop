@@ -53,6 +53,20 @@ public final class UserDataBackupService {
         }
     }
 
+    public struct RecordCount: Equatable {
+        public var expenses: Int
+        public var profiles: Int
+        public var accounts: Int
+        public var movements: Int
+        public var rules: Int = 0
+
+        /// True when any kind of record would disappear.
+        public func isSmaller(than other: RecordCount) -> Bool {
+            expenses < other.expenses || profiles < other.profiles || accounts < other.accounts ||
+            movements < other.movements || rules < other.rules
+        }
+    }
+
     public struct ExpenseDTO: Codable {
         public let id: UUID
         public let amount: Double
