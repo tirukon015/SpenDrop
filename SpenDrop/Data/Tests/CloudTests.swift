@@ -27,3 +27,67 @@ final class FakeSupabase: HTTPTransport, @unchecked Sendable {
          "user": ["id": id, "email": email, "app_metadata": ["provider": provider], "user_metadata": ["full_name": "Test User"]]]
     }
 
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        let url = request.url!
+        let path = url.path
+        let query = url.query ?? ""
+        let method = request.httpMethod ?? "GET"
+
+        if let index = failures.firstIndex(where: { (path + "?" + query).contains($0.match) && $0.remaining > 0 }) {
+            failures[index].remaining -= 1
+            guard let status = failures[index].status else { throw CloudError.offline }
+            return respond(status, ["msg": "Injected failure", "code": status])
+        }
+
+        switch (method, path) {
+        case ("POST", "/auth/v1/signup"):
+            let (status, body) = authResponses["signup"] ?? (200, Self.sessionJSON())
+            return respond(status, body)
+        case ("POST", "/auth/v1/token"):
+            let grant = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "grant_type" }?.value ?? ""
+            let (status, body) = authResponses[grant] ?? (200, Self.sessionJSON())
+            return respond(status, body)
+        case ("POST", "/auth/v1/logout"):
+            return respond(204, [:])
+        case ("POST", "/rest/v1/rpc/delete_my_account"):
+            deletedAccount = true
+            return respond(204, [:])
+        case ("POST", let p) where p.hasPrefix("/storage/v1/object/backups/"):
+            let key = String(p.dropFirst("/storage/v1/object/backups/".count))
+            guard objects[key] == nil else { return respond(409, ["message": "The resource already exists"]) }
+            objects[key] = request.httpBody ?? Data()
+            return respond(200, ["Key": "backups/" + key])
+        case ("GET", let p) where p.hasPrefix("/storage/v1/object/authenticated/backups/"):
+            let key = String(p.dropFirst("/storage/v1/object/authenticated/backups/".count))
+            guard let data = objects[key] else { return respond(404, ["message": "Object not found"]) }
+            return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        case ("DELETE", "/storage/v1/object/backups"):
+            let body = (try? JSONSerialization.jsonObject(with: request.httpBody ?? Data())) as? [String: Any]
+            for prefix in body?["prefixes"] as? [String] ?? [] { objects[prefix] = nil }
+            return respond(200, [:])
+        case ("POST", "/rest/v1/backups"):
+            guard var row = (try? JSONSerialization.jsonObject(with: request.httpBody ?? Data())) as? [String: Any] else { return respond(400, [:]) }
+            row["created_at"] = "2026-09-29T10:15:30.123456+00:00"
+            rows.append(row)
+            return respond(201, [:])
+        case ("GET", "/rest/v1/backups"):
+            var result = rows
+            if query.contains("offset=") {
+                let offset = Int(query.components(separatedBy: "offset=").last ?? "0") ?? 0
+                result = Array(rows.reversed().dropFirst(offset))
+            }
+            return respondArray(result)
+        case ("DELETE", "/rest/v1/backups"):
+            if query.contains("not.is.null") {
+                rows.removeAll()
+            } else if let ids = query.components(separatedBy: "in.(").last?.dropLast() {
+                let set = Set(ids.split(separator: ",").map(String.init))
+                rows.removeAll { set.contains(($0["id"] as? String) ?? "") }
+            }
+            return respond(204, [:])
+        default:
+            return respond(404, ["message": "Unknown route \(method) \(path)"])
+        }
+    }
+
