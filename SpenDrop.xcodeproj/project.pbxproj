@@ -233,16 +233,44 @@
 		2214D3C9E9702D1468A364B0 /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AnalyticsView.swift"; sourceTree = "<group>"; };
 		1BE7110DD119A384B85C14AF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
 		9A97CC2C55224ED44BC26CDA /* ParserSelfTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ParserSelfTestView.swift"; sourceTree = "<group>"; };
+		A2FFF646FE2FC4D7C75FEA8F /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoreView.swift"; sourceTree = "<group>"; };
+		103EE7EAEF81A5688D372E52 /* AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccountsView.swift"; sourceTree = "<group>"; };
+		820624DB7B23CE8AC1948279 /* MoneyMovementFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MoneyMovementFormView.swift"; sourceTree = "<group>"; };
 		EC0527D198B5E800BBD73E29 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareViewController.swift"; sourceTree = "<group>"; };
 		D450754B03FB3BD4BC2259CE /* ShareExtensionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareExtensionView.swift"; sourceTree = "<group>"; };
 		74F36E9F65C8726E25F3F88B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		8A8782C2F33B2C38E16F8F5B /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "ShareExtension.entitlements"; sourceTree = "<group>"; };
+		916E6BD9E6DAF43A5AA0A63B /* SplitDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SplitDraft.swift"; sourceTree = "<group>"; };
+		68CE5BA46F294CB69AC4816C /* TestKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TestKit.swift"; sourceTree = "<group>"; };
+		97C6C4D96250C1F526514E6C /* SplitFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SplitFeatureTests.swift"; sourceTree = "<group>"; };
+		E11689CE30F5D5BD24FD9519 /* SplitEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SplitEditorView.swift"; sourceTree = "<group>"; };
+		221716C81FD4F3338377CDF6 /* PersonLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PersonLedger.swift"; sourceTree = "<group>"; };
+		5308225118CA1DC65E77572B /* PeopleBalanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PeopleBalanceTests.swift"; sourceTree = "<group>"; };
+		9A60CBEAA7DD79FBBF22EB2C /* ActivityFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ActivityFeed.swift"; sourceTree = "<group>"; };
+		32215A13AA3C105228C1533E /* ActivityFeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ActivityFeedTests.swift"; sourceTree = "<group>"; };
+		464C79172F34832CFA2ED593 /* ClassificationRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ClassificationRule.swift"; sourceTree = "<group>"; };
+		C59D49902CA454D9B4585633 /* TransactionClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TransactionClassifier.swift"; sourceTree = "<group>"; };
+		DE7B25AAC2BF13BDC7750CBD /* MovementDuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MovementDuplicateDetector.swift"; sourceTree = "<group>"; };
+		0AF3A130AC63C9063C4E0A4E /* DirectionDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DirectionDetector.swift"; sourceTree = "<group>"; };
+		AE2E795C6B286712D4C32545 /* ApplePayAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ApplePayAutomation.swift"; sourceTree = "<group>"; };
+		25BDEF66C12BE715641B5694 /* ApplePayIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ApplePayIntent.swift"; sourceTree = "<group>"; };
+		0F7D24CAAD991423026BD7CE /* PeriodGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PeriodGrouping.swift"; sourceTree = "<group>"; };
+		CDC5F8C9B195399148800E90 /* Phase7Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Phase7Tests.swift"; sourceTree = "<group>"; };
+		51E1ABCCC8B18F2EAD97C7FA /* CloudCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CloudCore.swift"; sourceTree = "<group>"; };
+		1449EA28C0B28E63BB53E8B5 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuthService.swift"; sourceTree = "<group>"; };
+		F97B0096BF1A9431D6AB3E3E /* CloudBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CloudBackupService.swift"; sourceTree = "<group>"; };
+		39CD71A9B591B958A10F17FB /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccountView.swift"; sourceTree = "<group>"; };
+		60A2C4817536448262F0BBDD /* CloudTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CloudTests.swift"; sourceTree = "<group>"; };
+		880FBA1FAF8F89FF753955A5 /* HardeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HardeningTests.swift"; sourceTree = "<group>"; };
 		8F803C7948C35DE410150A16 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
+		B0275F4D6564C4D51A461F3A /* CloudConfig */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "CloudConfig"; sourceTree = "<group>"; };
 		89FF344A7E1E8EA604374D82 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		7238871D72A2D28B41E6FE91 /* SpenDrop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SpenDrop.entitlements"; sourceTree = "<group>"; };
 		993BAF59B8D09DAEF65536EC /* sample_screenshot.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "sample_screenshot.png"; sourceTree = "<group>"; };
 		02955226116027AB104FAA8C /* sample_photo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "sample_photo.jpg"; sourceTree = "<group>"; };
 		22633D08D6F18490DDC8C43F /* sample_camera.heic */ = {isa = PBXFileReference; lastKnownFileType = image.heic; path = "sample_camera.heic"; sourceTree = "<group>"; };
+		E9B7C6AEE7EBF28871CBF0F3 /* SpenDropUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SpenDropUITests.swift"; sourceTree = "<group>"; };
+		E293400F4A8286F093BE1139 /* SpenDropUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpenDropUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
