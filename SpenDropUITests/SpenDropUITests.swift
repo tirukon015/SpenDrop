@@ -73,3 +73,23 @@ final class SpenDropUITests: XCTestCase {
         app.navigationBars["Accounts"].buttons.element(boundBy: 0).tap()   // back to More
     }
 
+    func test01_FiveTabsInOrder() {
+        let labels = app.tabBars.buttons.allElementsBoundByIndex.map(\.label)
+        XCTAssertEqual(labels, ["Home", "Transactions", "PayBook", "Breakdown", "More"])
+        for name in labels {
+            tab(name)
+            snap("Tab \(name)")
+        }
+        XCTAssertTrue(app.staticTexts["Home"].exists || app.navigationBars["More"].exists)
+    }
+
+    func test02_AddNormalExpense() {
+        openAdd("Expense")
+        typeAmount("25")
+        snap("Add Expense")
+        app.buttons["Save Expense"].tap()
+        tab("Transactions")
+        XCTAssertTrue(app.staticTexts["RM 25.00"].firstMatch.waitForExistence(timeout: 5))
+        snap("Transactions after expense")
+    }
+
