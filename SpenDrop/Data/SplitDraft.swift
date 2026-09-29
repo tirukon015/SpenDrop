@@ -81,3 +81,15 @@ public struct SplitDraft: Equatable {
         return true
     }
 
+    /// Removes a participant. Me cannot be removed. Removing the payer makes Me the payer again only if
+    /// the payer was a participant — a payer who is not a participant is allowed and kept.
+    public mutating func remove(id: UUID) {
+        guard let index = participants.firstIndex(where: { $0.id == id }), !participants[index].isMe else { return }
+        participants.remove(at: index)
+    }
+
+    public mutating func setParts(_ parts: Int, for id: UUID) {
+        guard let index = participants.firstIndex(where: { $0.id == id }) else { return }
+        participants[index].parts = min(max(parts, 1), SplitCalculator.maxParts)
+    }
+
