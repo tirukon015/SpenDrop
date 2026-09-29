@@ -222,3 +222,7 @@ public struct SplitDraft: Equatable {
         return draft.others.isEmpty ? nil : draft
     }
 
+    static func text(fromMinor minor: Int) -> String {
+        String(format: "%.2f", Money.majorAmount(fromMinor: minor))
+    }
+}
