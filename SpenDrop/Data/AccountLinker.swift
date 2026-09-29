@@ -67,3 +67,18 @@ public enum AccountLinker {
         return account
     }
 
+    /// Funding-account choices for the expense forms: the existing fixed list, plus any active account the user
+    /// added, with "Other" kept last. Names already in the list are not repeated.
+    public static func fundingOptions(base: [String], accounts: [Account]) -> [String] {
+        var options = base.filter { normalizedKey($0) != nil }
+        var keys = Set(options.compactMap { normalizedKey($0) })
+        for account in accounts.sorted(by: { $0.sortIndex < $1.sortIndex }) where !account.isArchived {
+            if let key = account.nameKey, !keys.contains(key) {
+                options.append(account.name)
+                keys.insert(key)
+            }
+        }
+        if base.contains("Other") { options.append("Other") }
+        return options
+    }
+
