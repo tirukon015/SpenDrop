@@ -99,3 +99,21 @@ public struct URLSessionTransport: HTTPTransport {
     }
 }
 
+enum CloudJSON {
+    static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            if let date = CloudJSON.parseDate(text) { return date }
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Bad date \(text)"))
+        }
+        return decoder
+    }
+
+    static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
