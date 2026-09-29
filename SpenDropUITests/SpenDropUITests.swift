@@ -58,3 +58,18 @@ final class SpenDropUITests: XCTestCase {
         item.tap()
     }
 
+    private func addAccount(_ name: String) {
+        tab("More")
+        app.buttons["more.accounts"].tap()
+        let add = app.navigationBars["Accounts"].buttons["Add Account"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        let field = app.textFields["Name (e.g. Maybank)"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(name)
+        app.navigationBars["New Account"].buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
+        app.navigationBars["Accounts"].buttons.element(boundBy: 0).tap()   // back to More
+    }
+
