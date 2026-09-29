@@ -35,3 +35,9 @@ public struct SplitDraft: Equatable {
     /// nil = I paid.
     public var payer: PayBookProfile?
 
+    public init() {}
+
+    public static func == (lhs: SplitDraft, rhs: SplitDraft) -> Bool {
+        lhs.method == rhs.method && lhs.participants == rhs.participants && lhs.payer?.id == rhs.payer?.id
+    }
+
