@@ -179,3 +179,38 @@ public struct SplitEditorView: View {
         }
     }
 
+    @ViewBuilder
+    private func participantRow(_ participant: SplitDraft.Participant) -> some View {
+        let index = draft.participants.firstIndex(where: { $0.id == participant.id }) ?? 0
+        HStack {
+            Image(systemName: participant.isMe ? "person.crop.circle.fill" : "person.crop.circle")
+                .foregroundStyle(participant.isMe ? .blue : .secondary)
+            Text(participant.name)
+            if draft.payer?.id != nil && draft.payer?.id == participant.person?.id {
+                Text("paid").font(.caption2).foregroundStyle(.secondary)
+            } else if participant.isMe && draft.payer == nil {
+                Text("paid").font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            switch draft.method {
+            case .equal:
+                Text(amounts.map { format($0[index]) } ?? "—").foregroundStyle(.secondary)
+            case .parts:
+                Stepper(value: Binding(get: { participant.parts }, set: { draft.setParts($0, for: participant.id) }),
+                        in: 1...SplitCalculator.maxParts) {
+                    Text("\(participant.parts) × · \(amounts.map { format($0[index]) } ?? "—")")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .fixedSize()
+            case .amounts:
+                TextField("0.00", text: Binding(get: { participant.amountText }, set: { draft.setAmountText($0, for: participant.id) }))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 90)
+            }
+        }
+    }
+}
+
