@@ -798,7 +798,23 @@ public struct ShareExtensionView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private var movementKind: MoneyMovementKind {
+        let wanted: MoneyDirection = viewModel.saveAs == .moneyIn ? .moneyIn : .moneyOut
+        if let suggested = viewModel.suggestedMovementKind, suggested.direction == wanted { return suggested }
+        return wanted == .moneyIn ? .otherIn : .otherOut
+    }
+
     private func handleSaveButtonTapped() {
+        if viewModel.saveAs != .expense {
+            let amountMinor = Money.minorUnits(from: parsedAmount)
+            if let match = MovementDuplicateDetector.findMatch(amountMinor: amountMinor, date: viewModel.date,
+                                                               reference: viewModel.transactionReference, kind: movementKind, in: modelContext) {
+                viewModel.movementDuplicateMessage = "A \(match.kind.displayName.lowercased()) of the same amount on \(match.date.formatted(date: .abbreviated, time: .omitted)) is already recorded."
+            } else {
+                saveMovement()
+            }
+            return
+        }
         if viewModel.duplicateResult.isDuplicate {
             viewModel.showingDuplicateConfirmation = true
         } else {
