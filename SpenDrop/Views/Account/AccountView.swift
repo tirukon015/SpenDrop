@@ -323,3 +323,23 @@ struct CloudRestoreView: View {
         }
     }
 
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            records = try await cloud.listBackups()
+            errorMessage = nil
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func restore(_ record: CloudBackupRecord) async {
+        do {
+            let summary = try await cloud.restore(record)
+            resultMessage = summary.message
+        } catch {
+            resultMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+}
