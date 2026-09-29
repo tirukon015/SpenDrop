@@ -44,3 +44,45 @@ public struct CloudBackupRecord: Codable, Identifiable, Equatable {
 @MainActor
 @Observable
 public final class CloudBackupService {
+    public enum Status: Equatable {
+        case notConfigured
+        case notSignedIn
+        case idle
+        case waitingForNetwork
+        case uploading
+        case upToDate
+        case restoring
+        case failed(String)
+
+        public var isFailure: Bool {
+            if case .failed = self { return true }
+            return false
+        }
+
+        public var title: String {
+            switch self {
+            case .notConfigured: return "Not set up"
+            case .notSignedIn: return "Not signed in"
+            case .idle: return "Enabled"
+            case .waitingForNetwork: return "Waiting for internet"
+            case .uploading: return "Backup in progress…"
+            case .upToDate: return "Up to date"
+            case .restoring: return "Restoring…"
+            case .failed: return "Backup failed"
+            }
+        }
+    }
+
+    public static let bucket = "backups"
+    public static let keepPerDevice = 10
+
+    public static let shared = CloudBackupService(
+        auth: .shared,
+        transport: URLSessionTransport(),
+        defaults: .standard,
+        device: .current,
+        contextProvider: { ExpenseDataContainer.shared.mainContext },
+        canUseLocalStore: { ExpenseDataContainer.isPersistentStoreHealthy },
+        makeSafetyBackup: { context in CloudBackupService.writeLocalSafetyBackup(from: context) }
+    )
+
