@@ -167,3 +167,24 @@ public struct MoneyMovementFormView: View {
         return issues.first
     }
 
+    private func accountPicker(title: String, selection: Binding<Account?>, allowsNone: Bool) -> some View {
+        Picker(title, selection: selection) {
+            Text(allowsNone ? "None" : "Choose").tag(Account?.none)
+            ForEach(selectableAccounts) { account in
+                Text(account.isArchived ? "\(account.name) (archived)" : account.name).tag(Account?.some(account))
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private func save() {
+        if let existing {
+            guard draft.apply(to: existing) else { return }
+        } else {
+            guard draft.insertMovement(into: modelContext) != nil else { return }
+        }
+        try? modelContext.save()
+        HapticFeedback.notification(.success)
+        onFinished()
+    }
+
