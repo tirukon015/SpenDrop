@@ -52,3 +52,24 @@ public final class SystemWebAuthLauncher: NSObject, WebAuthLauncher, ASWebAuthen
         }
     }
 
+    nonisolated public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+        }
+    }
+}
+
+/// SpenDrop account sign-in using Supabase Auth's official HTTP API (the same endpoints the official SDKs call).
+/// Local-first: signing in or out never touches the local SwiftData store.
+@MainActor
+@Observable
+public final class AuthService {
+    public enum State: Equatable {
+        case notConfigured
+        case signedOut(message: String?)
+        case signedIn(AuthUser)
+    }
+
