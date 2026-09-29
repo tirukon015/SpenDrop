@@ -306,3 +306,49 @@ public struct FinancialModelTests {
             check("Balance: refunds and income never change a person balance", noEffect.isEmpty, expected: "empty", actual: "\(noEffect)")
         }
 
+        // MARK: Delete rules preserve history
+        do {
+            let ctx = context()
+            let bijoy = PayBookProfile(name: "Bijoy")
+            let maybank = Account(name: "Maybank", type: .bank)
+            ctx.insert(bijoy); ctx.insert(maybank)
+            let dinner = sharedExpense(ctx, amount: 30, payer: bijoy, people: [bijoy])
+            dinner.account = maybank
+            let purchase = Expense(amount: 100, merchant: "Shop")
+            ctx.insert(purchase)
+            let refund = MoneyMovement(kind: .refund, amountMinor: 3000, linkedExpense: purchase, account: maybank)
+            let loan = MoneyMovement(kind: .loanGiven, amountMinor: 500, person: bijoy)
+            ctx.insert(refund); ctx.insert(loan)
+            try? ctx.save()
+
+            let bijoyShare = dinner.shares.first { !$0.isMe }
+            ctx.delete(bijoy)
+            try? ctx.save()
+            let personDeleteOK = dinner.payer == nil && dinner.payerNameSnapshot == "Bijoy" && bijoyShare?.person == nil &&
+                bijoyShare?.nameSnapshot == "Bijoy" && loan.person == nil && loan.personNameSnapshot == "Bijoy" && count(ExpenseShare.self, in: ctx) == 2
+            check("Deleting a person keeps shares/payer/movements with name snapshots", personDeleteOK,
+                  expected: "links nil, snapshots 'Bijoy', shares kept",
+                  actual: "payerSnapshot=\(dinner.payerNameSnapshot ?? "nil") shareSnapshot=\(bijoyShare?.nameSnapshot ?? "nil") shares=\(count(ExpenseShare.self, in: ctx))")
+
+            ctx.delete(purchase)
+            try? ctx.save()
+            let expenseDeleteOK = count(MoneyMovement.self, in: ctx) == 2 && refund.linkedExpense == nil && refund.linkedExpenseSnapshot?.hasPrefix("Shop") == true
+            check("Deleting an expense keeps its refund (with snapshot)", expenseDeleteOK,
+                  expected: "refund kept, link nil, snapshot 'Shop…'", actual: "movements=\(count(MoneyMovement.self, in: ctx)) snapshot=\(refund.linkedExpenseSnapshot ?? "nil")")
+
+            ctx.delete(dinner)
+            try? ctx.save()
+            check("Deleting a shared expense deletes its shares", count(ExpenseShare.self, in: ctx) == 0,
+                  expected: "0 shares", actual: "\(count(ExpenseShare.self, in: ctx))")
+
+            let other = Expense(amount: 8, merchant: "Kopi", fundingAccount: "Maybank")
+            ctx.insert(other)
+            other.account = maybank
+            try? ctx.save()
+            ctx.delete(maybank)
+            try? ctx.save()
+            check("Deleting an account keeps expenses, movements and the text", other.account == nil && other.fundingAccount == "Maybank" &&
+                  count(Expense.self, in: ctx) == 1 && refund.account == nil && count(MoneyMovement.self, in: ctx) == 2,
+                  expected: "expense + movements kept, text 'Maybank'", actual: "expenses=\(count(Expense.self, in: ctx)) text=\(other.fundingAccount)")
+        }
+
