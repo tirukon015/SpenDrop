@@ -246,33 +246,77 @@ public struct ExpensesView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
 
-                // MARK: - EXPENSE LIST (Starts high on screen)
-                if allExpenses.isEmpty {
+                // MARK: - TYPE FILTER + SPENT / IN / OUT HEADER
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(ActivityFilter.allCases) { filter in
+                            Button {
+                                HapticFeedback.selection()
+                                activityFilter = filter
+                            } label: {
+                                Text(filter.title)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(activityFilter == filter ? Color.accentColor : Color(uiColor: .tertiarySystemFill))
+                                    .foregroundStyle(activityFilter == filter ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("transactions.filter.\(filter.rawValue)")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+
+                transactionsHeader
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+
+                // MARK: - TRANSACTION LIST (Starts high on screen)
+                if allExpenses.isEmpty && allMovements.isEmpty {
                     emptyState(
                         title: "No expenses recorded",
                         message: "Add your first cash expense or drop a transaction screenshot."
                     )
-                } else if engine.filteredExpenses.isEmpty {
+                } else if timelineItems.isEmpty {
                     emptyState(
-                        title: "No expenses yet",
-                        message: "Your expenses from \(engine.selectedDateFilter.displayName) will appear here."
+                        title: activityFilter == .all ? "Nothing recorded yet" : "No \(activityFilter.title.lowercased())",
+                        message: "Transactions from \(engine.selectedDateFilter.displayName) will appear here."
                     )
                 } else {
                     List {
-                        ForEach(groupedExpenses, id: \.dateHeader) { group in
+                        ForEach(groupedItems, id: \.dateHeader) { group in
                             Section {
-                                ForEach(group.expenses) { expense in
-                                    Button(action: {
-                                        selectedExpense = expense
-                                    }) {
-                                        ExpenseRowView(expense: expense)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            delete(expense: expense)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
+                                ForEach(group.items) { item in
+                                    switch item {
+                                    case .expense(let expense):
+                                        Button(action: {
+                                            selectedExpense = expense
+                                        }) {
+                                            ExpenseRowView(expense: expense)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                delete(expense: expense)
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        }
+                                    case .movement(let movement):
+                                        Button(action: {
+                                            selectedMovement = movement
+                                        }) {
+                                            MovementRow(movement: movement, incoming: movement.kind.direction == .moneyIn, timelineStyle: true)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                delete(movement: movement)
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }
