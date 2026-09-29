@@ -57,8 +57,7 @@ public struct ExpensesView: View {
                 header = dateKey
                 subtitle = nil
             }
-
-            return (dateHeader: header, dateSubtitle: subtitle, date: dayStart, expenses: expenses)
+            return (dateHeader: header, dateSubtitle: subtitle, date: dayStart, items: items)
         }
         .sorted { g1, g2 in
             sortOrder == .newestFirst ? g1.date > g2.date : g1.date < g2.date
