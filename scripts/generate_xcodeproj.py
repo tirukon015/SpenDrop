@@ -548,6 +548,7 @@ add_group(diag_samples_group_id, "DiagnosticSamples", "DiagnosticSamples", [
 res_group_id = gen_id("GROUP_Resources")
 add_group(res_group_id, "Resources", "Resources", [
     file_refs["SpenDrop/Resources/Assets.xcassets"],
+    file_refs["SpenDrop/Resources/CloudConfig"],
     file_refs["SpenDrop/Resources/Info.plist"],
     file_refs["SpenDrop/Resources/SpenDrop.entitlements"],
     diag_samples_group_id
@@ -574,9 +575,10 @@ add_group(spendrop_group_id, "SpenDrop", "SpenDrop", [
 ])
 
 products_group_id = gen_id("GROUP_Products")
-add_group(products_group_id, "Products", None, [app_product_id, share_product_id])
+add_group(products_group_id, "Products", None, [app_product_id, share_product_id, uit_product_id])
+add_group(uit_group_id, "SpenDropUITests", "SpenDropUITests", [file_refs[p] for p in uit_source_paths])
 
-add_group(main_group_id, None, None, [spendrop_group_id, products_group_id])
+add_group(main_group_id, None, None, [spendrop_group_id, uit_group_id, products_group_id])
 
 pbx.append("\n/* Begin PBXGroup section */")
 for gid, (name, path, children) in groups.items():
