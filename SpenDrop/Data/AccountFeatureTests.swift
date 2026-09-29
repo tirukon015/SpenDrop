@@ -188,3 +188,22 @@ public struct AccountFeatureTests {
             }
         }
 
+        // MARK: Account form validation
+        do {
+            let maybank = Account(name: "Maybank")
+            let existing = [maybank]
+            let problems = [
+                AccountFormValidation.problem(name: "  ", editing: nil, existing: existing),
+                AccountFormValidation.problem(name: "Unknown", editing: nil, existing: existing),
+                AccountFormValidation.problem(name: " MAYBANK", editing: nil, existing: existing),
+                AccountFormValidation.problem(name: "Maybank", editing: maybank, existing: existing),
+                AccountFormValidation.problem(name: "Bank Rakyat", editing: nil, existing: existing)
+            ].map { $0 != nil }
+            check("Account form: empty/Unknown/duplicate rejected; rename-to-self and new name allowed",
+                  problems == [true, true, true, false, false],
+                  expected: "[true, true, true, false, false]", actual: "\(problems)")
+        }
+
+        return results
+    }
+}
