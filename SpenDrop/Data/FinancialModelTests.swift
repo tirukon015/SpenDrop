@@ -198,3 +198,62 @@ public struct FinancialModelTests {
             check("MoneyMovement: validation", issues == expected, expected: "\(expected)", actual: "\(issues)")
         }
 
+        // MARK: Financial calculations
+        do {
+            let ctx = context()
+            let bijoy = PayBookProfile(name: "Bijoy"), riyad = PayBookProfile(name: "Riyad"), labib = PayBookProfile(name: "Labib")
+            [bijoy, riyad, labib].forEach { ctx.insert($0) }
+
+            let iPaid = sharedExpense(ctx, amount: 30, payer: nil, people: [bijoy, riyad, labib])
+            let bijoyPaid = sharedExpense(ctx, amount: 30, payer: bijoy, people: [bijoy, riyad, labib])
+            try? ctx.save()
+            check("Shared expense I paid: spending 30, cash out 30, my share 7.50",
+                  iPaid.spendingMinor == 3000 && iPaid.cashOutMinor == 3000 && iPaid.myShareMinor == 750 && iPaid.sharesMatchAmount,
+                  expected: "3000/3000/750", actual: "\(iPaid.spendingMinor)/\(iPaid.cashOutMinor)/\(iPaid.myShareMinor)")
+            check("Shared expense Bijoy paid: spending 7.50, cash out 0",
+                  bijoyPaid.spendingMinor == 750 && bijoyPaid.cashOutMinor == 0 && bijoyPaid.payerNameSnapshot == "Bijoy" && !bijoyPaid.paidByMe,
+                  expected: "750/0, payer snapshot Bijoy", actual: "\(bijoyPaid.spendingMinor)/\(bijoyPaid.cashOutMinor) \(bijoyPaid.payerNameSnapshot ?? "nil")")
+
+            let ownWeek = Expense(amount: 400, merchant: "Week spending")
+            ctx.insert(ownWeek)
+            let received = MoneyMovement(kind: .repaymentReceived, amountMinor: 50000, person: bijoy)
+            ctx.insert(received)
+            let weekSummary = FinancialCalculator.summary(expenses: [ownWeek], movements: [received])
+            check("Spend 400 + receive 500: spending 400, in 500, net +100",
+                  weekSummary.spendingMinor == 40000 && weekSummary.moneyInMinor == 50000 && weekSummary.moneyOutMinor == 40000 && weekSummary.netCashFlowMinor == 10000,
+                  expected: "40000/50000/40000/+10000",
+                  actual: "\(weekSummary.spendingMinor)/\(weekSummary.moneyInMinor)/\(weekSummary.moneyOutMinor)/\(weekSummary.netCashFlowMinor)")
+
+            let expenses450 = Expense(amount: 450, merchant: "Expenses")
+            ctx.insert(expenses450)
+            let loan = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: labib)
+            let transfer = MoneyMovement(kind: .ownTransfer, amountMinor: 20000)
+            let income = MoneyMovement(kind: .income, amountMinor: 100000)
+            [loan, transfer, income].forEach { ctx.insert($0) }
+            let s = FinancialCalculator.summary(expenses: [expenses450], movements: [loan, transfer, income])
+            check("450 expenses + 150 loan (+ own transfer ignored): out 600, spending 450",
+                  s.spendingMinor == 45000 && s.moneyOutMinor == 60000 && s.moneyInMinor == 100000 && s.netCashFlowMinor == 40000,
+                  expected: "spending 45000, out 60000, in 100000, net +40000",
+                  actual: "\(s.spendingMinor)/\(s.moneyOutMinor)/\(s.moneyInMinor)/\(s.netCashFlowMinor)")
+
+            let ownOnly = FinancialCalculator.summary(expenses: [], movements: [transfer])
+            check("Own transfer excluded from every total", ownOnly == FinancialCalculator.Summary(),
+                  expected: "all zero", actual: "\(ownOnly)")
+
+            let purchase = Expense(amount: 100, merchant: "Uniqlo")
+            ctx.insert(purchase)
+            let refund = MoneyMovement(kind: .refund, amountMinor: 3000, linkedExpense: purchase)
+            ctx.insert(refund)
+            try? ctx.save()
+            let r = FinancialCalculator.summary(expenses: [purchase], movements: [refund])
+            check("Refund: original expense unchanged, gross 100, refund 30, net 70, money in 30",
+                  purchase.amount == 100 && r.spendingMinor == 10000 && r.refundsMinor == 3000 && r.netSpendingMinor == 7000 && r.moneyInMinor == 3000 &&
+                  purchase.linkedMovements.contains { $0 === refund } && refund.linkedExpenseSnapshot?.hasPrefix("Uniqlo") == true,
+                  expected: "10000/3000/7000, linked", actual: "\(r.spendingMinor)/\(r.refundsMinor)/\(r.netSpendingMinor) linked=\(purchase.linkedMovements.count)")
+
+            let usd = Expense(amount: 10, currency: "USD", merchant: "Abroad")
+            ctx.insert(usd)
+            let rmOnly = FinancialCalculator.summary(expenses: [usd, purchase], movements: [])
+            check("Currencies are never mixed", rmOnly.spendingMinor == 10000, expected: "RM total excludes USD", actual: "\(rmOnly.spendingMinor)")
+        }
+
