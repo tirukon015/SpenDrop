@@ -391,3 +391,16 @@ struct AccountFormSheet: View {
     }
 }
 
+/// Pure validation for the account form (tested).
+enum AccountFormValidation {
+    static func problem(name: String, editing: Account?, existing: [Account]) -> String? {
+        guard let key = AccountLinker.normalizedKey(name) else {
+            return "Enter a name. \"Unknown\" and \"Other\" can't be used."
+        }
+        if existing.contains(where: { $0.id != editing?.id && $0.nameKey == key }) {
+            return "An account with this name already exists."
+        }
+        return nil
+    }
+}
+
