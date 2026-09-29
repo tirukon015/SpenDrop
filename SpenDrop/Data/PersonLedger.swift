@@ -133,3 +133,16 @@ public enum PersonLedger {
         return "Settled with \(name)"
     }
 
+    static func format(_ minor: Int, _ currency: String) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor), currency: currency)
+    }
+}
+
+/// How PayBook groups people: Frequent, Other People, Archived.
+public enum PayBookGrouping {
+    public static func groups(_ people: [PayBookProfile]) -> (frequent: [PayBookProfile], other: [PayBookProfile], archived: [PayBookProfile]) {
+        (people.filter { $0.isFrequent && !$0.isArchived },
+         people.filter { !$0.isFrequent && !$0.isArchived },
+         people.filter(\.isArchived))
+    }
+}
