@@ -18,3 +18,18 @@ public struct SupabaseConfig: Equatable {
         self.anonKey = anonKey
     }
 
+    public static func load(bundle: Bundle = .main) -> SupabaseConfig? {
+        guard let fileURL = bundle.url(forResource: "SupabaseConfig", withExtension: "plist", subdirectory: "CloudConfig"),
+              let data = try? Data(contentsOf: fileURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let urlString = (plist["SUPABASE_URL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let key = (plist["SUPABASE_ANON_KEY"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: urlString), url.scheme == "https", !key.isEmpty, !key.hasPrefix("YOUR_") else {
+            return nil
+        }
+        return SupabaseConfig(url: url, anonKey: key)
+    }
+}
+
+// MARK: - Errors
+
