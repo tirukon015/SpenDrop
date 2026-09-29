@@ -60,6 +60,16 @@ public final class ShareExtensionViewModel: ObservableObject {
     @Published public var duplicateResult: DuplicateCheckResult = .none
     @Published public var showingDuplicateConfirmation: Bool = false
 
+    // Save as Expense / Money In / Money Out (suggested only from clear wording; the user confirms)
+    public enum SaveType: String, CaseIterable, Identifiable {
+        case expense = "Expense", moneyIn = "Money In", moneyOut = "Money Out"
+        public var id: String { rawValue }
+    }
+    @Published public var saveAs: SaveType = .expense
+    @Published public var suggestedMovementKind: MoneyMovementKind?
+    @Published public var directionReason: String?
+    @Published public var movementDuplicateMessage: String?
+
     // Asynchronous OCR Task reference
     private var ocrTask: Task<Void, Never>?
     private var isProcessingOCR: Bool = false
@@ -129,6 +139,9 @@ public final class ShareExtensionViewModel: ObservableObject {
 
             // Populate detected fields
             self.applyParsedTransaction(parsed)
+            // Learned rule > parser rule > generic suggestion (local only).
+            self.selectedCategory = TransactionClassifier.suggestCategory(
+                merchant: parsed.merchant, deterministic: parsed.category, in: ExpenseDataContainer.shared.mainContext).category
 
             // Duplicate detection executed safely
             do {
@@ -159,6 +172,13 @@ public final class ShareExtensionViewModel: ObservableObject {
 
         self.merchant = parsed.merchant ?? ""
         self.selectedCategory = parsed.category ?? .other
+        self.suggestedMovementKind = parsed.suggestedMovementKind
+        self.directionReason = parsed.directionReason
+        switch parsed.suggestedMovementKind?.direction {
+        case .moneyIn?: self.saveAs = .moneyIn
+        case .moneyOut?: self.saveAs = .moneyOut
+        default: self.saveAs = .expense   // own transfers are recorded in the app (they need two accounts)
+        }
         self.fundingAccount = parsed.displayFundingAccount
         self.selectedPaymentChannel = parsed.paymentChannel
         self.fundingInstrument = parsed.fundingInstrument
@@ -428,6 +448,25 @@ public struct ShareExtensionView: View {
                     )
                 }
 
+                // Save as
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Save as", selection: $viewModel.saveAs) {
+                        ForEach(ShareExtensionViewModel.SaveType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    if viewModel.suggestedMovementKind == .ownTransfer {
+                        Text("Looks like a top-up between your own accounts. Open SpenDrop to record it as a Transfer.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else if let reason = viewModel.directionReason {
+                        Text("Suggested from the screenshot: \(reason). Please confirm.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 // Screenshot Preview Thumbnail (Allows verifying while editing)
                 HStack(spacing: 12) {
                     Image(uiImage: image)
@@ -676,7 +715,7 @@ public struct ShareExtensionView: View {
                 Button(action: handleSaveButtonTapped) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text("Save Expense")
+                        Text(viewModel.saveAs == .expense ? "Save Expense" : "Save \(viewModel.saveAs.rawValue)")
                             .fontWeight(.bold)
                     }
                     .font(.headline)
@@ -691,6 +730,13 @@ public struct ShareExtensionView: View {
                 .padding(.bottom, 16)
             }
             .padding()
+        }
+        .alert("Possible Duplicate", isPresented: Binding(get: { viewModel.movementDuplicateMessage != nil },
+                                                         set: { if !$0 { viewModel.movementDuplicateMessage = nil } })) {
+            Button("Add Anyway") { saveMovement() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(viewModel.movementDuplicateMessage ?? "")
         }
         .alert("Possible Duplicate Expense", isPresented: $viewModel.showingDuplicateConfirmation) {
             Button("Add Anyway") {
@@ -752,12 +798,55 @@ public struct ShareExtensionView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private var movementKind: MoneyMovementKind {
+        let wanted: MoneyDirection = viewModel.saveAs == .moneyIn ? .moneyIn : .moneyOut
+        if let suggested = viewModel.suggestedMovementKind, suggested.direction == wanted { return suggested }
+        return wanted == .moneyIn ? .otherIn : .otherOut
+    }
+
     private func handleSaveButtonTapped() {
+        if viewModel.saveAs != .expense {
+            let amountMinor = Money.minorUnits(from: parsedAmount)
+            if let match = MovementDuplicateDetector.findMatch(amountMinor: amountMinor, date: viewModel.date,
+                                                               reference: viewModel.transactionReference, kind: movementKind, in: modelContext) {
+                viewModel.movementDuplicateMessage = "A \(match.kind.displayName.lowercased()) of the same amount on \(match.date.formatted(date: .abbreviated, time: .omitted)) is already recorded."
+            } else {
+                saveMovement()
+            }
+            return
+        }
         if viewModel.duplicateResult.isDuplicate {
             viewModel.showingDuplicateConfirmation = true
         } else {
             saveToSwiftData()
         }
+    }
+
+    /// Money In / Money Out from a shared screenshot. The account is resolved from the funding account text
+    /// (Unknown stays unlinked, no duplicate accounts are created).
+    private func saveMovement() {
+        guard isValid else { return }
+        let trimmedMerchant = viewModel.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteParts = [trimmedMerchant, viewModel.notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }
+        let movement = MoneyMovement(
+            kind: movementKind,
+            amountMinor: Money.minorUnits(from: parsedAmount),
+            date: viewModel.date,
+            account: AccountLinker.resolveAccount(named: viewModel.fundingAccount, in: modelContext),
+            note: noteParts.isEmpty ? nil : noteParts.joined(separator: " · "),
+            transactionReference: viewModel.transactionReference,
+            sourceType: .shareExtension,
+            paymentChannel: viewModel.selectedPaymentChannel
+        )
+        modelContext.insert(movement)
+        do {
+            try modelContext.save()
+            shareLog("[SpenDropShare] money movement saved (\(movement.kind.rawValue))")
+        } catch {
+            shareLog("[SpenDropShare][ERROR] failed to save money movement: \(error.localizedDescription)")
+        }
+        HapticFeedback.notification(.success)
+        onComplete()
     }
 
     private func saveToSwiftData() {
@@ -808,12 +897,14 @@ public struct ShareExtensionView: View {
                 fundingInstrument: viewModel.fundingInstrument
             )
             modelContext.insert(expense)
+            AccountLinker.relink(expense, in: modelContext)
+            TransactionClassifier.learn(merchant: finalMerchant, category: viewModel.selectedCategory, accountId: expense.account?.id, in: modelContext)
         }
 
         do {
             try modelContext.save()
             modelContext.processPendingChanges()
-            shareLog("[SpenDropShare][OCR] expense saved successfully: \(finalMerchant) RM\(parsedAmount), channel: \(viewModel.selectedPaymentChannel.displayName), funding: \(viewModel.fundingAccount)")
+            shareLog("[SpenDropShare][OCR] expense saved successfully")
         } catch {
             shareLog("[SpenDropShare][OCR][ERROR] failed to save expense: \(error.localizedDescription)")
         }

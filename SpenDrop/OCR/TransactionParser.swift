@@ -100,7 +100,7 @@ public final class TransactionParser {
         let detectedChannel = PaymentChannel.detect(from: fullText, paymentSource: detectedPaymentSource, paymentMethod: paymentMethod, detectedSource: transactionSource)
         let detectedFunding: String = underlyingBank?.rawValue ?? (detectedPaymentSource != .applePay && detectedPaymentSource != .qrPayment && detectedPaymentSource != .bankTransfer && detectedPaymentSource != .physicalCard && detectedPaymentSource != .unknown && detectedPaymentSource != nil ? detectedPaymentSource!.rawValue : "Unknown")
 
-        return ParsedTransaction(
+        var parsed = ParsedTransaction(
             amount: selectedAmount,
             amountConfidence: amountConfidence,
             currency: detectedCurrency,
@@ -130,6 +130,12 @@ public final class TransactionParser {
             isFailedTransaction: isFailed,
             isBalanceOrLimitOnly: isBalanceOrLimit
         )
+
+        // 9. Direction suggestion (additive; does not change any field above)
+        let direction = DirectionDetector.detect(text: fullText)
+        parsed.suggestedMovementKind = direction.kind
+        parsed.directionReason = direction.reason
+        return parsed
     }
 
     // MARK: - Amount Extraction & Semantic Classification (Issue 1, 4)

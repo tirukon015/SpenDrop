@@ -4,6 +4,7 @@ import SwiftData
 public struct ExpenseReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Account.sortIndex) private var accounts: [Account]
 
     public let initialParsed: ParsedTransaction
     public var onSaved: ((Expense) -> Void)?
@@ -30,6 +31,12 @@ public struct ExpenseReviewView: View {
     // PayBook Integration State
     @State private var showingSaveToPayBookSheet = false
 
+    // Save as Expense / Money In / Money Out / Transfer (suggested from clear wording only; user confirms)
+    @State private var saveAs: TransactionEntryType
+    @State private var pendingMovement: PrefilledMovement?
+    @State private var movementDuplicateMessage: String?
+    @State private var categoryTouched = false
+
     public init(parsed: ParsedTransaction, onSaved: ((Expense) -> Void)? = nil) {
         self.initialParsed = parsed
         self.onSaved = onSaved
@@ -44,6 +51,7 @@ public struct ExpenseReviewView: View {
         _date = State(initialValue: parsed.date ?? Date())
         _notes = State(initialValue: parsed.suggestedRemark ?? "")
         _transactionReference = State(initialValue: parsed.transactionReference)
+        _saveAs = State(initialValue: parsed.suggestedMovementKind.map(TransactionEntryType.init(kind:)) ?? .expense)
     }
 
     private var parsedAmount: Double {
@@ -98,6 +106,22 @@ public struct ExpenseReviewView: View {
                             title: "Possible Expense Detected",
                             subtitle: "Please verify the highlighted fields below."
                         )
+                    }
+
+                    // SAVE AS (Expense stays the default unless the screenshot clearly says otherwise)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Save as", selection: $saveAs) {
+                            ForEach(TransactionEntryType.allCases) { type in
+                                Text(type.title).tag(type)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("review.saveAs")
+                        if let reason = initialParsed.directionReason {
+                            Text(initialParsed.suggestedMovementKind == nil ? "Unclear direction (\(reason)). Please choose." : "Suggested: \(reason). Please confirm.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     // AMOUNT HERO DISPLAY
@@ -228,6 +252,7 @@ public struct ExpenseReviewView: View {
                                     Button {
                                         HapticFeedback.selection()
                                         selectedCategory = cat
+                                        categoryTouched = true
                                     } label: {
                                         Label(cat.rawValue, systemImage: cat.icon)
                                     }
@@ -261,7 +286,7 @@ public struct ExpenseReviewView: View {
                             Spacer()
 
                             Menu {
-                                ForEach(commonFundingAccounts, id: \.self) { acc in
+                                ForEach(AccountLinker.fundingOptions(base: commonFundingAccounts, accounts: accounts), id: \.self) { acc in
                                     Button {
                                         HapticFeedback.selection()
                                         fundingAccount = acc
@@ -449,10 +474,10 @@ public struct ExpenseReviewView: View {
                             }
                         }
 
-                        Button(action: handleSaveTapped) {
+                        Button(action: { saveAs == .expense ? handleSaveTapped() : continueAsMovement() }) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Save Expense")
+                                Text(saveAs == .expense ? "Save Expense" : "Continue as \(saveAs.title)")
                                     .fontWeight(.bold)
                             }
                             .font(.headline)
@@ -505,7 +530,24 @@ public struct ExpenseReviewView: View {
             } message: {
                 Text(duplicateResult.reason ?? "This transaction matches an existing record. Reconciling will link them into one single expense without double-counting.")
             }
+            .sheet(item: $pendingMovement) { item in
+                MoneyMovementCreateSheet(draft: item.draft) {
+                    dismiss()
+                }
+            }
+            .alert("Possible duplicate", isPresented: Binding(get: { movementDuplicateMessage != nil },
+                                                               set: { if !$0 { movementDuplicateMessage = nil } })) {
+                Button("Continue Anyway") { presentMovementDraft() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(movementDuplicateMessage ?? "")
+            }
             .onAppear {
+                // Learned rule > parser rule > generic; never overrides a category the user picked.
+                if !categoryTouched {
+                    selectedCategory = TransactionClassifier.suggestCategory(
+                        merchant: merchant, deterministic: initialParsed.category, in: modelContext).category
+                }
                 duplicateResult = DuplicateDetector.shared.checkDuplicate(
                     amount: parsedAmount,
                     merchant: merchant,
@@ -559,6 +601,37 @@ public struct ExpenseReviewView: View {
         .padding()
         .background(color.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// The kind to use for the chosen type: the parser's suggestion when it matches, else the type's default.
+    private var movementKind: MoneyMovementKind {
+        if let suggested = initialParsed.suggestedMovementKind, TransactionEntryType(kind: suggested) == saveAs {
+            return suggested
+        }
+        return saveAs.kinds.first ?? .otherIn
+    }
+
+    private func makeMovementDraft() -> MoneyMovementDraft {
+        MoneyMovementDraft.fromParsed(
+            amount: parsedAmount, date: date, fundingAccount: fundingAccount, merchant: merchant,
+            reference: transactionReference, channel: selectedPaymentChannel, walletSource: initialParsed.paymentSource,
+            kind: movementKind, source: .screenshot, in: modelContext
+        )
+    }
+
+    private func continueAsMovement() {
+        let draft = makeMovementDraft()
+        if let amountMinor = draft.amountMinor,
+           let match = MovementDuplicateDetector.findMatch(amountMinor: amountMinor, date: date, reference: transactionReference,
+                                                           kind: movementKind, in: modelContext) {
+            movementDuplicateMessage = "A \(match.kind.displayName.lowercased()) of \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: match.amountMinor))) on \(match.date.formatted(date: .abbreviated, time: .omitted)) is already recorded."
+        } else {
+            presentMovementDraft()
+        }
+    }
+
+    private func presentMovementDraft() {
+        pendingMovement = PrefilledMovement(draft: makeMovementDraft())
     }
 
     private func handleSaveTapped() {
@@ -641,6 +714,8 @@ public struct ExpenseReviewView: View {
         )
 
         modelContext.insert(expense)
+        AccountLinker.relink(expense, in: modelContext)
+        TransactionClassifier.learn(merchant: finalMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
         try? modelContext.save()
         modelContext.processPendingChanges()
 
