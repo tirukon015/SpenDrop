@@ -277,3 +277,11 @@ struct MovementRow: View {
     }
 }
 
+private extension AccountDetailView {
+    func movementRow(_ movement: MoneyMovement, incoming: Bool) -> some View {
+        MovementRow(movement: movement, incoming: incoming)
+    }
+}
+
+// MARK: - Records without an account
+
