@@ -100,3 +100,91 @@ public struct AccountFeatureTests {
                   expected: "[Maybank, CIMB, Wise, Bank Rakyat, Other]", actual: "\(options)")
         }
 
+        // MARK: Money In / Money Out / Transfer drafts
+        do {
+            var draft = MoneyMovementDraft(entryType: .moneyIn)
+            let defaultKind = draft.kind
+            let emptyIssues = draft.issues
+            draft.amountText = "0"
+            let zeroIssues = draft.issues
+            draft.amountText = "12.50"
+            let validIncome = draft.isValid && draft.amountMinor == 1250
+            draft.setEntryType(.moneyOut)
+            let outKind = draft.kind
+            let loanIssues = draft.issues
+            check("Draft validation: amount and person",
+                  defaultKind == .income && emptyIssues == [.invalidAmount] && zeroIssues == [.invalidAmount] &&
+                  validIncome && outKind == .loanGiven && loanIssues == [.missingPerson],
+                  expected: "income default; empty/0 invalid; 12.50 valid; Money Out -> loan needs person",
+                  actual: "default=\(defaultKind) empty=\(emptyIssues) zero=\(zeroIssues) valid=\(validIncome) out=\(outKind) loan=\(loanIssues)")
+
+            let ctx = context()
+            let maybank = Account(name: "Maybank"), tng = Account(name: "Touch 'n Go")
+            ctx.insert(maybank); ctx.insert(tng)
+            var transfer = MoneyMovementDraft(entryType: .transfer)
+            transfer.amountText = "200"
+            let missing = transfer.issues
+            transfer.account = maybank
+            transfer.counterAccount = maybank
+            let same = transfer.issues
+            transfer.counterAccount = tng
+            check("Draft validation: transfer needs two different accounts",
+                  transfer.kind == .ownTransfer && missing == [.missingFromAccount, .missingToAccount] && same == [.sameAccount] && transfer.isValid,
+                  expected: "missing both, then same account, then valid", actual: "missing=\(missing) same=\(same) valid=\(transfer.isValid)")
+        }
+        do {
+            let ctx = context()
+            let maybank = Account(name: "Maybank"), tng = Account(name: "Touch 'n Go")
+            let shadin = PayBookProfile(name: "Shadin")
+            ctx.insert(maybank); ctx.insert(tng); ctx.insert(shadin)
+
+            var loan = MoneyMovementDraft(entryType: .moneyOut)
+            loan.amountText = "150"
+            loan.person = shadin
+            loan.account = maybank
+            loan.note = "  for rent  "
+            let savedLoan = loan.insertMovement(into: ctx)
+
+            var income = MoneyMovementDraft(entryType: .moneyIn)
+            income.amountText = "3000"
+            income.person = shadin           // not needed for income: must not be stored
+            let savedIncome = income.insertMovement(into: ctx)
+
+            var transfer = MoneyMovementDraft(entryType: .transfer)
+            transfer.amountText = "200"
+            transfer.account = maybank
+            transfer.counterAccount = tng
+            let savedTransfer = transfer.insertMovement(into: ctx)
+
+            var invalid = MoneyMovementDraft(entryType: .moneyOut)
+            invalid.amountText = "5"
+            let rejected = invalid.insertMovement(into: ctx)
+            try? ctx.save()
+
+            let passed = savedLoan?.kind == .loanGiven && savedLoan?.direction == .moneyOut && savedLoan?.amountMinor == 15000 &&
+                savedLoan?.person === shadin && savedLoan?.personNameSnapshot == "Shadin" && savedLoan?.account === maybank &&
+                savedLoan?.note == "for rent" && savedLoan?.sourceType == .manual &&
+                savedIncome?.person == nil && savedIncome?.direction == .moneyIn &&
+                savedTransfer?.counterAccount === tng && savedTransfer?.direction == .internal &&
+                rejected == nil && count(MoneyMovement.self, in: ctx) == 3
+            check("Draft save: loan, income and transfer stored correctly; invalid draft not saved", passed,
+                  expected: "3 movements with correct kind/direction/person/accounts; invalid rejected",
+                  actual: "loan=\(savedLoan?.kind.rawValue ?? "nil") person=\(savedLoan?.personNameSnapshot ?? "nil") incomePerson=\(savedIncome?.person?.name ?? "nil") transferTo=\(savedTransfer?.counterAccount?.name ?? "nil") count=\(count(MoneyMovement.self, in: ctx))")
+
+            // Edit an existing record
+            if let savedLoan {
+                let originalId = savedLoan.id
+                var edit = MoneyMovementDraft(movement: savedLoan)
+                let loadedText = edit.amountText
+                edit.amountText = "100"
+                edit.kind = .repaymentMade
+                let applied = edit.apply(to: savedLoan)
+                try? ctx.save()
+                check("Draft edit: loads the record and updates it in place",
+                      loadedText == "150.00" && applied && savedLoan.id == originalId && savedLoan.amountMinor == 10000 &&
+                      savedLoan.kind == .repaymentMade && savedLoan.directionRaw == "out" && count(MoneyMovement.self, in: ctx) == 3,
+                      expected: "150.00 loaded; now 100 repayment made, same id, no new record",
+                      actual: "loaded=\(loadedText) amount=\(savedLoan.amountMinor) kind=\(savedLoan.kind.rawValue) count=\(count(MoneyMovement.self, in: ctx))")
+            }
+        }
+
