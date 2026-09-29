@@ -61,3 +61,29 @@ public extension MoneyMovementKind {
     }
 }
 
+/// Money that moved in or out and is NOT spending: loans, repayments, refunds, income, own-account transfers.
+/// Amounts are integer minor units (sen) and always positive; `kind` decides the direction.
+@Model
+public final class MoneyMovement {
+    @Attribute(.unique) public var id: UUID
+    public var directionRaw: String
+    public var kindRaw: String
+    public var amountMinor: Int
+    public var currency: String
+    public var date: Date
+    public var person: PayBookProfile?
+    public var personNameSnapshot: String?
+    /// For refunds: the original expense (which stays unchanged).
+    public var linkedExpense: Expense?
+    public var linkedExpenseSnapshot: String?
+    /// The account money left (out / own transfer) or arrived in (in).
+    public var account: Account?
+    /// Own transfers only: the account money moved to.
+    public var counterAccount: Account?
+    public var note: String?
+    public var transactionReference: String?
+    public var sourceTypeRaw: String
+    public var paymentChannelRaw: String
+    public var createdAt: Date
+    public var updatedAt: Date
+
