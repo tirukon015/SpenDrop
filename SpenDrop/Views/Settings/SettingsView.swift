@@ -348,7 +348,7 @@ public struct SettingsView: View {
             do {
                 let stats = try UserDataBackupService.importFromJSON(at: fileURL, into: modelContext)
                 HapticFeedback.notification(.success)
-                restoreSummaryMessage = "Successfully imported \(stats.expensesAdded) expenses and \(stats.profilesAdded) PayBook profiles."
+                restoreSummaryMessage = stats.message
                 showingRestoreSuccessAlert = true
             } catch {
                 importErrorMessage = error.localizedDescription
