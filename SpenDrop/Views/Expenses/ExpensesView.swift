@@ -416,6 +416,36 @@ public struct ExpensesView: View {
         }
     }
 
+    /// "Spent" leads; Money In / Money Out are shown separately and never combined with spending.
+    private var transactionsHeader: some View {
+        let summary = engine.cashFlowSummary
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("SPENT")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.spendingMinor)))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("In \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.moneyInMinor)))")
+                    .foregroundStyle(.green)
+                Text("Out \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.moneyOutMinor)))")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 11, weight: .semibold))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("transactions.header")
+    }
+
+    private func delete(movement: MoneyMovement) {
+        HapticFeedback.notification(.warning)
+        modelContext.delete(movement)
+        try? modelContext.save()
+    }
+
     private func emptyState(title: String, message: String) -> some View {
         VStack(spacing: 12) {
             Spacer()
