@@ -277,6 +277,13 @@ public struct PayBookPickerSheet: View {
                     }
                 }
             }
+            .alert("New Person", isPresented: $showingNewPersonAlert) {
+                TextField("Name", text: $newPersonName)
+                Button("Add") { addNewPerson() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Adds a person to PayBook. Payment details are optional.")
+            }
             .sheet(isPresented: $showingCreateNewSheet) {
                 if case .saveRecipient(let name, let provider, let account) = mode {
                     AddPayBookProfileView(
@@ -295,6 +302,8 @@ public struct PayBookPickerSheet: View {
             return "Select from PayBook"
         case .saveRecipient:
             return "Save Recipient"
+        case .selectPerson:
+            return "Choose Person"
         }
     }
 
@@ -317,6 +326,17 @@ public struct PayBookPickerSheet: View {
                     )
             }
         }
+    }
+
+    private func addNewPerson() {
+        let name = newPersonName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let profile = PayBookProfile(name: name)
+        modelContext.insert(profile)
+        try? modelContext.save()
+        HapticFeedback.notification(.success)
+        onSelectPerson?(profile)
+        dismiss()
     }
 
     private func saveToExistingProfile(profile: PayBookProfile, provider: String, account: String) {
