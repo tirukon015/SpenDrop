@@ -118,3 +118,27 @@ public struct SplitDraft: Equatable {
         return shares[meIndex]
     }
 
+    /// A readable problem, or nil when the split is valid for this total.
+    public func problem(totalMinor: Int) -> String? {
+        switch calculate(totalMinor: totalMinor) {
+        case .success:
+            return nil
+        case .failure(let error):
+            switch error {
+            case .nonPositiveTotal: return "Enter the expense amount first."
+            case .tooFewParticipants: return "Add at least one other person."
+            case .missingMe, .moreThanOneMe: return "A split must include you exactly once."
+            case .invalidParts: return "Parts must be whole numbers from 1 to \(SplitCalculator.maxParts)."
+            case .missingAmount(let index): return "Enter an amount for \(participants[index].name)."
+            case .negativeAmount(let index): return "\(participants[index].name)'s amount can't be negative."
+            case .amountsDoNotMatchTotal(let difference):
+                let formatted = CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: abs(difference)))
+                return difference > 0 ? "Amounts are \(formatted) more than the total." : "\(formatted) left to assign."
+            }
+        }
+    }
+
+    public func isValid(totalMinor: Int) -> Bool { problem(totalMinor: totalMinor) == nil }
+
+    // MARK: Saving
+
