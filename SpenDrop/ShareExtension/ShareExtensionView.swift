@@ -822,6 +822,33 @@ public struct ShareExtensionView: View {
         }
     }
 
+    /// Money In / Money Out from a shared screenshot. The account is resolved from the funding account text
+    /// (Unknown stays unlinked, no duplicate accounts are created).
+    private func saveMovement() {
+        guard isValid else { return }
+        let trimmedMerchant = viewModel.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteParts = [trimmedMerchant, viewModel.notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }
+        let movement = MoneyMovement(
+            kind: movementKind,
+            amountMinor: Money.minorUnits(from: parsedAmount),
+            date: viewModel.date,
+            account: AccountLinker.resolveAccount(named: viewModel.fundingAccount, in: modelContext),
+            note: noteParts.isEmpty ? nil : noteParts.joined(separator: " · "),
+            transactionReference: viewModel.transactionReference,
+            sourceType: .shareExtension,
+            paymentChannel: viewModel.selectedPaymentChannel
+        )
+        modelContext.insert(movement)
+        do {
+            try modelContext.save()
+            shareLog("[SpenDropShare] money movement saved (\(movement.kind.rawValue))")
+        } catch {
+            shareLog("[SpenDropShare][ERROR] failed to save money movement: \(error.localizedDescription)")
+        }
+        HapticFeedback.notification(.success)
+        onComplete()
+    }
+
     private func saveToSwiftData() {
         guard isValid else { return }
 
