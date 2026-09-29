@@ -177,3 +177,24 @@ public final class AuthService {
 
     // MARK: Session
 
+    /// A valid access token, refreshed when it expires within a minute. An expired refresh token signs the
+    /// user out of the cloud (local data untouched); being offline keeps the session.
+    public func validAccessToken() async throws -> String {
+        guard config != nil else { throw CloudError.notConfigured }
+        guard var session else { throw CloudError.notSignedIn }
+        if session.expiresAt.timeIntervalSince(now()) > 60 { return session.accessToken }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["refresh_token": session.refreshToken])
+            let data = try await post(path: "/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "refresh_token")], body: body)
+            session = try parseSession(data)
+            save(session)
+            return session.accessToken
+        } catch CloudError.offline {
+            throw CloudError.offline
+        } catch let error as CloudError {
+            if case .server(let status, _) = error, status >= 500 { throw error }
+            clearSession(message: CloudError.sessionExpired.errorDescription)
+            throw CloudError.sessionExpired
+        }
+    }
+
