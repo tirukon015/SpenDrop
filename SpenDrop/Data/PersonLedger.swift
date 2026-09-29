@@ -85,3 +85,31 @@ public enum PersonLedger {
 
     // MARK: History
 
+    public static func entries(for person: PayBookProfile) -> [Entry] {
+        var entries: [Entry] = []
+        for expense in relatedExpenses(person) {
+            let theirShare = expense.shares.first { $0.person?.id == person.id }
+            let effect: Int
+            let detail: String
+            if expense.paidByMe {
+                effect = theirShare?.amountMinor ?? 0
+                detail = "You paid · their share \(format(effect, expense.currency))"
+            } else if expense.payer?.id == person.id {
+                effect = -expense.myShareMinor
+                detail = "\(person.name) paid · your share \(format(expense.myShareMinor, expense.currency))"
+            } else {
+                effect = 0
+                detail = "Paid by \(expense.payer?.name ?? expense.payerNameSnapshot ?? "someone else") · not between you"
+            }
+            entries.append(Entry(id: expense.id, date: expense.date, title: expense.merchant, detail: detail,
+                                 effectMinor: effect, currency: expense.currency, source: .expense(expense)))
+        }
+        for movement in person.movements {
+            entries.append(Entry(id: movement.id, date: movement.date, title: movement.kind.displayName,
+                                 detail: movement.note ?? (movement.account?.name ?? ""),
+                                 effectMinor: movement.kind.personBalanceSign * movement.amountMinor,
+                                 currency: movement.currency, source: .movement(movement)))
+        }
+        return entries.sorted { $0.date > $1.date }
+    }
+
