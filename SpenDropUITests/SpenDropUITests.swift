@@ -42,3 +42,19 @@ final class SpenDropUITests: XCTestCase {
         }
     }
 
+    private func typeAmount(_ text: String) {
+        let field = app.textFields["0.00"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(text)
+    }
+
+    private func choose(_ option: String, inPicker label: String) {
+        let picker = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "picker \(label) missing")
+        picker.tap()
+        let item = app.buttons[option].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "option \(option) missing")
+        item.tap()
+    }
+
