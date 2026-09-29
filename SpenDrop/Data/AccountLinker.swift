@@ -34,3 +34,20 @@ public enum AccountLinker {
         return .other
     }
 
+    /// Finds the account for a funding-account name (case/space-insensitive, archived accounts included so no
+    /// duplicate is ever created), or creates it. Returns nil for "Unknown", "Other", empty…
+    @discardableResult
+    public static func resolveAccount(named rawName: String, currency: String = "RM", in context: ModelContext) -> Account? {
+        guard let key = normalizedKey(rawName) else { return nil }
+        let accounts = (try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortIndex), SortDescriptor(\.createdAt)]))) ?? []
+        let matches = accounts.filter { $0.nameKey == key }
+        if let active = matches.first(where: { !$0.isArchived }) ?? matches.first {
+            return active
+        }
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let account = Account(name: name, type: inferredType(forName: name), currency: currency,
+                              sortIndex: (accounts.map(\.sortIndex).max() ?? -1) + 1)
+        context.insert(account)
+        return account
+    }
+
