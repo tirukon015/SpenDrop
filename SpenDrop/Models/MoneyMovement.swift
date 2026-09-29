@@ -45,3 +45,19 @@ public enum MoneyMovementKind: String, CaseIterable, Codable, Identifiable {
     public var requiresPerson: Bool { personBalanceSign != 0 }
 }
 
+public extension MoneyMovementKind {
+    var displayName: String {
+        switch self {
+        case .income: return "Income"
+        case .loanReceived: return "Loan received"
+        case .repaymentReceived: return "Repayment received"
+        case .refund: return "Refund"
+        case .otherIn: return "Other money in"
+        case .loanGiven: return "Loan given"
+        case .repaymentMade: return "Repayment made"
+        case .otherOut: return "Other money out"
+        case .ownTransfer: return "Own transfer"
+        }
+    }
+}
+
