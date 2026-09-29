@@ -150,3 +150,23 @@ final class SpenDropUITests: XCTestCase {
         snap("Accounts recorded")
     }
 
+    func test05_HomeAndBreakdownCashFlow() {
+        openAdd("Money In")
+        typeAmount("1000")
+        app.buttons["Save Money In"].tap()
+        tab("Home")
+        XCTAssertTrue(app.otherElements["home.cashFlow"].waitForExistence(timeout: 5) || app.staticTexts["CASH FLOW · THIS MONTH"].exists)
+        snap("Home cash flow")
+        tab("Breakdown")
+        app.segmentedControls["breakdown.mode"].buttons["Cash Flow"].tap()
+        XCTAssertTrue(app.staticTexts["NET CASH FLOW"].waitForExistence(timeout: 5))
+        snap("Breakdown cash flow")
+    }
+
+    func test06_AccountScreenIsLocalFirst() {
+        tab("More")
+        app.buttons["more.account"].tap()
+        XCTAssertTrue(app.staticTexts["Cloud backup isn't set up in this build"].waitForExistence(timeout: 5))
+        snap("More Account")
+    }
+}
