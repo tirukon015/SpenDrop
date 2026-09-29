@@ -441,7 +441,12 @@ add_group(views_group_id, "Views", "Views", [
     review_group_id,
     analytics_group_id,
     settings_group_id,
-    file_refs["SpenDrop/Views/MainTabView.swift"]
+    more_group_id,
+    accounts_group_id,
+    money_group_id,
+    file_refs["SpenDrop/Views/MainTabView.swift"],
+    split_group_id,
+    account_views_group_id
 ])
 
 ocr_group_id = gen_id("GROUP_OCR")
@@ -455,12 +460,14 @@ add_group(ocr_group_id, "OCR", "OCR", [
     file_refs["SpenDrop/OCR/TransactionParser.swift"],
     file_refs["SpenDrop/OCR/ImageStorageService.swift"],
     file_refs["SpenDrop/OCR/ImagePipelineDiagnostics.swift"],
-    file_refs["SpenDrop/OCR/TransactionParserTests.swift"]
+    file_refs["SpenDrop/OCR/TransactionParserTests.swift"],
+    file_refs["SpenDrop/OCR/DirectionDetector.swift"]
 ])
 
 app_group_id = gen_id("GROUP_App")
 add_group(app_group_id, "App", "App", [
-    file_refs["SpenDrop/App/SpenDropApp.swift"]
+    file_refs["SpenDrop/App/SpenDropApp.swift"],
+    file_refs["SpenDrop/App/ApplePayIntent.swift"]
 ])
 
 models_group_id = gen_id("GROUP_Models")
