@@ -164,3 +164,16 @@ public final class AuthService {
         try await completeGoogleSignIn(callbackURL: callback, verifier: pkce.verifier)
     }
 
+    public func completeGoogleSignIn(callbackURL: URL, verifier: String) async throws {
+        let items = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        if let description = items.first(where: { $0.name == "error_description" || $0.name == "error" })?.value {
+            throw CloudError.server(status: 400, message: description)
+        }
+        guard let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty else { throw CloudError.invalidResponse }
+        let body = try JSONSerialization.data(withJSONObject: ["auth_code": code, "code_verifier": verifier])
+        let data = try await post(path: "/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "pkce")], body: body)
+        save(try parseSession(data))
+    }
+
+    // MARK: Session
+
