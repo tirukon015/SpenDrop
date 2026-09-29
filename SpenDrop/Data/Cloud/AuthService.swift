@@ -90,3 +90,23 @@ public final class AuthService {
     @ObservationIgnored private var session: AuthSession?
     @ObservationIgnored private static let sessionKey = "session"
 
+    public init(config: SupabaseConfig?, transport: HTTPTransport, store: SecureStore, now: @escaping () -> Date = Date.init) {
+        self.config = config
+        self.transport = transport
+        self.store = store
+        self.now = now
+        if config == nil {
+            state = .notConfigured
+        } else if let data = store.read(Self.sessionKey), let saved = try? JSONDecoder().decode(AuthSession.self, from: data) {
+            session = saved
+            state = .signedIn(saved.user)
+        } else {
+            state = .signedOut(message: nil)
+        }
+    }
+
+    public var currentUser: AuthUser? {
+        if case .signedIn(let user) = state { return user }
+        return nil
+    }
+
