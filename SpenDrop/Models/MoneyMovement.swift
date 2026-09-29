@@ -144,3 +144,22 @@ public final class MoneyMovement {
         ExpenseSourceType(rawValue: sourceTypeRaw) ?? .manual
     }
 
+    /// Links a person and records their current name for history.
+    public func setPerson(_ newPerson: PayBookProfile?) {
+        person = newPerson
+        personNameSnapshot = newPerson?.name
+    }
+
+    /// Links an expense (e.g. the purchase a refund belongs to) and records a readable summary for history.
+    public func setLinkedExpense(_ expense: Expense?) {
+        linkedExpense = expense
+        linkedExpenseSnapshot = expense.map(MoneyMovement.snapshot(of:))
+    }
+
+    static func snapshot(of expense: Expense) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "\(expense.merchant) · \(expense.currency) \(String(format: "%.2f", expense.amount)) · \(formatter.string(from: expense.date))"
+    }
+
