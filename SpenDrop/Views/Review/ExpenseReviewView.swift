@@ -603,6 +603,37 @@ public struct ExpenseReviewView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    /// The kind to use for the chosen type: the parser's suggestion when it matches, else the type's default.
+    private var movementKind: MoneyMovementKind {
+        if let suggested = initialParsed.suggestedMovementKind, TransactionEntryType(kind: suggested) == saveAs {
+            return suggested
+        }
+        return saveAs.kinds.first ?? .otherIn
+    }
+
+    private func makeMovementDraft() -> MoneyMovementDraft {
+        MoneyMovementDraft.fromParsed(
+            amount: parsedAmount, date: date, fundingAccount: fundingAccount, merchant: merchant,
+            reference: transactionReference, channel: selectedPaymentChannel, walletSource: initialParsed.paymentSource,
+            kind: movementKind, source: .screenshot, in: modelContext
+        )
+    }
+
+    private func continueAsMovement() {
+        let draft = makeMovementDraft()
+        if let amountMinor = draft.amountMinor,
+           let match = MovementDuplicateDetector.findMatch(amountMinor: amountMinor, date: date, reference: transactionReference,
+                                                           kind: movementKind, in: modelContext) {
+            movementDuplicateMessage = "A \(match.kind.displayName.lowercased()) of \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: match.amountMinor))) on \(match.date.formatted(date: .abbreviated, time: .omitted)) is already recorded."
+        } else {
+            presentMovementDraft()
+        }
+    }
+
+    private func presentMovementDraft() {
+        pendingMovement = PrefilledMovement(draft: makeMovementDraft())
+    }
+
     private func handleSaveTapped() {
         if duplicateResult.isDuplicate {
             showingDuplicateConfirmation = true
