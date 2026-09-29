@@ -37,3 +37,145 @@ public struct SplitEditorView: View {
 
     private var amounts: [Int]? { draft.shares(totalMinor: totalMinor) }
 
+    private func format(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor), currency: currency)
+    }
+
+    public var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text("Total")
+                        Spacer()
+                        Text(format(totalMinor)).fontWeight(.semibold)
+                    }
+                    Picker("Split", selection: $draft.method) {
+                        Text("Equally").tag(SplitMethod.equal)
+                        Text("Parts").tag(SplitMethod.parts)
+                        Text("Amounts").tag(SplitMethod.amounts)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("split.method")
+                }
+
+                if draft.others.isEmpty, let lastTime {
+                    Section {
+                        Button {
+                            draft = lastTime
+                        } label: {
+                            Label("Same as last time: \(lastTime.others.map(\.name).joined(separator: ", "))", systemImage: "clock.arrow.circlepath")
+                        }
+                    }
+                }
+
+                Section {
+                    ForEach(draft.participants) { participant in
+                        participantRow(participant)
+                            .deleteDisabled(participant.isMe)
+                    }
+                    .onDelete { offsets in
+                        let ids = offsets.map { draft.participants[$0].id }
+                        ids.forEach { draft.remove(id: $0) }
+                    }
+
+                    if !frequentSuggestions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(frequentSuggestions) { person in
+                                    Button {
+                                        draft.add(person)
+                                    } label: {
+                                        Label(person.name, systemImage: "plus")
+                                            .font(.caption.weight(.semibold))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color.blue.opacity(0.12))
+                                            .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+
+                    Button {
+                        showingPersonPicker = true
+                    } label: {
+                        Label("Add Person", systemImage: "person.badge.plus")
+                    }
+                    .accessibilityIdentifier("split.addPerson")
+                } header: {
+                    Text("People")
+                } footer: {
+                    if let problem = draft.problem(totalMinor: totalMinor) {
+                        Text(problem).foregroundStyle(.orange)
+                    } else if let mine = draft.myShareMinor(totalMinor: totalMinor) {
+                        Text("✓ Balanced · Your share \(format(mine))")
+                    }
+                }
+
+                Section {
+                    Menu {
+                        Button("Me") { draft.payer = nil }
+                        ForEach(draft.others.compactMap(\.person)) { person in
+                            Button(person.name) { draft.payer = person }
+                        }
+                        Button("Someone else…") { showingPayerPicker = true }
+                    } label: {
+                        HStack {
+                            Text("Paid by").foregroundStyle(.primary)
+                            Spacer()
+                            Text(draft.payer?.name ?? "Me").foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .accessibilityIdentifier("split.paidBy")
+                } footer: {
+                    if let payer = draft.payer, let mine = draft.myShareMinor(totalMinor: totalMinor) {
+                        Text("You spent \(format(mine)) and owe \(payer.name) \(format(mine)). Nothing left your account.")
+                    } else if let mine = draft.myShareMinor(totalMinor: totalMinor) {
+                        Text("You paid \(format(totalMinor)). Others owe you \(format(totalMinor - mine)).")
+                    }
+                }
+
+                if allowsRemove {
+                    Section {
+                        Button("Remove Split", role: .destructive) {
+                            onDone(nil)
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Split with Others")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        onDone(draft)
+                        dismiss()
+                    }
+                    .disabled(!draft.isValid(totalMinor: totalMinor))
+                    .accessibilityIdentifier("split.done")
+                }
+            }
+            .sheet(isPresented: $showingPersonPicker) {
+                PayBookPickerSheet(mode: .selectPerson, onSelectPerson: { person in
+                    draft.add(person)
+                })
+            }
+            .sheet(isPresented: $showingPayerPicker) {
+                PayBookPickerSheet(mode: .selectPerson, onSelectPerson: { person in
+                    draft.payer = person
+                })
+            }
+            .task {
+                lastTime = SplitDraft.lastTimeSuggestion(merchant: merchant, excluding: editingExpenseID, in: modelContext)
+            }
+        }
+    }
+
