@@ -897,12 +897,14 @@ public struct ShareExtensionView: View {
                 fundingInstrument: viewModel.fundingInstrument
             )
             modelContext.insert(expense)
+            AccountLinker.relink(expense, in: modelContext)
+            TransactionClassifier.learn(merchant: finalMerchant, category: viewModel.selectedCategory, accountId: expense.account?.id, in: modelContext)
         }
 
         do {
             try modelContext.save()
             modelContext.processPendingChanges()
-            shareLog("[SpenDropShare][OCR] expense saved successfully: \(finalMerchant) RM\(parsedAmount), channel: \(viewModel.selectedPaymentChannel.displayName), funding: \(viewModel.fundingAccount)")
+            shareLog("[SpenDropShare][OCR] expense saved successfully")
         } catch {
             shareLog("[SpenDropShare][OCR][ERROR] failed to save expense: \(error.localizedDescription)")
         }
