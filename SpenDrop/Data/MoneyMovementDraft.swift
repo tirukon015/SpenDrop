@@ -38,3 +38,15 @@ public enum TransactionEntryType: String, CaseIterable, Identifiable {
         }
     }
 
+    public init(kind: MoneyMovementKind) {
+        switch kind.direction {
+        case .moneyIn: self = .moneyIn
+        case .moneyOut: self = .moneyOut
+        case .internal: self = .transfer
+        }
+    }
+}
+
+/// Editable, validated form state for a Money In / Money Out / Transfer record.
+/// Keeps validation out of the view so it can be tested.
+public struct MoneyMovementDraft {
