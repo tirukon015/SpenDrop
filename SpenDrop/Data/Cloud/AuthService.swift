@@ -130,3 +130,19 @@ public final class AuthService {
 
     // MARK: Google (OAuth + PKCE)
 
+    public struct PKCE: Equatable {
+        public let verifier: String
+        public let challenge: String
+
+        public static func make() -> PKCE {
+            var bytes = [UInt8](repeating: 0, count: 48)
+            _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+            let verifier = Data(bytes).base64URLEncoded()
+            return PKCE(verifier: verifier, challenge: challenge(for: verifier))
+        }
+
+        public static func challenge(for verifier: String) -> String {
+            Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncoded()
+        }
+    }
+
