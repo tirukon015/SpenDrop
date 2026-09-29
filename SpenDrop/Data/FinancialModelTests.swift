@@ -366,3 +366,99 @@ public struct FinancialModelTests {
                   expected: "0 merged, both kept", actual: "merged=\(merged) expenses=\(count(Expense.self, in: ctx))")
         }
 
+        // MARK: Backup V2
+        do {
+            let source = context()
+            let maybank = Account(name: "Maybank", type: .bank), tng = Account(name: "Touch 'n Go", type: .eWallet)
+            let bijoy = PayBookProfile(name: "Bijoy"), shadin = PayBookProfile(name: "Shadin")
+            [maybank, tng].forEach { source.insert($0) }
+            [bijoy, shadin].forEach { source.insert($0) }
+            bijoy.isFrequent = true
+            shadin.isArchived = true
+            let dinner = sharedExpense(source, amount: 30, payer: bijoy, people: [bijoy])
+            dinner.account = maybank
+            let purchase = Expense(amount: 100, merchant: "Uniqlo")
+            source.insert(purchase)
+            let refund = MoneyMovement(kind: .refund, amountMinor: 3000, linkedExpense: purchase, account: maybank)
+            let loan = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: shadin, account: maybank)
+            let transfer = MoneyMovement(kind: .ownTransfer, amountMinor: 20000, account: maybank, counterAccount: tng)
+            [refund, loan, transfer].forEach { source.insert($0) }
+            try? source.save()
+
+            let payload = UserDataBackupService.makePayload(from: source)
+            let data = try? UserDataBackupService.makeEncoder().encode(payload)
+            let decoded = data.flatMap { try? UserDataBackupService.makeDecoder().decode(UserDataBackupService.BackupPayload.self, from: $0) }
+            // Updated in Phase 7: the export writes the CURRENT format (3 since ClassificationRule was added).
+            check("Backup V2+: version marker and all collections exported",
+                  decoded?.version == UserDataBackupService.BackupPayload.currentVersion && (decoded?.version ?? 0) >= 2 && decoded?.accounts?.count == 2 && decoded?.moneyMovements?.count == 3 &&
+                  decoded?.expenses.first { $0.id == dinner.id }?.shares?.count == 2,
+                  expected: "current version (>= 2), 2 accounts, 3 movements, 2 shares",
+                  actual: "version=\(decoded?.version ?? -1) accounts=\(decoded?.accounts?.count ?? -1) movements=\(decoded?.moneyMovements?.count ?? -1)")
+
+            let target = context()
+            let first = decoded.map { UserDataBackupService.applyBackupPayload($0, into: target) }
+            try? target.save()
+            let rDinner = fetch(Expense.self, in: target).first { $0.id == dinner.id }
+            let rRefund = fetch(MoneyMovement.self, in: target).first { $0.id == refund.id }
+            let rLoan = fetch(MoneyMovement.self, in: target).first { $0.id == loan.id }
+            let rTransfer = fetch(MoneyMovement.self, in: target).first { $0.id == transfer.id }
+            let rBijoy = fetch(PayBookProfile.self, in: target).first { $0.id == bijoy.id }
+            let rShadin = fetch(PayBookProfile.self, in: target).first { $0.id == shadin.id }
+            let relationshipsOK = rDinner?.account?.id == maybank.id && rDinner?.payer?.id == bijoy.id && rDinner?.paidByMe == false &&
+                rDinner?.splitMethod == .equal && rDinner?.shares.count == 2 &&
+                rDinner?.shares.first { !$0.isMe }?.person?.id == bijoy.id && rDinner?.spendingMinor == 1500 &&
+                rRefund?.linkedExpense?.id == purchase.id && rRefund?.kind == .refund &&
+                rLoan?.person?.id == shadin.id && rTransfer?.account?.id == maybank.id && rTransfer?.counterAccount?.id == tng.id &&
+                rBijoy?.isFrequent == true && rShadin?.isArchived == true
+            check("Backup V2: round trip restores every relationship by id", relationshipsOK,
+                  expected: "account, payer, shares, refund link, loan person, transfer accounts, person flags",
+                  actual: "dinnerAccount=\(rDinner?.account?.name ?? "nil") payer=\(rDinner?.payer?.name ?? "nil") shares=\(rDinner?.shares.count ?? -1) refundLink=\(rRefund?.linkedExpense != nil) transfer=\(rTransfer?.account?.name ?? "nil")->\(rTransfer?.counterAccount?.name ?? "nil") frequent=\(rBijoy?.isFrequent ?? false)")
+
+            let second = decoded.map { UserDataBackupService.applyBackupPayload($0, into: target) }
+            try? target.save()
+            let idempotent = count(Expense.self, in: target) == 2 && count(ExpenseShare.self, in: target) == 2 &&
+                count(MoneyMovement.self, in: target) == 3 && count(Account.self, in: target) == 2 && count(PayBookProfile.self, in: target) == 2 &&
+                second?.expensesAdded == 0 && second?.movementsAdded == 0 && second?.accountsAdded == 0 && first?.missingReferences == 0
+            check("Backup V2: re-import updates existing ids, adds nothing", idempotent,
+                  expected: "same counts, 0 added", actual: "expenses=\(count(Expense.self, in: target)) shares=\(count(ExpenseShare.self, in: target)) movements=\(count(MoneyMovement.self, in: target)) accounts=\(count(Account.self, in: target))")
+
+            // A version-1 backup must never clear version-2 data on an existing record.
+            let v1Expense = UserDataBackupService.ExpenseDTO(id: dinner.id, amount: dinner.amount, merchant: dinner.merchant, categoryRaw: dinner.categoryRaw,
+                                                             paymentSourceRaw: dinner.paymentSourceRaw, date: dinner.date, createdAt: dinner.createdAt)
+            let v1Payload = UserDataBackupService.BackupPayload(version: 1, expenses: [v1Expense], paybookProfiles: [])
+            UserDataBackupService.applyBackupPayload(v1Payload, into: target)
+            try? target.save()
+            check("Backup V1 import does not clear splits/payer/account", rDinner?.shares.count == 2 && rDinner?.payer?.id == bijoy.id && rDinner?.account?.id == maybank.id,
+                  expected: "shares 2, payer and account kept", actual: "shares=\(rDinner?.shares.count ?? -1) payer=\(rDinner?.payer?.name ?? "nil")")
+        }
+        do {
+            // Accounts are matched by name when ids differ, so a device never ends up with two "Maybank" accounts.
+            let ctx = context()
+            let local = Account(name: "Maybank", type: .bank)
+            ctx.insert(local)
+            try? ctx.save()
+            let backupAccount = Account(name: "maybank", type: .bank)
+            let expense = Expense(amount: 12, merchant: "Kedai", fundingAccount: "Maybank")
+            let tmp = context()
+            tmp.insert(backupAccount); tmp.insert(expense)
+            expense.account = backupAccount
+            try? tmp.save()
+            let payload = UserDataBackupService.makePayload(from: tmp)
+            let summary = UserDataBackupService.applyBackupPayload(payload, into: ctx)
+            try? ctx.save()
+            let imported = fetch(Expense.self, in: ctx).first
+            check("Backup import: same-named account is reused (no duplicate Maybank)",
+                  count(Account.self, in: ctx) == 1 && imported?.account === local && summary.accountsMatchedByName == 1,
+                  expected: "1 account, expense linked to local", actual: "accounts=\(count(Account.self, in: ctx)) linkedLocal=\(imported?.account === local)")
+        }
+        do {
+            // Updated in Phase 7: "future" means one above the current format (format 3 is now supported).
+            let future = UserDataBackupService.BackupPayload(version: UserDataBackupService.BackupPayload.currentVersion + 1, expenses: [], paybookProfiles: [])
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("SpenDropFutureBackup-\(UUID().uuidString).json")
+            try? UserDataBackupService.makeEncoder().encode(future).write(to: url)
+            var rejected = false
+            do { _ = try UserDataBackupService.importFromJSON(at: url, into: context()) } catch { rejected = true }
+            try? FileManager.default.removeItem(at: url)
+            check("Backup from a newer app version is refused, not half-imported", rejected, expected: "refused", actual: rejected ? "refused" : "imported")
+        }
+
