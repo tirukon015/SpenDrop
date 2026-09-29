@@ -102,3 +102,25 @@ public struct MoneyMovementDraft {
         self.paymentChannel = movement.paymentChannel
     }
 
+    /// Draft for a scanned screenshot the user chose to save as Money In / Money Out / Transfer.
+    /// The account is resolved from the detected funding account (never invented; Unknown stays empty).
+    public static func fromParsed(amount: Double, date: Date, fundingAccount: String, merchant: String, reference: String?,
+                                  channel: PaymentChannel, walletSource: PaymentSource?, kind: MoneyMovementKind,
+                                  source: ExpenseSourceType, in context: ModelContext) -> MoneyMovementDraft {
+        var draft = MoneyMovementDraft(entryType: TransactionEntryType(kind: kind))
+        draft.kind = kind
+        draft.amountText = String(format: "%.2f", amount)
+        draft.date = date
+        draft.account = AccountLinker.resolveAccount(named: fundingAccount, in: context)
+        if kind == .ownTransfer, let wallet = walletSource, [.touchNGo, .grabPay, .boost].contains(wallet) {
+            let to = AccountLinker.resolveAccount(named: wallet.rawValue, in: context)
+            if to?.id != draft.account?.id { draft.counterAccount = to }
+        }
+        let trimmed = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.note = trimmed == "Unknown" ? "" : trimmed
+        draft.transactionReference = reference
+        draft.sourceType = source
+        draft.paymentChannel = channel
+        return draft
+    }
+
