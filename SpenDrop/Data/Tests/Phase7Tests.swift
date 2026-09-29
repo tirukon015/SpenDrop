@@ -49,3 +49,24 @@ public struct Phase7Tests {
                     expected: "generic transport, unknown other", actual: "\(generic.source)/\(generic.category), \(unknown.source)/\(unknown.category)")
         }
 
+        // MARK: Direction detection
+        do {
+            let cases: [(String, MoneyMovementKind?)] = [
+                ("DuitNow Transfer\nYou have received RM50.00 from BIJOY", .otherIn),
+                ("Salary has been credited to your account RM3,000", .income),
+                ("Refund processed RM30.00 Uniqlo", .refund),
+                ("Reload successful\nTouch 'n Go eWallet RM200", .ownTransfer),
+                ("Payment successful\nPaid to McDonald's RM18.50", nil),
+                ("Received from Ali\nTransfer to Bob RM20", nil)
+            ]
+            let actual = cases.map { DirectionDetector.detect(text: $0.0).kind }
+            t.check("Direction: received/salary/refund/top-up detected; payments and mixed wording stay unsuggested",
+                    actual == cases.map(\.1), expected: "\(cases.map { $0.1?.rawValue ?? "nil" })", actual: "\(actual.map { $0?.rawValue ?? "nil" })")
+            let text = "Maybank2u\nDuitNow Transfer\nYou have received\nRM 50.00\nfrom BIJOY DAS\n29 Sep 2026\nReference: MBB123"
+            let ocr = OCRResult(fullText: text, lines: text.components(separatedBy: "\n").map { RecognizedTextLine(text: $0, confidence: 0.95) }, averageConfidence: 0.95)
+            let parsed = TransactionParser.shared.parse(ocrResult: ocr)
+            t.check("Parser: incoming screenshot keeps its amount and suggests Money In (for review)",
+                    parsed.amount == 50 && parsed.suggestedMovementKind == .otherIn && parsed.directionReason != nil,
+                    expected: "RM50, otherIn", actual: "RM\(parsed.amount ?? 0), \(parsed.suggestedMovementKind?.rawValue ?? "nil")")
+        }
+
