@@ -18,3 +18,27 @@ public final class ClassificationRule {
     public var createdAt: Date
     public var updatedAt: Date
 
+    public init(
+        id: UUID = UUID(),
+        merchantKey: String,
+        categoryRaw: String? = nil,
+        suggestedTypeRaw: String? = nil,
+        accountId: UUID? = nil,
+        hitCount: Int = 1,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.merchantKey = merchantKey
+        self.categoryRaw = categoryRaw
+        self.suggestedTypeRaw = suggestedTypeRaw
+        self.accountId = accountId
+        self.hitCount = hitCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public var category: ExpenseCategory? {
+        categoryRaw.flatMap(ExpenseCategory.init(rawValue:))
+    }
+}
