@@ -735,6 +735,11 @@
 						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
 					};
+					B90E2FADC45B809884FCDFE5 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 5106A5C44FB8AE42B1DD5394;
+					};
 					7D9143BC9561C13DFD670940 = {
 						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
@@ -756,6 +761,7 @@
 			targets = (
 				5106A5C44FB8AE42B1DD5394 /* SpenDrop */,
 				7D9143BC9561C13DFD670940 /* SpenDropShare */,
+				B90E2FADC45B809884FCDFE5 /* SpenDropUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -766,6 +772,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A4D89D0907654E6E67A93E3 /* Assets.xcassets in Resources */,
+				9B79C564E32B7E6124B9079F /* CloudConfig in Resources */,
 				BD6723B8461B6E2B5D59224E /* sample_screenshot.png in Resources */,
 				24F985E68177D0C757416D85 /* sample_photo.jpg in Resources */,
 				5DF085C89F59DE191C56E9E3 /* sample_camera.heic in Resources */,
@@ -773,6 +780,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		950D1DF8992EF24163B90678 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1DB1463FD9A48C3313EDB761 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
