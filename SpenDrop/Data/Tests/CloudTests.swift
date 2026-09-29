@@ -341,3 +341,176 @@ public struct CloudBackupTests {
         try? ctx.save()
     }
 
+    public static func runAllTests() async -> [TestCaseResult] {
+        var results: [TestCaseResult] = []
+        let t = TestKit(suite: "Cloud Backup") { results.append($0) }
+
+        // Upload: path, headers, metadata, append-only, change detection
+        do {
+            let server = FakeSupabase()
+            let auth = await signedInAuth(server)
+            let ctx = TestKit.context()
+            sampleData(ctx)
+            let cloud = makeCloud(auth: auth, server: server, context: ctx)
+            let ok = await cloud.backupNow()
+            let upload = server.requests.first { $0.httpMethod == "POST" && $0.url!.path.hasPrefix("/storage/v1/object/backups/") }
+            let row = server.rows.first ?? [:]
+            let path = row["object_path"] as? String ?? ""
+            let uploaded = server.objects[path].flatMap { try? UserDataBackupService.makeDecoder().decode(UserDataBackupService.BackupPayload.self, from: $0) }
+            t.check("Backup: file uploaded to <user>/<device>/ with the user's token, never overwriting (x-upsert false)",
+                    ok && path.hasPrefix("user-123/device-A/") && upload?.value(forHTTPHeaderField: "Authorization") == "Bearer access-1" &&
+                    upload?.value(forHTTPHeaderField: "x-upsert") == "false" && uploaded?.expenses.count == 1 && cloud.status == .upToDate,
+                    expected: "uploaded, upToDate", actual: "ok=\(ok) path=\(path) status=\(cloud.status)")
+            t.check("Backup metadata: device, app/schema/backup version, counts (user id assigned by the server)",
+                    row["device_id"] as? String == "device-A" && row["backup_version"] as? Int == 3 && row["schema_version"] as? String == "3.0.0" &&
+                    row["expenses_count"] as? Int == 1 && row["people_count"] as? Int == 1 && row["accounts_count"] as? Int == 1 &&
+                    row["movements_count"] as? Int == 1 && row["user_id"] == nil && cloud.lastBackupDate != nil,
+                    expected: "complete metadata", actual: "\(row.keys.sorted())")
+
+            let uploadsBefore = server.objects.count
+            _ = await cloud.backupNow()
+            let unchanged = server.objects.count
+            ctx.insert(Expense(amount: 3, merchant: "Kopi"))
+            try? ctx.save()
+            _ = await cloud.backupNow()
+            t.check("Unchanged data is not re-uploaded; a change creates a NEW backup (old one kept)",
+                    uploadsBefore == 1 && unchanged == 1 && server.objects.count == 2 && server.rows.count == 2,
+                    expected: "1, 1, 2", actual: "\(uploadsBefore), \(unchanged), \(server.objects.count)")
+        }
+
+        // Not signed in / offline / failures never affect local data
+        do {
+            let ctx = TestKit.context()
+            sampleData(ctx)
+            let server = FakeSupabase()
+            let signedOut = AuthService(config: AuthTests.config, transport: server, store: MemorySecureStore())
+            let c1 = makeCloud(auth: signedOut, server: server, context: ctx)
+            _ = await c1.backupNow()
+            let unconfigured = makeCloud(auth: AuthService(config: nil, transport: server, store: MemorySecureStore()), server: server, context: ctx)
+            _ = await unconfigured.backupNow()
+            t.check("Not signed in / not configured: no upload, clear status", c1.status == .notSignedIn && unconfigured.status == .notConfigured &&
+                    server.requests.isEmpty, expected: "notSignedIn, notConfigured, 0 requests", actual: "\(c1.status) \(unconfigured.status) \(server.requests.count)")
+
+            let s2 = FakeSupabase()
+            let c2 = makeCloud(auth: await signedInAuth(s2), server: s2, context: ctx)
+            c2.isOnline = false
+            let requestsBefore = s2.requests.count
+            _ = await c2.backupNow()
+            t.check("Offline: waits for the network, no request, local data untouched",
+                    c2.status == .waitingForNetwork && s2.requests.count == requestsBefore && TestKit.count(Expense.self, in: ctx) == 1,
+                    expected: "waitingForNetwork", actual: "\(c2.status)")
+
+            let s3 = FakeSupabase()
+            let c3 = makeCloud(auth: await signedInAuth(s3), server: s3, context: ctx)
+            s3.fail("/storage/v1/object/backups/", status: 500)
+            let failed = await c3.backupNow()
+            let failedStatus = c3.status
+            let retried = await c3.backupNow()
+            t.check("Upload failure: 'Backup failed' shown, local data safe; Retry succeeds",
+                    !failed && failedStatus.isFailure && retried && c3.status == .upToDate && s3.objects.count == 1 && TestKit.count(Expense.self, in: ctx) == 1,
+                    expected: "failed then upToDate", actual: "\(failedStatus) → \(c3.status)")
+
+            let s4 = FakeSupabase()
+            let c4 = makeCloud(auth: await signedInAuth(s4), server: s4, context: ctx)
+            s4.fail("/rest/v1/backups", status: 500)
+            _ = await c4.backupNow()
+            t.check("Metadata failure: the uploaded file is removed again (no orphan), status failed",
+                    s4.objects.isEmpty && s4.rows.isEmpty && c4.status.isFailure &&
+                    s4.requests.contains { $0.httpMethod == "DELETE" && $0.url!.path == "/storage/v1/object/backups" },
+                    expected: "cleaned up", actual: "objects=\(s4.objects.count) status=\(c4.status)")
+
+            let s5 = FakeSupabase()
+            let c5 = makeCloud(auth: await signedInAuth(s5), server: s5, context: ctx)
+            s5.fail("/storage/v1/object/backups/", status: nil)          // connection lost mid-upload
+            _ = await c5.backupNow()
+            let interrupted = c5.status
+            let resumed = await c5.backupNow()
+            t.check("Interrupted upload: waits for network, then completes on retry",
+                    interrupted == .waitingForNetwork && resumed && s5.objects.count == 1,
+                    expected: "waiting → uploaded", actual: "\(interrupted) → \(c5.status)")
+        }
+
+        // List + restore
+        do {
+            let server = FakeSupabase()
+            let auth = await signedInAuth(server)
+            let source = TestKit.context()
+            sampleData(source)
+            _ = await makeCloud(auth: auth, server: server, context: source).backupNow()
+
+            let target = TestKit.context()
+            let localOnly = Expense(amount: 9, merchant: "Only on this phone")
+            target.insert(localOnly)
+            try? target.save()
+            var safetyCalls = 0
+            let cloud = makeCloud(auth: auth, server: server, context: target, safety: { _ in safetyCalls += 1; return true })
+            let list = (try? await cloud.listBackups()) ?? []
+            t.check("Restore list: backups decoded with server timestamps (microseconds)", list.count == 1 && list.first?.expensesCount == 1,
+                    expected: "1 backup", actual: "\(list.count)")
+
+            var summary: UserDataBackupService.ImportSummary?
+            if let record = list.first { summary = try? await cloud.restore(record) }
+            let dinner = TestKit.fetch(Expense.self, in: target).first { $0.merchant == "Dinner" }
+            t.check("Restore: safety copy first, then merge by id — local-only record kept, links and rules restored",
+                    safetyCalls == 1 && summary?.expensesAdded == 1 && TestKit.count(Expense.self, in: target) == 2 &&
+                    TestKit.fetch(Expense.self, in: target).contains { $0.id == localOnly.id } &&
+                    dinner?.shares.count == 2 && dinner?.payer?.name == "Bijoy" && dinner?.account?.name == "Maybank" &&
+                    TestKit.count(MoneyMovement.self, in: target) == 1 && TestKit.count(ClassificationRule.self, in: target) == 1,
+                    expected: "2 expenses, links intact", actual: "safety=\(safetyCalls) expenses=\(TestKit.count(Expense.self, in: target)) shares=\(dinner?.shares.count ?? -1)")
+
+            if let record = list.first { _ = try? await cloud.restore(record) }
+            t.check("Restoring the same backup again adds nothing (duplicate-safe)",
+                    TestKit.count(Expense.self, in: target) == 2 && TestKit.count(ExpenseShare.self, in: target) == 2 && TestKit.count(PayBookProfile.self, in: target) == 1,
+                    expected: "same counts", actual: "\(TestKit.count(Expense.self, in: target))/\(TestKit.count(ExpenseShare.self, in: target))")
+
+            // Safety copy failure, future format, interrupted download → nothing applied
+            let blocked = TestKit.context()
+            let noSafety = makeCloud(auth: auth, server: server, context: blocked, safety: { _ in false })
+            var e1: CloudError?
+            if let record = list.first { do { _ = try await noSafety.restore(record) } catch { e1 = error as? CloudError } }
+
+            let future = UserDataBackupService.BackupPayload(version: UserDataBackupService.BackupPayload.currentVersion + 1, expenses: [], paybookProfiles: [])
+            server.objects["user-123/device-A/future.json"] = try? UserDataBackupService.makeEncoder().encode(future)
+            let futureRecord = CloudBackupRecord(id: UUID(), deviceId: "device-A", deviceName: "iPhone", appVersion: "9", schemaVersion: "9", backupVersion: 99,
+                                                 createdAt: Date(), objectPath: "user-123/device-A/future.json", expensesCount: 0, peopleCount: 0,
+                                                 accountsCount: 0, movementsCount: 0, sizeBytes: 0)
+            var e2: CloudError?
+            do { _ = try await noSafety.restore(futureRecord) } catch { e2 = error as? CloudError }
+
+            server.fail("/storage/v1/object/authenticated/", status: nil)
+            var e3: CloudError?
+            if let record = list.first { do { _ = try await cloud.restore(record) } catch { e3 = error as? CloudError } }
+            t.check("Restore refuses safely: no safety copy / newer format / interrupted download → nothing changed",
+                    e1 == .safetyBackupFailed && TestKit.count(Expense.self, in: blocked) == 0 &&
+                    e2 == .unsupportedBackup(UserDataBackupService.BackupPayload.currentVersion + 1) && e3 == .offline &&
+                    TestKit.count(Expense.self, in: target) == 2,
+                    expected: "3 safe refusals", actual: "\(String(describing: e1)) \(String(describing: e2)) \(String(describing: e3))")
+        }
+
+        // Full round trip: cloud backup → wipe → cloud restore
+        do {
+            let server = FakeSupabase()
+            let auth = await signedInAuth(server)
+            let original = TestKit.context()
+            sampleData(original)
+            let originalSummary = FinancialCalculator.summary(expenses: TestKit.fetch(Expense.self, in: original), movements: TestKit.fetch(MoneyMovement.self, in: original))
+            let originalIDs = Set(TestKit.fetch(Expense.self, in: original).map(\.id) + TestKit.fetch(MoneyMovement.self, in: original).map(\.id))
+            _ = await makeCloud(auth: auth, server: server, context: original).backupNow()
+
+            let wiped = TestKit.context()        // empty "new phone"
+            let cloud = makeCloud(auth: auth, server: server, context: wiped)
+            if let record = try? await cloud.listBackups().first { _ = try? await cloud.restore(record) }
+            let restoredExpenses = TestKit.fetch(Expense.self, in: wiped)
+            let restoredMovements = TestKit.fetch(MoneyMovement.self, in: wiped)
+            let restoredSummary = FinancialCalculator.summary(expenses: restoredExpenses, movements: restoredMovements)
+            let bijoy = TestKit.fetch(PayBookProfile.self, in: wiped).first
+            t.check("Cloud round trip onto an empty device: same ids, links, balances and totals",
+                    Set(restoredExpenses.map(\.id) + restoredMovements.map(\.id)) == originalIDs && restoredSummary == originalSummary &&
+                    bijoy.map { PersonLedger.balances(for: $0)["RM"] } == 15000 - 1500 &&
+                    restoredMovements.first?.account?.name == "Maybank" && TestKit.count(ClassificationRule.self, in: wiped) == 1,
+                    expected: "identical", actual: "ids=\(Set(restoredExpenses.map(\.id) + restoredMovements.map(\.id)) == originalIDs) totals=\(restoredSummary == originalSummary) bijoy=\(bijoy.map { PersonLedger.balances(for: $0)["RM"] ?? 0 } ?? 0)")
+        }
+
+        return results
+    }
+}
