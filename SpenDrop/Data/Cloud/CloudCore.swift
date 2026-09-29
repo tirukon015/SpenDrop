@@ -150,3 +150,25 @@ enum CloudJSON {
     }
 }
 
+// MARK: - Secure storage (Keychain)
+
+public protocol SecureStore: AnyObject {
+    func read(_ key: String) -> Data?
+    @discardableResult func write(_ data: Data, for key: String) -> Bool
+    func delete(_ key: String)
+}
+
+/// Stores the auth session in the Keychain (this device only). Never in SwiftData or UserDefaults.
+public final class KeychainStore: SecureStore {
+    private let service: String
+
+    public init(service: String) {
+        self.service = service
+    }
+
+    private func query(_ key: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: key]
+    }
+
