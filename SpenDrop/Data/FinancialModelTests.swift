@@ -40,3 +40,14 @@ public struct FinancialModelTests {
             return expense
         }
 
+        // MARK: Money conversion
+        do {
+            let cases: [(Double, Int)] = [(0, 0), (0.01, 1), (7.50, 750), (30, 3000), (100.99, 10099), (0.1 + 0.2, 30), (19.999, 2000), (42.90, 4290)]
+            let actual = cases.map { Money.minorUnits(from: $0.0) }
+            check("Money: Double -> sen", actual == cases.map(\.1),
+                  expected: "\(cases.map(\.1))", actual: "\(actual)")
+            let parsed = ["7.50", "RM 1,234.5", "0.01", "100.99", "abc", ""].map { Money.minorUnits(parsing: $0) }
+            check("Money: text -> sen (exact decimal)", parsed == [750, 123450, 1, 10099, nil, nil],
+                  expected: "[750, 123450, 1, 10099, nil, nil]", actual: "\(parsed)")
+        }
+
