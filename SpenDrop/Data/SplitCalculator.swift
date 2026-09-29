@@ -17,3 +17,17 @@ public enum SplitCalculator {
         }
     }
 
+    public enum SplitError: Error, Equatable {
+        case nonPositiveTotal
+        case tooFewParticipants
+        case missingMe
+        case moreThanOneMe
+        case invalidParts(index: Int)
+        case missingAmount(index: Int)
+        case negativeAmount(index: Int)
+        /// Positive = shares add up to MORE than the total; negative = less. Never silently adjusted.
+        case amountsDoNotMatchTotal(differenceMinor: Int)
+    }
+
+    public static let maxParts = 99
+
