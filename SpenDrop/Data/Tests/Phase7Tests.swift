@@ -171,3 +171,28 @@ public struct Phase7Tests {
                     actual: "\(shared)")
         }
 
+        // MARK: Backup V3 (rules) and V2 payloads
+        do {
+            let source = TestKit.context()
+            TransactionClassifier.learn(merchant: "Grab", category: .transport, in: source)
+            try? source.save()
+            let payload = UserDataBackupService.makePayload(from: source)
+            let data = try? UserDataBackupService.makeEncoder().encode(payload)
+            let decoded = data.flatMap { try? UserDataBackupService.makeDecoder().decode(UserDataBackupService.BackupPayload.self, from: $0) }
+            let target = TestKit.context()
+            TransactionClassifier.learn(merchant: "grab", category: .food, in: target, now: Date.distantPast)   // older local rule, same merchant
+            try? target.save()
+            let summary = decoded.map { UserDataBackupService.applyBackupPayload($0, into: target) }
+            try? target.save()
+            let rules = TestKit.fetch(ClassificationRule.self, in: target)
+            t.check("Backup V3: rules exported and restored; same merchant merged (no duplicate), newer backup wins",
+                    decoded?.version == 3 && decoded?.classificationRules?.count == 1 && summary?.rulesRestored == 1 &&
+                    rules.count == 1 && rules.first?.category == .transport,
+                    expected: "v3, 1 rule, transport", actual: "v\(decoded?.version ?? 0) rules=\(rules.count) cat=\(rules.first?.categoryRaw ?? "nil")")
+
+            let v2 = UserDataBackupService.BackupPayload(version: 2, expenses: [], paybookProfiles: [])
+            UserDataBackupService.applyBackupPayload(v2, into: target)
+            t.check("A version-2 backup (no rules) leaves existing rules untouched", TestKit.count(ClassificationRule.self, in: target) == 1,
+                    expected: "1 rule", actual: "\(TestKit.count(ClassificationRule.self, in: target))")
+        }
+
