@@ -100,3 +100,21 @@ public struct HardeningTests {
                     passed, expected: "identical, second import adds nothing", actual: actual)
         }
 
+        // MARK: Transfers both ways
+        do {
+            let ctx = TestKit.context()
+            let maybank = Account(name: "Maybank", type: .bank), tng = Account(name: "Touch 'n Go", type: .eWallet)
+            ctx.insert(maybank); ctx.insert(tng)
+            let there = MoneyMovement(kind: .ownTransfer, amountMinor: 20000, account: maybank, counterAccount: tng)
+            let back = MoneyMovement(kind: .ownTransfer, amountMinor: 5000, account: tng, counterAccount: maybank)
+            ctx.insert(there); ctx.insert(back)
+            try? ctx.save()
+            let m = FinancialCalculator.accountActivity(for: maybank), n = FinancialCalculator.accountActivity(for: tng)
+            let global = FinancialCalculator.summary(expenses: [], movements: [there, back])
+            var same = MoneyMovementDraft(entryType: .transfer); same.amountText = "1"; same.account = tng; same.counterAccount = tng
+            t.check("Transfers Maybank → TNG and TNG → Maybank: per-account in/out, global cash flow and spending zero; same account rejected",
+                    m.outMinor == 20000 && m.inMinor == 5000 && n.inMinor == 20000 && n.outMinor == 5000 && global == FinancialCalculator.Summary() &&
+                    same.issues == [.sameAccount],
+                    expected: "Maybank -200/+50, TNG +200/-50, global 0", actual: "maybank \(m) tng \(n) global \(global)")
+        }
+
