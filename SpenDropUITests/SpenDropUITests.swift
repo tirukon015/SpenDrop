@@ -93,3 +93,29 @@ final class SpenDropUITests: XCTestCase {
         snap("Transactions after expense")
     }
 
+    func test03_SplitExpenseCreatesBalance() {
+        openAdd("Expense")
+        typeAmount("30")
+        app.buttons["addExpense.split"].tap()
+        app.buttons["split.addPerson"].tap()
+        let newPerson = app.buttons["New Person"]
+        XCTAssertTrue(newPerson.waitForExistence(timeout: 5))
+        newPerson.tap()
+        let name = app.alerts.textFields.firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Bijoy")
+        app.alerts.buttons["Add"].tap()
+        XCTAssertTrue(app.staticTexts["Bijoy"].waitForExistence(timeout: 5))
+        snap("Split editor")
+        app.buttons["split.done"].tap()
+        XCTAssertTrue(app.staticTexts["Shared · 2 people"].waitForExistence(timeout: 5))
+        app.buttons["Save Expense"].tap()
+
+        tab("PayBook")
+        XCTAssertTrue(app.staticTexts["owes you"].waitForExistence(timeout: 5))
+        snap("PayBook balances")
+        app.staticTexts["Bijoy"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Bijoy owes you RM 15.00"].waitForExistence(timeout: 5))
+        snap("Person detail")
+    }
+
