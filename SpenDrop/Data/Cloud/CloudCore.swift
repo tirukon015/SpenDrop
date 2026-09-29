@@ -133,3 +133,20 @@ enum CloudJSON {
         return nil
     }
 
+    /// Maps a Supabase error body to a user-facing error.
+    static func error(status: Int, data: Data) -> CloudError {
+        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        let code = (body["error_code"] as? String) ?? (body["error"] as? String) ?? (body["code"] as? String) ?? ""
+        let message = (body["msg"] as? String) ?? (body["error_description"] as? String) ?? (body["message"] as? String) ?? ""
+        let lower = (code + " " + message).lowercased()
+        if lower.contains("invalid_credentials") || lower.contains("invalid login credentials") || (code == "invalid_grant" && lower.contains("credentials")) {
+            return .invalidCredentials
+        }
+        if lower.contains("email_not_confirmed") || lower.contains("email not confirmed") { return .emailNotConfirmed }
+        if lower.contains("user_already_exists") || lower.contains("already registered") || lower.contains("email_exists") { return .emailAlreadyRegistered }
+        if lower.contains("weak_password") || lower.contains("password should") { return .weakPassword(message) }
+        if lower.contains("refresh_token") || lower.contains("jwt expired") || status == 401 { return .sessionExpired }
+        return .server(status: status, message: message)
+    }
+}
+
