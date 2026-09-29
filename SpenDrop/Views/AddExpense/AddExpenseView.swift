@@ -5,6 +5,7 @@ import PhotosUI
 public struct AddExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Account.sortIndex) private var accounts: [Account]
 
     @State private var amountText: String = ""
     @State private var merchant: String = ""
@@ -15,6 +16,11 @@ public struct AddExpenseView: View {
     @State private var date: Date = Date()
     @State private var notes: String = ""
     @State private var currency: String = "RM"
+    @State private var entryType: TransactionEntryType = .expense
+    // Optional split (Phase 4). nil = normal expense.
+    @State private var splitDraft: SplitDraft?
+    @State private var showingSplitEditor = false
+    @State private var categoryTouched = false
 
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
