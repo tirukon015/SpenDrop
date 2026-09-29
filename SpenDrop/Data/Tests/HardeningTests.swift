@@ -118,3 +118,21 @@ public struct HardeningTests {
                     expected: "Maybank -200/+50, TNG +200/-50, global 0", actual: "maybank \(m) tng \(n) global \(global)")
         }
 
+        // MARK: Accounts: rename, archive, unarchive keep history
+        do {
+            let ctx = TestKit.context()
+            let bank = Account(name: "Maybank", type: .bank)
+            ctx.insert(bank)
+            let e = Expense(amount: 8, merchant: "Kopi", fundingAccount: "Maybank"); ctx.insert(e); e.account = bank
+            try? ctx.save()
+            bank.name = "Maybank Savings"
+            bank.isArchived = true
+            let hiddenFromPickers = !AccountLinker.fundingOptions(base: ["Other"], accounts: [bank]).contains("Maybank Savings")
+            let historyKept = bank.expenses.count == 1 && e.fundingAccount == "Maybank" && e.account === bank
+            bank.isArchived = false
+            let visibleAgain = AccountLinker.fundingOptions(base: ["Other"], accounts: [bank]).contains("Maybank Savings")
+            t.check("Account rename/archive/unarchive: history and original text kept; archived hidden from pickers",
+                    hiddenFromPickers && historyKept && visibleAgain, expected: "hidden, kept, visible",
+                    actual: "hidden=\(hiddenFromPickers) kept=\(historyKept) visible=\(visibleAgain)")
+        }
+
