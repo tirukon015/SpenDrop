@@ -51,3 +51,57 @@ public struct FinancialModelTests {
                   expected: "[750, 123450, 1, 10099, nil, nil]", actual: "\(parsed)")
         }
 
+        // MARK: Split calculator
+        do {
+            let me = SplitCalculator.Participant(isMe: true)
+            let other = SplitCalculator.Participant()
+            func split(_ total: Int, _ method: SplitMethod, _ ps: [SplitCalculator.Participant], iPaid: Bool = true) -> Result<[Int], SplitCalculator.SplitError> {
+                SplitCalculator.calculate(totalMinor: total, method: method, participants: ps, iPaid: iPaid)
+            }
+
+            let equal = split(3000, .equal, [me, other, other, other])
+            check("Split: equal RM30 / 4", equal == .success([750, 750, 750, 750]), expected: "750 x4", actual: "\(equal)")
+
+            let odd = split(1000, .equal, [other, me, other])
+            check("Split: odd sen goes to Me when I paid", odd == .success([333, 334, 333]), expected: "[333, 334, 333]", actual: "\(odd)")
+
+            let oddOtherPaid = split(1000, .equal, [other, me, other], iPaid: false)
+            check("Split: odd sen in list order when someone else paid", oddOtherPaid == .success([334, 333, 333]),
+                  expected: "[334, 333, 333]", actual: "\(oddOtherPaid)")
+
+            let sevenWay = split(10000, .equal, [me] + Array(repeating: other, count: 6))
+            let sevenSum = (try? sevenWay.get())?.reduce(0, +)
+            check("Split: 7-way RM100 totals exactly", sevenSum == 10000 && (try? sevenWay.get()) == [1429, 1429, 1429, 1429, 1428, 1428, 1428],
+                  expected: "sum 10000, 4 leftover sen to Me then list order", actual: "\(sevenWay)")
+
+            let parts = split(3000, .parts, [SplitCalculator.Participant(isMe: true, parts: 1), .init(parts: 1), .init(parts: 2), .init(parts: 1)])
+            check("Split: parts 1/1/2/1", parts == .success([600, 600, 1200, 600]), expected: "[600, 600, 1200, 600]", actual: "\(parts)")
+
+            let partsOdd = split(1000, .parts, [SplitCalculator.Participant(isMe: true, parts: 1), .init(parts: 2)])
+            check("Split: parts with remainder", partsOdd == .success([333, 667]), expected: "[333, 667]", actual: "\(partsOdd)")
+
+            let exact = split(3000, .amounts, [SplitCalculator.Participant(isMe: true, enteredMinor: 800), .init(enteredMinor: 700), .init(enteredMinor: 800), .init(enteredMinor: 700)])
+            check("Split: exact amounts", exact == .success([800, 700, 800, 700]), expected: "[800, 700, 800, 700]", actual: "\(exact)")
+
+            let mismatch = split(3000, .amounts, [SplitCalculator.Participant(isMe: true, enteredMinor: 800), .init(enteredMinor: 2199)])
+            check("Split: total mismatch is an error (not adjusted)", mismatch == .failure(.amountsDoNotMatchTotal(differenceMinor: -1)),
+                  expected: "difference -1", actual: "\(mismatch)")
+
+            let zeroMe = split(3000, .amounts, [SplitCalculator.Participant(isMe: true, enteredMinor: 0), .init(enteredMinor: 3000)])
+            check("Split: Me may have RM0", zeroMe == .success([0, 3000]), expected: "[0, 3000]", actual: "\(zeroMe)")
+
+            let errors = [
+                split(3000, .equal, [me]),
+                split(3000, .equal, [other, other]),
+                split(3000, .equal, [me, me]),
+                split(0, .equal, [me, other]),
+                split(3000, .parts, [SplitCalculator.Participant(isMe: true, parts: 0), .init(parts: 1)]),
+                split(3000, .amounts, [SplitCalculator.Participant(isMe: true, enteredMinor: -1), .init(enteredMinor: 3001)])
+            ]
+            let expectedErrors: [Result<[Int], SplitCalculator.SplitError>] = [
+                .failure(.tooFewParticipants), .failure(.missingMe), .failure(.moreThanOneMe),
+                .failure(.nonPositiveTotal), .failure(.invalidParts(index: 0)), .failure(.negativeAmount(index: 0))
+            ]
+            check("Split: validation errors", errors == expectedErrors, expected: "\(expectedErrors)", actual: "\(errors)")
+        }
+
