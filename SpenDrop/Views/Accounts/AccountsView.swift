@@ -121,3 +121,14 @@ struct AccountSummaryRow: View {
     }
 }
 
+// MARK: - Account detail
+
+/// One account's recorded expenses and money movements, newest first.
+struct AccountDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+    let account: Account
+
+    @State private var showingEdit = false
+    @State private var selectedExpense: Expense?
+    @State private var selectedMovement: MoneyMovement?
+
