@@ -190,3 +190,16 @@ public final class KeychainStore: SecureStore {
         return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
     }
 
+    public func delete(_ key: String) {
+        SecItemDelete(query(key) as CFDictionary)
+    }
+}
+
+/// In-memory store for tests.
+public final class MemorySecureStore: SecureStore {
+    public private(set) var values: [String: Data] = [:]
+    public init() {}
+    public func read(_ key: String) -> Data? { values[key] }
+    @discardableResult public func write(_ data: Data, for key: String) -> Bool { values[key] = data; return true }
+    public func delete(_ key: String) { values[key] = nil }
+}
