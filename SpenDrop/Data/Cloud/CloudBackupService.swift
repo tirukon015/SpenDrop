@@ -179,3 +179,62 @@ public final class CloudBackupService {
 
     // MARK: Backup
 
+    /// Uploads a new backup when local data changed since the last successful one. Never blocks local use:
+    /// failures only change `status`.
+    @discardableResult
+    public func backupNow(force: Bool = false) async -> Bool {
+        guard let config = auth.config else { status = .notConfigured; return false }
+        guard let user = auth.currentUser else { status = .notSignedIn; return false }
+        guard canUseLocalStore() else { status = .failed("Local data isn't available (safe mode)."); return false }
+        guard isOnline else { pendingBackup = true; status = .waitingForNetwork; return false }
+        guard status != .uploading && status != .restoring else { return false }
+
+        let context = contextProvider()
+        let payload = UserDataBackupService.makePayload(from: context)
+        let hash = Self.contentHash(payload)
+        if !force, hash == defaults.string(forKey: Self.lastHashKey) {
+            pendingBackup = false
+            status = .upToDate
+            return true
+        }
+
+        status = .uploading
+        do {
+            let data = try UserDataBackupService.makeEncoder().encode(payload)
+            let token = try await auth.validAccessToken()
+            let backupID = UUID()
+            let path = "\(user.id)/\(device.id)/\(backupID.uuidString).json"
+            try await send(config: config, method: "POST", path: "storage/v1/object/\(Self.bucket)/\(path)", token: token,
+                           body: data, headers: ["Content-Type": "application/json", "x-upsert": "false"])
+            let record = CloudBackupRecord(
+                id: backupID, deviceId: device.id, deviceName: device.name, appVersion: device.appVersion,
+                schemaVersion: "\(SpenDropSchemaV3.versionIdentifier)", backupVersion: payload.version, createdAt: Date(),
+                objectPath: path, expensesCount: payload.expenses.count, peopleCount: payload.paybookProfiles.count,
+                accountsCount: payload.accounts?.count ?? 0, movementsCount: payload.moneyMovements?.count ?? 0, sizeBytes: data.count)
+            do {
+                try await send(config: config, method: "POST", path: "rest/v1/backups", token: token,
+                               body: try CloudJSON.encoder().encode(record), headers: ["Prefer": "return=minimal"])
+            } catch {
+                // Keep the cloud consistent: remove the file whose metadata could not be recorded.
+                _ = try? await deleteObjects([path], config: config, token: token)
+                throw error
+            }
+            defaults.set(hash, forKey: Self.lastHashKey)
+            lastBackupDate = record.createdAt
+            defaults.set(record.createdAt, forKey: Self.lastBackupKey)
+            pendingBackup = false
+            status = .upToDate
+            await pruneOldBackups(config: config, token: token)
+            return true
+        } catch CloudError.offline {
+            pendingBackup = true
+            status = .waitingForNetwork
+        } catch CloudError.sessionExpired {
+            status = .notSignedIn
+        } catch {
+            pendingBackup = true
+            status = .failed((error as? LocalizedError)?.errorDescription ?? "Cloud backup failed.")
+        }
+        return false
+    }
+
