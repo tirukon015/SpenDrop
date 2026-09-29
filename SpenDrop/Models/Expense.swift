@@ -30,6 +30,23 @@ public final class Expense {
     public var matchingStatusRaw: String = "UNMATCHED"
     public var matchingConfidence: Double? = nil
 
+    // MARK: - Financial Architecture V2 (Accounts, Payer, Splits)
+    // The text fields above (fundingAccount, paymentSourceRaw, underlyingBankRaw) are kept as historical snapshots.
+    public var account: Account? = nil
+    /// false when another person paid the whole bill (`payer`).
+    public var paidByMe: Bool = true
+    public var payer: PayBookProfile? = nil
+    public var payerNameSnapshot: String? = nil
+    /// nil = not shared. See `SplitMethod`.
+    public var splitMethodRaw: String? = nil
+
+    @Relationship(deleteRule: .cascade, inverse: \ExpenseShare.expense)
+    public var shares: [ExpenseShare] = []
+
+    /// Money movements that reference this expense (e.g. refunds). They are kept if the expense is deleted.
+    @Relationship(deleteRule: .nullify, inverse: \MoneyMovement.linkedExpense)
+    public var linkedMovements: [MoneyMovement] = []
+
     public init(
         id: UUID = UUID(),
         amount: Double,
