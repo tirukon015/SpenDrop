@@ -13,3 +13,46 @@ public enum SpenDropSchemaV1: VersionedSchema {
         [Expense.self, PayBookProfile.self, PayBookPaymentMethod.self, PayBookContact.self]
     }
 
+    @Model
+    public final class Expense {
+        @Attribute(.unique) public var id: UUID
+        public var amount: Double
+        public var currency: String
+        public var merchant: String
+        public var categoryRaw: String
+        public var paymentSourceRaw: String
+        public var underlyingBankRaw: String?
+        public var paymentMethodRaw: String?
+        public var date: Date
+        public var notes: String?
+        public var transactionReference: String?
+        public var imageRelativePath: String?
+        public var sourceTypeRaw: String
+        public var ocrText: String?
+        public var confidence: Double?
+        public var isSampleData: Bool
+        public var createdAt: Date
+        public var updatedAt: Date
+        public var paymentChannelRaw: String = "UNKNOWN"
+        public var fundingAccount: String = "Unknown"
+        public var fundingInstrument: String? = nil
+        public var externalTransactionId: String? = nil
+        public var matchingStatusRaw: String = "UNMATCHED"
+        public var matchingConfidence: Double? = nil
+
+        public init(id: UUID = UUID(), amount: Double, merchant: String, fundingAccount: String = "Unknown", date: Date = Date()) {
+            self.id = id
+            self.amount = amount
+            self.currency = "RM"
+            self.merchant = merchant
+            self.categoryRaw = "Other"
+            self.paymentSourceRaw = "Unknown"
+            self.date = date
+            self.sourceTypeRaw = "manual"
+            self.isSampleData = false
+            self.createdAt = Date()
+            self.updatedAt = Date()
+            self.fundingAccount = fundingAccount
+        }
+    }
+
