@@ -188,3 +188,18 @@ public struct MoneyMovementFormView: View {
         onFinished()
     }
 
+    private func deleteExisting() {
+        guard let existing else { return }
+        modelContext.delete(existing)
+        try? modelContext.save()
+        HapticFeedback.notification(.success)
+        onFinished()
+    }
+}
+
+/// Sheet wrapper for creating a record from a prefilled draft.
+public struct MoneyMovementCreateSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let draft: MoneyMovementDraft
+    let onSaved: () -> Void
+
