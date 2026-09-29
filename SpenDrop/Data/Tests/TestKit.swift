@@ -77,3 +77,38 @@ public enum AllTestSuites {
         return output ?? []
     }
 
+    /// Handles any test launch argument. Returns the process exit code, or nil when no test flag was given.
+    public static func runFromLaunchArguments(_ arguments: [String]) -> Int32? {
+        if arguments.contains("--print-schema-fingerprints") {
+            print("[SCHEMA_FINGERPRINT] V1 \(ExpenseDataContainer.schemaFingerprint(Schema(versionedSchema: SpenDropSchemaV1.self)))")
+            print("[SCHEMA_FINGERPRINT] V2 \(ExpenseDataContainer.schemaFingerprint(Schema(versionedSchema: SpenDropSchemaV2.self)))")
+            print("[SCHEMA_FINGERPRINT] CURRENT \(ExpenseDataContainer.schemaFingerprint(ExpenseDataContainer.currentSchema))")
+            fflush(stdout)
+            return 0
+        }
+        let selected: [(name: String, flag: String, run: () -> [TestCaseResult])]
+        if arguments.contains("--run-all-tests") {
+            selected = suites
+        } else {
+            selected = suites.filter { arguments.contains($0.flag) }
+        }
+        guard !selected.isEmpty else { return nil }
+
+        var allPassed = true
+        var summaries: [String] = []
+        for suite in selected {
+            let results = suite.run()
+            for r in results {
+                print("[TEST][\(suite.name)] [\(r.passed ? "PASS" : "FAIL")] \(r.testName): Expected: \(r.expected) | Actual: \(r.actual)")
+            }
+            let passed = results.filter(\.passed).count
+            allPassed = allPassed && passed == results.count
+            let line = "[SUITE_SUMMARY] \(suite.name): \(passed)/\(results.count) PASSED"
+            summaries.append(line)
+            print(line)
+        }
+        print("[ALL_SUITES] " + summaries.map { $0.replacingOccurrences(of: "[SUITE_SUMMARY] ", with: "") }.joined(separator: " | "))
+        fflush(stdout)
+        return allPassed ? 0 : 1
+    }
+}
