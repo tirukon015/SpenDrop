@@ -109,7 +109,12 @@
 		F113C9E605201748DBFB0038 /* PayBookProfile.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 3962EB138E3C01056C9EA091 /* PayBookProfile.swift */; };
 		EA7285FDA7FF9CF88ACEA298 /* PayBookPaymentMethod.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 5DE467AC6032AD0241DF6A4D /* PayBookPaymentMethod.swift */; };
 		5FD7C76FD83F5A87DAFE964B /* PayBookContact.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 61D2B27A0B1547C4160017B1 /* PayBookContact.swift */; };
+		0EA1CAA53BAC686B4009B4F2 /* Account.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = D1A81056DE73922C40EBCEAA /* Account.swift */; };
+		FC6E5D22C4F58747920F37AB /* ExpenseShare.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = DA3DA25EB4357CCED07D0652 /* ExpenseShare.swift */; };
+		861203A655146F1733A4033A /* MoneyMovement.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 82892A042FBBDFA35B279C86 /* MoneyMovement.swift */; };
 		E585E7A052DA6C512AC02D0A /* ExpenseDataContainer.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 6B13BFA0565178CE6CA86F31 /* ExpenseDataContainer.swift */; };
+		AE72EB9B9FD6EBFEC16B0E16 /* SchemaVersions.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = D3F7C6B0896A710EFD10CC96 /* SchemaVersions.swift */; };
+		763892B821F71589D7019A04 /* AccountLinker.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = FEF5DFB0894B7B693871AD35 /* AccountLinker.swift */; };
 		EC03FFD8633141FB8B4F3632 /* DuplicateDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = F9472BC1B655354029FA1C75 /* DuplicateDetector.swift */; };
 		1D29A3E53F3B749AFF0FADB5 /* TransactionReconciliationEngine.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 517A9B61C5C3BA46283C6B40 /* TransactionReconciliationEngine.swift */; };
 		C401501A0E6691F14C48EC61 /* SampleData.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 61BA0658BA7924F016833930 /* SampleData.swift */; };
@@ -124,7 +129,13 @@
 		DE6844BF9ED7BA6D85F11612 /* ImageStorageService.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 9D484BA3782E1CB3BDE7E5E5 /* ImageStorageService.swift */; };
 		C97D67AF5C6551985E636C34 /* CurrencyFormatter.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 4C2E5DD7370E8B1ACD070FDE /* CurrencyFormatter.swift */; };
 		8984DC05FB091DA9EC70DF03 /* HapticFeedback.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 106D5EBDD0321891C8D0CE05 /* HapticFeedback.swift */; };
+		F495268141B77DE712804BA5 /* ClassificationRule.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 464C79172F34832CFA2ED593 /* ClassificationRule.swift */; };
+		2E60649AA1E66F0475E134F3 /* TransactionClassifier.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = C59D49902CA454D9B4585633 /* TransactionClassifier.swift */; };
+		3EBC88C12F99D032454E175E /* MovementDuplicateDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = DE7B25AAC2BF13BDC7750CBD /* MovementDuplicateDetector.swift */; };
+		7A330A97244293F68AB183E9 /* DirectionDetector.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = 0AF3A130AC63C9063C4E0A4E /* DirectionDetector.swift */; };
+		4D4D66D1F838D36F633D482F /* Money.swift in Share Sources */ = {isa = PBXBuildFile; fileRef = D9EABF66839D037C004194B7 /* Money.swift */; };
 		7A175483AEFC5DF543692FBC /* SpenDropShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 08D9AD5D69593B13C044F950 /* SpenDropShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		32B58FA9B18C8EB127B499F6 /* SpenDropUITests.swift in UITest Sources */ = {isa = PBXBuildFile; fileRef = E9B7C6AEE7EBF28871CBF0F3 /* SpenDropUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -134,6 +145,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 7D9143BC9561C13DFD670940;
 			remoteInfo = SpenDropShare;
+		};
+		7395AFE1B8C921757EED69FE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 213ACF315F27069E8A8A9830 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5106A5C44FB8AE42B1DD5394;
+			remoteInfo = SpenDrop;
 		};
 /* End PBXContainerItemProxy section */
 
