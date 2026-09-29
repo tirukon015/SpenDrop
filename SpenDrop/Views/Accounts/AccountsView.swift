@@ -376,3 +376,18 @@ struct AccountFormSheet: View {
         }
     }
 
+    private func save() {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let account {
+            account.name = trimmed
+            account.type = type
+        } else {
+            let nextIndex = (allAccounts.map(\.sortIndex).max() ?? -1) + 1
+            modelContext.insert(Account(name: trimmed, type: type, sortIndex: nextIndex))
+        }
+        try? modelContext.save()
+        HapticFeedback.notification(.success)
+        dismiss()
+    }
+}
+
