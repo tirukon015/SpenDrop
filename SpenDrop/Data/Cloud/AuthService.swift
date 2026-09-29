@@ -214,3 +214,19 @@ public final class AuthService {
         clearSession(message: "Your cloud account was deleted. Local data remains on this iPhone.")
     }
 
+    // MARK: Internals
+
+    private func save(_ newSession: AuthSession) {
+        session = newSession
+        if let data = try? JSONEncoder().encode(newSession) {
+            store.write(data, for: Self.sessionKey)
+        }
+        state = .signedIn(newSession.user)
+    }
+
+    private func clearSession(message: String?) {
+        session = nil
+        store.delete(Self.sessionKey)
+        state = config == nil ? .notConfigured : .signedOut(message: message)
+    }
+
