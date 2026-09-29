@@ -704,6 +704,24 @@
 			productReference = 08D9AD5D69593B13C044F950 /* SpenDropShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		B90E2FADC45B809884FCDFE5 /* SpenDropUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D9C13688D3E312048D849D9 /* Build configuration list for PBXNativeTarget "SpenDropUITests" */;
+			buildPhases = (
+				AA97D1C56C8BB8C87362D215 /* Sources */,
+				6DA36C42252CFF916F23842F /* Frameworks */,
+				1DB1463FD9A48C3313EDB761 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				15D0509695B80BB8781A1982 /* PBXTargetDependency */,
+			);
+			name = SpenDropUITests;
+			productName = SpenDropUITests;
+			productReference = E293400F4A8286F093BE1139 /* SpenDropUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
