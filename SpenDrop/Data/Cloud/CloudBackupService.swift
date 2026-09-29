@@ -315,3 +315,20 @@ public final class CloudBackupService {
 
     // MARK: Local safety copy
 
+    /// Writes the current local data to the backup history before a cloud restore. Returns false on failure.
+    static func writeLocalSafetyBackup(from context: ModelContext) -> Bool {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("SpenDropBackupHistory", isDirectory: true),
+              let data = try? UserDataBackupService.makeEncoder().encode(UserDataBackupService.makePayload(from: context)) else {
+            return false
+        }
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent("SpenDrop_AutoBackup_before-cloud-restore_\(ExpenseDataContainer.timestampString(Date())).json")
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
