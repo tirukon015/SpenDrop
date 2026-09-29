@@ -140,10 +140,109 @@ public struct PayBookView: View {
                 }
             } message: {
                 if let profile = profileToDelete {
-                    Text("This will remove \(profile.name) and all saved payment methods under this profile.")
+                    Text("This removes \(profile.name) and their saved payment methods. Past shared expenses and money records are kept under their saved name.")
                 }
             }
         }
+    }
+
+    // MARK: - Rows & summary (Phase 5)
+
+    private func profileRow(_ profile: PayBookProfile) -> some View {
+        NavigationLink(destination: PayBookDetailView(profile: profile)) {
+            HStack(spacing: 14) {
+                avatarView(profile: profile, size: 48)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    HStack(spacing: 6) {
+                        Text(profile.paymentMethodCountText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        if !profile.paymentMethods.isEmpty {
+                            Text("•")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(profile.providersSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                Spacer()
+
+                balanceBadge(profile)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                if PersonLedger.canDelete(profile) {
+                    profileToDelete = profile
+                    showingDeleteAlert = true
+                } else {
+                    blockedDeleteProfile = profile
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                profile.isArchived.toggle()
+                try? modelContext.save()
+            } label: {
+                Label(profile.isArchived ? "Unarchive" : "Archive", systemImage: "archivebox")
+            }
+            .tint(.gray)
+        }
+    }
+
+    @ViewBuilder
+    private func balanceBadge(_ profile: PayBookProfile) -> some View {
+        let balances = PersonLedger.balances(for: profile)
+        if let first = balances.sorted(by: { $0.key < $1.key }).first {
+            let currency = first.key, value = first.value
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(value > 0 ? "owes you" : "you owe")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(PersonLedger.format(abs(value), currency) + (balances.count > 1 ? " +" : ""))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(value > 0 ? .green : .orange)
+            }
+        }
+    }
+
+    private func summaryView(_ summary: PersonLedger.Summary) -> some View {
+        HStack(spacing: 12) {
+            summaryColumn("Owed to you", summary.owedToMe, count: summary.owingMeCount, color: .green)
+            summaryColumn("You owe", summary.iOwe, count: summary.iOweCount, color: .orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Settled").font(.caption2).foregroundStyle(.secondary)
+                Text("\(summary.settledCount)").font(.subheadline.weight(.semibold))
+                Text("people").font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func summaryColumn(_ title: String, _ totals: [String: Int], count: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(totals.isEmpty ? PersonLedger.format(0, "RM")
+                 : totals.sorted { $0.key < $1.key }.map { PersonLedger.format($0.value, $0.key) }.joined(separator: "\n"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(totals.isEmpty ? .secondary : color)
+            Text("\(count) \(count == 1 ? "person" : "people")").font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func avatarView(profile: PayBookProfile, size: CGFloat) -> some View {
