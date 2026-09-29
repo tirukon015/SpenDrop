@@ -57,21 +57,155 @@ public struct AnalyticsView: View {
 
                         // MARK: - FUNDING ACCOUNT BREAKDOWN (Multi-Select Interactive)
                         fundingAccountBreakdownSection
+
+                        // MARK: - SHARED, MY SHARE, REFUNDS, NET SPENDING
+                        sharedAndRefundsSection
+
+                        // MARK: - MERCHANTS
+                        merchantSection
+
+                        // MARK: - WEEKLY / MONTHLY TREND
+                        trendSection(showsCashFlow: false)
                     }
                 }
                 .padding(.bottom, 32)
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Analytics")
+            .navigationTitle("Breakdown")
             .onAppear {
                 if let savedRange = DailySpendingRange(rawValue: storedDailySpendingRange) {
                     engine.dailySpendingRange = savedRange
                 }
                 engine.update(expenses: allExpenses)
+                engine.update(movements: allMovements)
             }
             .onChange(of: allExpenses) { _, newExpenses in
                 engine.update(expenses: newExpenses)
             }
+            .onChange(of: allMovements) { _, newMovements in
+                engine.update(movements: newMovements)
+            }
+        }
+    }
+
+    // MARK: - Spending extras (Phase 7)
+
+    private func money(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor))
+    }
+
+    @ViewBuilder
+    private var sharedAndRefundsSection: some View {
+        let shared = engine.sharedSpendingSummary
+        if shared.sharedCount > 0 || shared.refundsMinor > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Shared & Refunds").font(.headline)
+                if shared.sharedCount > 0 {
+                    row("Shared expenses", "\(shared.sharedCount) · bills \(money(shared.sharedTotalMinor))")
+                    row("My share", money(shared.myShareMinor))
+                }
+                if shared.refundsMinor > 0 {
+                    row("Gross spending", money(engine.cashFlowSummary.spendingMinor))
+                    row("Refunds", "−" + money(shared.refundsMinor))
+                    row("Net spending", money(shared.netSpendingMinor), bold: true)
+                }
+            }
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var merchantSection: some View {
+        let merchants = Array(engine.merchantBreakdown.prefix(8))
+        if !merchants.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Top Merchants").font(.headline)
+                ForEach(merchants) { item in
+                    row("\(item.name) · \(item.count)", CurrencyFormatter.format(amount: item.total))
+                }
+            }
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal)
+        }
+    }
+
+    /// Weekly / monthly (or daily) totals over all records; cash flow bars exclude own transfers.
+    private func trendSection(showsCashFlow: Bool) -> some View {
+        let buckets = PeriodGrouping.buckets(expenses: allExpenses, movements: allMovements, granularity: trendGranularity)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(showsCashFlow ? "Cash Flow Trend" : "Spending Trend").font(.headline)
+                Spacer()
+                Picker("Period", selection: $trendGranularity) {
+                    ForEach(PeriodGrouping.Granularity.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.menu)
+            }
+            Chart(buckets) { bucket in
+                if showsCashFlow {
+                    BarMark(x: .value("Period", bucket.label), y: .value("RM", Money.majorAmount(fromMinor: bucket.inMinor)))
+                        .foregroundStyle(by: .value("Type", "Money In"))
+                        .position(by: .value("Type", "Money In"))
+                    BarMark(x: .value("Period", bucket.label), y: .value("RM", Money.majorAmount(fromMinor: bucket.outMinor)))
+                        .foregroundStyle(by: .value("Type", "Money Out"))
+                        .position(by: .value("Type", "Money Out"))
+                } else {
+                    BarMark(x: .value("Period", bucket.label), y: .value("RM", Money.majorAmount(fromMinor: bucket.spendingMinor)))
+                        .foregroundStyle(Color.blue.gradient)
+                }
+            }
+            .chartForegroundStyleScale(["Money In": Color.green, "Money Out": Color.gray])
+            .frame(height: 180)
+            Text("All records · \(trendGranularity.rawValue.lowercased()) totals\(showsCashFlow ? " · own transfers excluded" : "")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private var cashFlowContent: some View {
+        let flow = engine.cashFlowSummary
+        HStack(spacing: 10) {
+            metricCard(title: "MONEY IN", value: money(flow.moneyInMinor), subtitle: engine.selectedDateFilter.displayName, color: .green)
+            metricCard(title: "MONEY OUT", value: money(flow.moneyOutMinor), subtitle: "expenses paid + other out", color: .primary)
+        }
+        .padding(.horizontal)
+        metricCard(title: "NET CASH FLOW", value: (flow.netCashFlowMinor >= 0 ? "+" : "") + money(flow.netCashFlowMinor),
+                   subtitle: "Money In − Money Out · spending is shown separately (\(money(flow.spendingMinor)))",
+                   color: flow.netCashFlowMinor >= 0 ? .green : .orange)
+            .padding(.horizontal)
+
+        let kinds = engine.movementKindBreakdown
+        if !kinds.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("By Type").font(.headline)
+                ForEach(kinds, id: \.kind) { item in
+                    row("\(item.kind.displayName) · \(item.count)", (item.kind.direction == .moneyIn ? "+" : "−") + money(item.totalMinor))
+                }
+            }
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal)
+        }
+
+        trendSection(showsCashFlow: true)
+    }
+
+    private func row(_ title: String, _ value: String, bold: Bool = false) -> some View {
+        HStack {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.subheadline.weight(bold ? .bold : .semibold))
         }
     }
 
