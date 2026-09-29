@@ -196,3 +196,45 @@ public struct Phase7Tests {
                     expected: "1 rule", actual: "\(TestKit.count(ClassificationRule.self, in: target))")
         }
 
+        // MARK: Migration V2 → V3 on an on-disk store
+        do {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SpenDropV3Migration-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let storeURL = dir.appendingPathComponent("default.store")
+            var ids: (expense: UUID, movement: UUID, account: UUID, person: UUID) = (UUID(), UUID(), UUID(), UUID())
+            do {
+                let v2 = Schema(versionedSchema: SpenDropSchemaV2.self)
+                if let container = try? ModelContainer(for: v2, configurations: [ModelConfiguration(schema: v2, url: storeURL)]) {
+                    let ctx = ModelContext(container)
+                    let account = Account(name: "Maybank", type: .bank); ctx.insert(account)
+                    let person = PayBookProfile(name: "Bijoy"); ctx.insert(person)
+                    let expense = Expense(amount: 30, merchant: "Dinner", fundingAccount: "Maybank"); ctx.insert(expense)
+                    expense.account = account
+                    var d = SplitDraft(); d.add(person); d.payer = person; d.apply(to: expense, in: ctx)
+                    let movement = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: person, account: account); ctx.insert(movement)
+                    try? ctx.save()
+                    ids = (expense.id, movement.id, account.id, person.id)
+                }
+            }
+            var actual = "open failed"
+            var passed = false
+            if let container = try? ExpenseDataContainer.openPersistentContainer(configuration: ModelConfiguration(schema: ExpenseDataContainer.currentSchema, url: storeURL)) {
+                let ctx = ModelContext(container)
+                let expense = TestKit.fetch(Expense.self, in: ctx).first
+                let movement = TestKit.fetch(MoneyMovement.self, in: ctx).first
+                ctx.insert(ClassificationRule(merchantKey: "dinner", categoryRaw: "Food"))
+                let ruleSaved = (try? ctx.save()) != nil
+                passed = expense?.id == ids.expense && expense?.amount == 30 && expense?.shares.count == 2 && expense?.payer?.id == ids.person &&
+                    expense?.account?.id == ids.account && expense?.fundingAccount == "Maybank" && expense?.spendingMinor == 1500 &&
+                    movement?.id == ids.movement && movement?.person?.id == ids.person && movement?.account?.id == ids.account &&
+                    ruleSaved && TestKit.count(ClassificationRule.self, in: ctx) == 1
+                actual = "expense=\(expense?.id == ids.expense) shares=\(expense?.shares.count ?? -1) payer=\(expense?.payer?.name ?? "nil") movement=\(movement?.id == ids.movement) rules=\(TestKit.count(ClassificationRule.self, in: ctx))"
+            }
+            t.check("Migration V2 → V3: ids, amount, shares, payer, account links and movements kept; rules table ready",
+                    passed, expected: "everything kept + rule saved", actual: actual)
+        }
+
+        return results
+    }
+}
