@@ -1172,19 +1172,14 @@ public final class UserDataBackupService {
         let count = (try? context.fetchCount(desc)) ?? 0
         guard count == 0 else { return false }
 
-        // Look for auto-backup file
-        let candidateURLs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap { $0 }
+        // Look for auto-backup file, then the most recent readable history copy
+        let candidateURLs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap { $0 } + historyBackupURLsNewestFirst()
         for url in candidateURLs {
-            if FileManager.default.fileExists(atPath: url.path),
-               let data = try? Data(contentsOf: url) {
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                if let payload = try? decoder.decode(BackupPayload.self, from: data) {
-                    print("[SpenDrop][BackupService] Restoring from auto-backup file: \(url.path)")
-                    applyBackupPayload(payload, into: context)
-                    try? context.save()
-                    return true
-                }
+            if let payload = decodePayload(at: url) {
+                print("[SpenDrop][BackupService] Restoring from auto-backup file: \(url.path)")
+                applyBackupPayload(payload, into: context)
+                try? context.save()
+                return true
             }
         }
 
