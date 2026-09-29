@@ -24,3 +24,13 @@ public enum PeriodGrouping {
         }
     }
 
+    public struct Bucket: Identifiable, Equatable {
+        public var id: Date { start }
+        public let start: Date
+        public let label: String
+        public var spendingMinor = 0
+        public var inMinor = 0
+        public var outMinor = 0
+        public var netMinor: Int { inMinor - outMinor }
+    }
+
