@@ -904,7 +904,12 @@
 				F113C9E605201748DBFB0038 /* PayBookProfile.swift in Sources */,
 				EA7285FDA7FF9CF88ACEA298 /* PayBookPaymentMethod.swift in Sources */,
 				5FD7C76FD83F5A87DAFE964B /* PayBookContact.swift in Sources */,
+				0EA1CAA53BAC686B4009B4F2 /* Account.swift in Sources */,
+				FC6E5D22C4F58747920F37AB /* ExpenseShare.swift in Sources */,
+				861203A655146F1733A4033A /* MoneyMovement.swift in Sources */,
 				E585E7A052DA6C512AC02D0A /* ExpenseDataContainer.swift in Sources */,
+				AE72EB9B9FD6EBFEC16B0E16 /* SchemaVersions.swift in Sources */,
+				763892B821F71589D7019A04 /* AccountLinker.swift in Sources */,
 				EC03FFD8633141FB8B4F3632 /* DuplicateDetector.swift in Sources */,
 				1D29A3E53F3B749AFF0FADB5 /* TransactionReconciliationEngine.swift in Sources */,
 				C401501A0E6691F14C48EC61 /* SampleData.swift in Sources */,
@@ -919,6 +924,19 @@
 				DE6844BF9ED7BA6D85F11612 /* ImageStorageService.swift in Sources */,
 				C97D67AF5C6551985E636C34 /* CurrencyFormatter.swift in Sources */,
 				8984DC05FB091DA9EC70DF03 /* HapticFeedback.swift in Sources */,
+				F495268141B77DE712804BA5 /* ClassificationRule.swift in Sources */,
+				2E60649AA1E66F0475E134F3 /* TransactionClassifier.swift in Sources */,
+				3EBC88C12F99D032454E175E /* MovementDuplicateDetector.swift in Sources */,
+				7A330A97244293F68AB183E9 /* DirectionDetector.swift in Sources */,
+				4D4D66D1F838D36F633D482F /* Money.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA97D1C56C8BB8C87362D215 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				32B58FA9B18C8EB127B499F6 /* SpenDropUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -929,6 +947,11 @@
 			isa = PBXTargetDependency;
 			target = 7D9143BC9561C13DFD670940 /* SpenDropShare */;
 			targetProxy = 43CDEDF300478D5269C91E50 /* PBXContainerItemProxy */;
+		};
+		15D0509695B80BB8781A1982 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5106A5C44FB8AE42B1DD5394 /* SpenDrop */;
+			targetProxy = 7395AFE1B8C921757EED69FE /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
