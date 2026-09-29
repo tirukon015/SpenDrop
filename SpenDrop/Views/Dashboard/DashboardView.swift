@@ -75,6 +75,81 @@ public struct DashboardView: View {
 
     public init() {}
 
+    @ViewBuilder
+    private var secondaryCards: some View {
+        let balances = PersonLedger.summary(of: people)
+        let owed = balances.owedToMe["RM"] ?? 0
+        let owe = balances.iOwe["RM"] ?? 0
+        VStack(spacing: 12) {
+            if !sharedThisMonth.isEmpty {
+                HStack {
+                    Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                    Text("My share of \(sharedThisMonth.count) shared expense\(sharedThisMonth.count == 1 ? "" : "s") this month")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatMinor(sharedThisMonth.reduce(0) { $0 + $1.myShareMinor }))
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            if !thisMonthMovements.isEmpty {
+                let flow = monthCashFlow
+                homeCard(title: "CASH FLOW · THIS MONTH", icon: "arrow.left.arrow.right", tint: .teal) {
+                    HStack {
+                        metric("Money In", formatMinor(flow.moneyInMinor), .green)
+                        metric("Money Out", formatMinor(flow.moneyOutMinor), .primary)
+                        metric("Net", (flow.netCashFlowMinor >= 0 ? "+" : "") + formatMinor(flow.netCashFlowMinor),
+                               flow.netCashFlowMinor >= 0 ? .green : .orange)
+                    }
+                }
+                .accessibilityIdentifier("home.cashFlow")
+            }
+
+            if owed != 0 || owe != 0 {
+                homeCard(title: "BALANCES", icon: "person.2", tint: .purple) {
+                    HStack {
+                        if owed != 0 { metric("Owed to you", formatMinor(owed), .green) }
+                        if owe != 0 { metric("You owe", formatMinor(owe), .orange) }
+                        Spacer()
+                    }
+                }
+                .accessibilityIdentifier("home.balances")
+            }
+        }
+    }
+
+    private func homeCard<Content: View>(title: String, icon: String, tint: Color, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(0.8)
+                Spacer()
+                Image(systemName: icon).foregroundStyle(tint)
+            }
+            content()
+        }
+        .padding()
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func metric(_ title: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     public var body: some View {
         NavigationStack {
             ZStack {
