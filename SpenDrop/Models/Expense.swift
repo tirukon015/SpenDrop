@@ -219,6 +219,18 @@ public final class Expense {
         set { sourceTypeRaw = newValue.rawValue }
     }
 
+    public var splitMethod: SplitMethod? {
+        get { splitMethodRaw.flatMap(SplitMethod.init(rawValue:)) }
+        set { splitMethodRaw = newValue?.rawValue }
+    }
+
+    /// Marks another person as the payer and records their current name for history. Pass nil for "I paid".
+    public func setPayer(_ person: PayBookProfile?) {
+        payer = person
+        paidByMe = (person == nil)
+        payerNameSnapshot = person?.name
+    }
+
     public var formattedAmount: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
