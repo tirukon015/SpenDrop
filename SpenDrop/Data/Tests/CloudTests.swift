@@ -313,3 +313,20 @@ public struct AuthTests {
     }
 }
 
+/// Cloud backup / restore tests. `--run-cloud-tests`
+@MainActor
+public struct CloudBackupTests {
+    static func signedInAuth(_ server: FakeSupabase) async -> AuthService {
+        let auth = AuthService(config: AuthTests.config, transport: server, store: MemorySecureStore())
+        try? await auth.signIn(email: "me@example.com", password: "correct-horse")
+        return auth
+    }
+
+    static func makeCloud(auth: AuthService, server: FakeSupabase, context: ModelContext,
+                          safety: @escaping (ModelContext) -> Bool = { _ in true }) -> CloudBackupService {
+        let suite = "SpenDropCloudTests.\(UUID().uuidString)"
+        return CloudBackupService(auth: auth, transport: server, defaults: UserDefaults(suiteName: suite)!,
+                                  device: .init(id: "device-A", name: "iPhone", appVersion: "1.4 (1)"),
+                                  contextProvider: { context }, canUseLocalStore: { true }, makeSafetyBackup: safety)
+    }
+
