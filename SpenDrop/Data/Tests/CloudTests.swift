@@ -108,3 +108,15 @@ final class FakeWebAuthLauncher: WebAuthLauncher {
     var lastURL: URL?
     let callback: URL?
     init(callback: URL?) { self.callback = callback }
+    func start(url: URL, callbackScheme: String) async throws -> URL {
+        lastURL = url
+        guard let callback else { throw CloudError.cancelled }
+        return callback
+    }
+}
+
+/// Authentication tests. `--run-auth-tests`
+@MainActor
+public struct AuthTests {
+    static let config = SupabaseConfig(url: URL(string: "https://fake.supabase.co")!, anonKey: "public-anon-key")
+
