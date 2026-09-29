@@ -93,3 +93,28 @@ public struct SplitDraft: Equatable {
         participants[index].parts = min(max(parts, 1), SplitCalculator.maxParts)
     }
 
+    public mutating func setAmountText(_ text: String, for id: UUID) {
+        guard let index = participants.firstIndex(where: { $0.id == id }) else { return }
+        participants[index].amountText = text
+    }
+
+    // MARK: Calculation
+
+    public var iPaid: Bool { payer == nil }
+
+    public func calculate(totalMinor: Int) -> Result<[Int], SplitCalculator.SplitError> {
+        let inputs = participants.map { p in
+            SplitCalculator.Participant(isMe: p.isMe, parts: p.parts, enteredMinor: Money.minorUnits(parsing: p.amountText))
+        }
+        return SplitCalculator.calculate(totalMinor: totalMinor, method: method, participants: inputs, iPaid: iPaid)
+    }
+
+    public func shares(totalMinor: Int) -> [Int]? {
+        try? calculate(totalMinor: totalMinor).get()
+    }
+
+    public func myShareMinor(totalMinor: Int) -> Int? {
+        guard let shares = shares(totalMinor: totalMinor), let meIndex = participants.firstIndex(where: \.isMe) else { return nil }
+        return shares[meIndex]
+    }
+
