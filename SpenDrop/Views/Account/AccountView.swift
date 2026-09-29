@@ -139,3 +139,11 @@ public struct AccountView: View {
         .onAppear { cloud.refreshStatus() }
     }
 
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value).foregroundStyle(.secondary)
+        }
+    }
+
