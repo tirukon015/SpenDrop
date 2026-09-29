@@ -479,7 +479,29 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpenDrop/Models/ExpenseSourceType.swift"],
     file_refs["SpenDrop/Models/PayBookProfile.swift"],
     file_refs["SpenDrop/Models/PayBookPaymentMethod.swift"],
-    file_refs["SpenDrop/Models/PayBookContact.swift"]
+    file_refs["SpenDrop/Models/PayBookContact.swift"],
+    file_refs["SpenDrop/Models/Account.swift"],
+    file_refs["SpenDrop/Models/ExpenseShare.swift"],
+    file_refs["SpenDrop/Models/MoneyMovement.swift"],
+    file_refs["SpenDrop/Models/ClassificationRule.swift"]
+])
+
+data_tests_group_id = gen_id("GROUP_data_tests_group_id")
+add_group(data_tests_group_id, "Tests", "Tests", [
+    file_refs["SpenDrop/Data/Tests/TestKit.swift"],
+    file_refs["SpenDrop/Data/Tests/SplitFeatureTests.swift"],
+    file_refs["SpenDrop/Data/Tests/PeopleBalanceTests.swift"],
+    file_refs["SpenDrop/Data/Tests/ActivityFeedTests.swift"],
+    file_refs["SpenDrop/Data/Tests/Phase7Tests.swift"],
+    file_refs["SpenDrop/Data/Tests/CloudTests.swift"],
+    file_refs["SpenDrop/Data/Tests/HardeningTests.swift"]
+])
+
+data_cloud_group_id = gen_id("GROUP_data_cloud_group_id")
+add_group(data_cloud_group_id, "Cloud", "Cloud", [
+    file_refs["SpenDrop/Data/Cloud/CloudCore.swift"],
+    file_refs["SpenDrop/Data/Cloud/AuthService.swift"],
+    file_refs["SpenDrop/Data/Cloud/CloudBackupService.swift"]
 ])
 
 data_group_id = gen_id("GROUP_Data")
