@@ -68,3 +68,10 @@ public enum FinancialCalculator {
         return result
     }
 
+    /// Recorded money through one account. NOT a bank balance: SpenDrop only knows what was recorded.
+    public struct AccountActivity: Equatable {
+        public var inMinor = 0
+        public var outMinor = 0
+        public var netMinor: Int { inMinor - outMinor }
+    }
+
