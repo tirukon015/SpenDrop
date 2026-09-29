@@ -117,3 +117,19 @@ enum CloudJSON {
         return encoder
     }
 
+    /// Accepts Postgres timestamptz ("2026-09-29T10:00:00.123456+00:00") and plain ISO 8601.
+    static func parseDate(_ text: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: text) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let date = plain.date(from: text) { return date }
+        // Postgres may send more than 3 fractional digits; trim to milliseconds and retry.
+        if let dot = text.firstIndex(of: "."), let zone = text[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {
+            let digits = text[text.index(after: dot)..<zone].prefix(3)
+            return fractional.date(from: String(text[..<dot]) + "." + digits + String(text[zone...]))
+        }
+        return nil
+    }
+
