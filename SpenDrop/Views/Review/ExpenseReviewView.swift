@@ -108,6 +108,22 @@ public struct ExpenseReviewView: View {
                         )
                     }
 
+                    // SAVE AS (Expense stays the default unless the screenshot clearly says otherwise)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Save as", selection: $saveAs) {
+                            ForEach(TransactionEntryType.allCases) { type in
+                                Text(type.title).tag(type)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("review.saveAs")
+                        if let reason = initialParsed.directionReason {
+                            Text(initialParsed.suggestedMovementKind == nil ? "Unclear direction (\(reason)). Please choose." : "Suggested: \(reason). Please confirm.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     // AMOUNT HERO DISPLAY
                     VStack(spacing: 8) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -236,6 +252,7 @@ public struct ExpenseReviewView: View {
                                     Button {
                                         HapticFeedback.selection()
                                         selectedCategory = cat
+                                        categoryTouched = true
                                     } label: {
                                         Label(cat.rawValue, systemImage: cat.icon)
                                     }
@@ -269,7 +286,7 @@ public struct ExpenseReviewView: View {
                             Spacer()
 
                             Menu {
-                                ForEach(commonFundingAccounts, id: \.self) { acc in
+                                ForEach(AccountLinker.fundingOptions(base: commonFundingAccounts, accounts: accounts), id: \.self) { acc in
                                     Button {
                                         HapticFeedback.selection()
                                         fundingAccount = acc
@@ -457,10 +474,10 @@ public struct ExpenseReviewView: View {
                             }
                         }
 
-                        Button(action: handleSaveTapped) {
+                        Button(action: { saveAs == .expense ? handleSaveTapped() : continueAsMovement() }) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Save Expense")
+                                Text(saveAs == .expense ? "Save Expense" : "Continue as \(saveAs.title)")
                                     .fontWeight(.bold)
                             }
                             .font(.headline)
