@@ -160,3 +160,28 @@ public enum SpenDropSchemaV3: VersionedSchema {
 
 // MARK: - Migration Plan
 
+public enum SpenDropMigrationPlan: SchemaMigrationPlan {
+    public static var schemas: [any VersionedSchema.Type] {
+        [SpenDropSchemaV1.self, SpenDropSchemaV2.self, SpenDropSchemaV3.self]
+    }
+
+    public static var stages: [MigrationStage] {
+        [migrateV1toV2, migrateV2toV3]
+    }
+
+    /// Only adds the ClassificationRule table; existing data is untouched.
+    static let migrateV2toV3 = MigrationStage.lightweight(fromVersion: SpenDropSchemaV2.self, toVersion: SpenDropSchemaV3.self)
+
+    /// Adds the new tables/columns (no existing column is removed or changed), then creates one Account per
+    /// distinct meaningful `fundingAccount` value and links existing expenses to it. The text is not modified.
+    static let migrateV1toV2 = MigrationStage.custom(
+        fromVersion: SpenDropSchemaV1.self,
+        toVersion: SpenDropSchemaV2.self,
+        willMigrate: nil,
+        didMigrate: { context in
+            let result = AccountLinker.linkUnlinkedExpenses(in: context)
+            try context.save()
+            print("[SpenDropMigration] V1 -> V2 complete: \(result.accountsCreated) accounts created, \(result.expensesLinked) expenses linked.")
+        }
+    )
+}
