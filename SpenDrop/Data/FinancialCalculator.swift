@@ -95,3 +95,30 @@ public enum FinancialCalculator {
         return result
     }
 
+    /// What each person owes me, keyed by `PayBookProfile.id`. Positive = they owe me; negative = I owe them.
+    /// - Expense I paid: every other participant's share adds to what they owe me.
+    /// - Expense a person paid: my share adds to what I owe them. (Other people's shares are between them and the payer.)
+    /// - Loan given / repayment made: they owe me more (or I owe them less).
+    /// - Loan received / repayment received: they owe me less (or I owe them more).
+    /// Records whose person was deleted are skipped; they cannot be attributed.
+    public static func personBalances(expenses: [Expense], movements: [MoneyMovement], currency: String = "RM") -> [UUID: Int] {
+        var balances: [UUID: Int] = [:]
+        for expense in expenses where expense.currency == currency {
+            if expense.paidByMe {
+                for share in expense.shares where !share.isMe {
+                    if let personID = share.person?.id {
+                        balances[personID, default: 0] += share.amountMinor
+                    }
+                }
+            } else if let payerID = expense.payer?.id {
+                balances[payerID, default: 0] -= expense.myShareMinor
+            }
+        }
+        for movement in movements where movement.currency == currency {
+            let sign = movement.kind.personBalanceSign
+            guard sign != 0, let personID = movement.person?.id else { continue }
+            balances[personID, default: 0] += sign * movement.amountMinor
+        }
+        return balances
+    }
+}
