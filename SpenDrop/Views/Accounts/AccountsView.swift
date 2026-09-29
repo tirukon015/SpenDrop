@@ -79,3 +79,30 @@ public struct AccountsView: View {
     }
 }
 
+struct AccountSummaryRow: View {
+    let account: Account
+
+    var body: some View {
+        let activity = FinancialCalculator.accountActivity(for: account)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: account.type.iconName)
+                    .foregroundStyle(.blue)
+                    .frame(width: 22)
+                Text(account.name)
+                    .font(.headline)
+                Spacer()
+                Text(account.type.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                labeled("Recorded In", formatMinor(activity.inMinor, currency: account.currency), color: .green)
+                labeled("Recorded Out", formatMinor(activity.outMinor, currency: account.currency), color: .primary)
+                labeled("Recorded Net", formatMinor(activity.netMinor, currency: account.currency),
+                        color: activity.netMinor < 0 ? .orange : .primary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
