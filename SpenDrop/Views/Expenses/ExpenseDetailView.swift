@@ -188,6 +188,49 @@ public struct ExpenseDetailView: View {
         }
     }
 
+    private func format(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor), currency: expense.currency)
+    }
+
+    @ViewBuilder
+    private var splitSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(expense.isShared ? "SHARED WITH \(expense.shares.count) PEOPLE" : "SHARED EXPENSE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(1.0)
+                Spacer()
+                Button(expense.isShared ? "Edit Split" : "Split with others") {
+                    showingSplitEditor = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .accessibilityIdentifier("detail.split")
+            }
+            .padding(.horizontal, 4)
+
+            if expense.isShared {
+                VStack(spacing: 0) {
+                    detailRow(title: "Paid by", value: expense.paidByMe ? "Me" : (expense.payer?.name ?? expense.payerNameSnapshot ?? "Someone"),
+                              icon: "creditcard.fill", iconColor: .green)
+                    ForEach(expense.shares.sorted { ($0.isMe ? 0 : 1, $0.sortIndex) < ($1.isMe ? 0 : 1, $1.sortIndex) }) { share in
+                        Divider().padding(.leading, 48)
+                        detailRow(title: share.isMe ? "Me" : (share.person?.name ?? share.nameSnapshot),
+                                  value: format(share.amountMinor),
+                                  icon: share.isMe ? "person.crop.circle.fill" : "person.crop.circle", iconColor: .blue)
+                    }
+                    if !expense.sharesMatchAmount {
+                        Divider().padding(.leading, 48)
+                        detailRow(title: "Needs attention", value: "Shares don't add up", icon: "exclamationmark.triangle.fill", iconColor: .orange)
+                    }
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
     private func detailRow(title: String, value: String, icon: String, iconColor: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
