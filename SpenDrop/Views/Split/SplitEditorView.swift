@@ -214,3 +214,9 @@ public struct SplitEditorView: View {
     }
 }
 
+/// Collapsed "Split with others" row used by Add Expense, Edit Expense and Expense Detail.
+public struct SplitSummaryRow: View {
+    let draft: SplitDraft?
+    let totalMinor: Int
+    let currency: String
+
