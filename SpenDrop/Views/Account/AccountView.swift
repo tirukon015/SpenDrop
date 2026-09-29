@@ -272,3 +272,54 @@ struct EmailAuthView: View {
     }
 }
 
+/// Lists cloud backups and restores one after showing exactly what it contains.
+struct CloudRestoreView: View {
+    let cloud: CloudBackupService
+
+    @State private var records: [CloudBackupRecord] = []
+    @State private var loading = true
+    @State private var errorMessage: String?
+    @State private var selected: CloudBackupRecord?
+    @State private var resultMessage: String?
+
+    var body: some View {
+        List {
+            if loading {
+                ProgressView()
+            } else if let errorMessage {
+                Text(errorMessage).foregroundStyle(.orange)
+            } else if records.isEmpty {
+                Text("No cloud backups yet.").foregroundStyle(.secondary)
+            }
+            ForEach(records) { record in
+                Button {
+                    selected = record
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(record.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.headline)
+                        Text("\(record.deviceName) · app \(record.appVersion) · schema \(record.schemaVersion) · format \(record.backupVersion)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(record.expensesCount) expenses · \(record.peopleCount) people · \(record.accountsCount) accounts · \(record.movementsCount) money records")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .navigationTitle("Cloud Backups")
+        .task { await load() }
+        .confirmationDialog("Restore this backup?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }),
+                            titleVisibility: .visible, presenting: selected) { record in
+            Button("Restore") { Task { await restore(record) } }
+        } message: { record in
+            Text("From \(record.deviceName), \(record.createdAt.formatted(date: .abbreviated, time: .shortened)): \(record.expensesCount) expenses, \(record.peopleCount) people, \(record.accountsCount) accounts, \(record.movementsCount) money records.\n\nA safety copy of this iPhone's data is saved first. The backup is merged by record ID; nothing on this iPhone is deleted, and records edited here more recently are kept.")
+        }
+        .alert("Restore", isPresented: Binding(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(resultMessage ?? "")
+        }
+    }
+
