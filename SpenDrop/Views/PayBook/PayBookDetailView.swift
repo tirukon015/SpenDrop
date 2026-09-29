@@ -224,13 +224,31 @@ public struct PayBookDetailView: View {
         .sheet(item: $methodToEdit) { method in
             EditPaymentMethodView(method: method)
         }
+        .sheet(item: $repayment) { item in
+            MoneyMovementCreateSheet(draft: item.draft)
+        }
+        .sheet(item: $selectedExpense) { expense in
+            ExpenseDetailView(expense: expense)
+        }
+        .sheet(item: $selectedMovement) { movement in
+            MoneyMovementEditSheet(movement: movement)
+        }
+        .alert("\(profile.name) still has a balance", isPresented: $showingCannotDeleteAlert) {
+            Button("Archive Instead") {
+                profile.isArchived = true
+                try? modelContext.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Settle up first, or archive \(profile.name) to hide them while keeping the balance and history.")
+        }
         .alert("Delete \(profile.name)?", isPresented: $showingDeleteProfileAlert) {
             Button("Delete", role: .destructive) {
                 deleteProfile()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will remove the profile and all saved payment methods under it.")
+            Text("This removes the profile and its saved payment methods. Past shared expenses and money records are kept under their saved name.")
         }
         .alert("Delete this payment method?", isPresented: $showingDeleteMethodAlert) {
             Button("Delete", role: .destructive) {
