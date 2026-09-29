@@ -275,3 +275,23 @@ public final class AuthService {
     }
 }
 
+/// Form checks shown before any network call.
+public enum AuthValidation {
+    public static func problem(email: String, password: String, confirm: String?) -> String? {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: "@")
+        guard parts.count == 2, parts[1].contains("."), !parts[0].isEmpty else { return "Enter a valid email address." }
+        guard password.count >= 8 else { return "Password must be at least 8 characters." }
+        if let confirm, confirm != password { return "Passwords don't match." }
+        return nil
+    }
+}
+
+extension Data {
+    func base64URLEncoded() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
