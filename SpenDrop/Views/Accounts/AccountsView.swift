@@ -203,3 +203,27 @@ struct AccountDetailView: View {
         }
     }
 
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value).fontWeight(.semibold)
+        }
+    }
+
+    private func expenseRow(_ expense: Expense) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(expense.merchant).font(.subheadline.weight(.semibold))
+                Text("Expense · \(expense.date.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(expense.paidByMe ? "-\(expense.formattedAmount)" : "Paid by \(expense.payerNameSnapshot ?? "someone")")
+                .font(.subheadline.weight(.semibold))
+        }
+        .contentShape(Rectangle())
+    }
+}
+
