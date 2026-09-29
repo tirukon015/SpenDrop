@@ -82,3 +82,23 @@ public struct MoneyMovementDraft {
     public var sourceType: ExpenseSourceType = .manual
     public var paymentChannel: PaymentChannel = .unknown
 
+    public init(entryType: TransactionEntryType) {
+        self.entryType = entryType
+        self.kind = entryType.kinds.first ?? .otherOut
+    }
+
+    public init(movement: MoneyMovement) {
+        self.entryType = TransactionEntryType(kind: movement.kind)
+        self.kind = movement.kind
+        self.amountText = String(format: "%.2f", Money.majorAmount(fromMinor: movement.amountMinor))
+        self.currency = movement.currency
+        self.date = movement.date
+        self.person = movement.person
+        self.account = movement.account
+        self.counterAccount = movement.counterAccount
+        self.note = movement.note ?? ""
+        self.transactionReference = movement.transactionReference
+        self.sourceType = movement.sourceType
+        self.paymentChannel = movement.paymentChannel
+    }
+
