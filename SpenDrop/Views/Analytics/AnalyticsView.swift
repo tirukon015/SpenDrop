@@ -4,9 +4,18 @@ import Charts
 
 public struct AnalyticsView: View {
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var allMovements: [MoneyMovement]
     @Bindable private var engine = TransactionFilterEngine.shared
 
     @AppStorage("analytics_daily_spending_range") private var storedDailySpendingRange: String = DailySpendingRange.last7Days.rawValue
+
+    private enum Mode: String, CaseIterable, Identifiable {
+        case spending = "Spending", cashFlow = "Cash Flow"
+        var id: String { rawValue }
+    }
+    @AppStorage("breakdown_mode") private var storedMode: String = Mode.spending.rawValue
+    @State private var trendGranularity: PeriodGrouping.Granularity = .weekly
+    private var mode: Mode { Mode(rawValue: storedMode) ?? .spending }
 
     public init() {}
 
@@ -19,7 +28,16 @@ public struct AnalyticsView: View {
                         .padding(.vertical, 4)
                         .background(Color(uiColor: .systemBackground))
 
-                    if engine.filteredExpenses.isEmpty {
+                    Picker("View", selection: $storedMode) {
+                        ForEach(Mode.allCases) { Text($0.rawValue).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("breakdown.mode")
+
+                    if mode == .cashFlow {
+                        cashFlowContent
+                    } else if engine.filteredExpenses.isEmpty {
                         emptyStateView
                     } else {
                         // MARK: - SUMMARY METRICS (Total, Count, Avg/Day)
