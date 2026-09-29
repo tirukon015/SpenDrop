@@ -134,6 +134,7 @@ public final class TransactionFilterEngine {
 
     // Raw transaction cache from SwiftData store
     private var allExpenses: [Expense] = []
+    private var allMovements: [MoneyMovement] = []
 
     public init() {}
 
