@@ -20,3 +20,20 @@ public struct SplitEditorView: View {
     @State private var showingPayerPicker = false
     @State private var lastTime: SplitDraft?
 
+    public init(totalMinor: Int, currency: String = "RM", merchant: String?, initial: SplitDraft?, editingExpenseID: UUID? = nil,
+                onDone: @escaping (SplitDraft?) -> Void) {
+        self.totalMinor = totalMinor
+        self.currency = currency
+        self.merchant = merchant
+        self.editingExpenseID = editingExpenseID
+        self.allowsRemove = initial != nil
+        self.onDone = onDone
+        _draft = State(initialValue: initial ?? SplitDraft())
+    }
+
+    private var frequentSuggestions: [PayBookProfile] {
+        people.filter { $0.isFrequent && !$0.isArchived && !draft.contains($0) }
+    }
+
+    private var amounts: [Int]? { draft.shares(totalMinor: totalMinor) }
+
