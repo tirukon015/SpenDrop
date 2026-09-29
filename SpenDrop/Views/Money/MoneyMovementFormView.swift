@@ -203,3 +203,25 @@ public struct MoneyMovementCreateSheet: View {
     let draft: MoneyMovementDraft
     let onSaved: () -> Void
 
+    public init(draft: MoneyMovementDraft, onSaved: @escaping () -> Void = {}) {
+        self.draft = draft
+        self.onSaved = onSaved
+    }
+
+    public var body: some View {
+        NavigationStack {
+            MoneyMovementFormView(draft: draft) {
+                onSaved()
+                dismiss()
+            }
+            .navigationTitle("Add \(draft.entryType.title)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
