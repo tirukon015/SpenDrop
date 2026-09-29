@@ -1188,27 +1188,27 @@ public final class UserDataBackupService {
         return true
     }
 
+    private static func historyBackupURLsNewestFirst() -> [URL] {
+        let fm = FileManager.default
+        let dirs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap {
+            $0?.deletingLastPathComponent().appendingPathComponent(backupHistoryFolderName, isDirectory: true)
+        }
+        let files = dirs.flatMap { dir -> [URL] in
+            let names = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+            return names.filter { $0.hasSuffix(".json") }.map { dir.appendingPathComponent($0) }
+        }
+        return files.sorted {
+            let a = ((try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date) ?? .distantPast
+            let b = ((try? fm.attributesOfItem(atPath: $1.path))?[.modificationDate] as? Date) ?? .distantPast
+            return a > b
+        }
+    }
+
     // MARK: - Export and Import JSON
 
     /// Creates an exportable JSON file and returns its URL for ShareSheet / saving
     public static func generateExportJSONFile(from context: ModelContext) -> URL? {
-        let expenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
-        let profiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
-
-        let payload = BackupPayload(
-            version: 1,
-            appName: "SpenDrop",
-            accountName: defaultAccountName,
-            exportDate: Date(),
-            expenses: expenses.map { ExpenseDTO(from: $0) },
-            paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }
-        )
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-
-        guard let data = try? encoder.encode(payload) else { return nil }
+        guard let data = try? makeEncoder().encode(makePayload(from: context)) else { return nil }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
