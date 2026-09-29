@@ -17,3 +17,24 @@ struct LogApplePayPurchaseIntent: AppIntent {
     @Parameter(title: "Card")
     var card: String?
 
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let context = ExpenseDataContainer.shared.mainContext
+        guard ExpenseDataContainer.isPersistentStoreHealthy else {
+            return .result(dialog: "SpenDrop can't open its data right now. Open the app to check.")
+        }
+        let outcome = ApplePayAutomation.record(amount: amount, merchant: merchant, card: card, in: context)
+        return .result(dialog: IntentDialog(stringLiteral: outcome.message))
+    }
+}
+
+struct SpenDropShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: LogApplePayPurchaseIntent(),
+            phrases: ["Log Apple Pay purchase in \(.applicationName)"],
+            shortTitle: "Log Apple Pay Purchase",
+            systemImageName: "wallet.pass"
+        )
+    }
+}
