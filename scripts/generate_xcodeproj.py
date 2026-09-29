@@ -201,6 +201,24 @@ file_refs = {}
 for path, _ in all_files:
     file_refs[path] = gen_id(f"FREF_{path}")
 
+# UI test target (SpenDropUITests): launches the app with --ui-testing (fresh temporary database)
+# and drives it like a user. Not part of the app or the Share Extension.
+uit_source_paths = ["SpenDropUITests/SpenDropUITests.swift"]
+for path in uit_source_paths:
+    file_refs[path] = gen_id(f"FREF_{path}")
+uit_build_files = {path: gen_id(f"BF_UIT_{path}") for path in uit_source_paths}
+uit_target_id = gen_id("SpenDropUITests_NativeTarget")
+uit_product_id = gen_id("SpenDropUITests_Product")
+uit_sources_phase_id = gen_id("SpenDropUITests_SourcesPhase")
+uit_frameworks_phase_id = gen_id("SpenDropUITests_FrameworksPhase")
+uit_resources_phase_id = gen_id("SpenDropUITests_ResourcesPhase")
+uit_debug_id = gen_id("SpenDropUITests_Debug")
+uit_release_id = gen_id("SpenDropUITests_Release")
+uit_config_list_id = gen_id("SpenDropUITests_ConfigList")
+uit_proxy_id = gen_id("SpenDropUITests_ContainerItemProxy_App")
+uit_dependency_id = gen_id("SpenDropUITests_TargetDependency_App")
+uit_group_id = gen_id("GROUP_SpenDropUITests")
+
 # PBXBuildFile IDs for App target
 app_build_files = {}
 for path in app_source_paths:
@@ -284,6 +302,9 @@ for path, fref_id in file_refs.items():
         ft = "sourcecode.swift"
     elif path.endswith(".xcassets"):
         ft = "folder.assetcatalog"
+    elif path.endswith("/CloudConfig"):
+        # Folder reference: its contents (e.g. the git-ignored SupabaseConfig.plist) are copied when present.
+        ft = "folder"
     elif path.endswith(".plist"):
         ft = "text.plist.xml"
     elif path.endswith(".entitlements"):
