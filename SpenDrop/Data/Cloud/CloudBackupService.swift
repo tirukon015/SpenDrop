@@ -159,3 +159,23 @@ public final class CloudBackupService {
         self.monitor = monitor
     }
 
+    /// Coalesces bursts of saves into one upload.
+    public func scheduleBackup(delay: Duration = .seconds(20)) {
+        guard auth.currentUser != nil else { return }
+        pendingBackup = true
+        pendingTask?.cancel()
+        pendingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            _ = await self?.backupNow()
+        }
+    }
+
+    public func refreshStatus() {
+        if auth.config == nil { status = .notConfigured }
+        else if auth.currentUser == nil { status = .notSignedIn }
+        else if status == .notSignedIn || status == .notConfigured { status = .idle }
+    }
+
+    // MARK: Backup
+
