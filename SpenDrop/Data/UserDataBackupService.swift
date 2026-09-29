@@ -87,6 +87,19 @@ public final class UserDataBackupService {
         public let fundingAccount: String?
         public let fundingInstrument: String?
         public let matchingStatusRaw: String?
+        // Added in Phase 0 (optional so older backup files still decode)
+        public var imageRelativePath: String? = nil
+        public var confidence: Double? = nil
+        public var externalTransactionId: String? = nil
+        public var matchingConfidence: Double? = nil
+        public var updatedAt: Date? = nil
+        // Version 2: relationships are stored as ids, never as names
+        public var accountId: UUID? = nil
+        public var paidByMe: Bool? = nil
+        public var payerId: UUID? = nil
+        public var payerNameSnapshot: String? = nil
+        public var splitMethodRaw: String? = nil
+        public var shares: [ExpenseShareDTO]? = nil
 
         public init(from expense: Expense) {
             self.id = expense.id
