@@ -230,3 +230,25 @@ public final class AuthService {
         state = config == nil ? .notConfigured : .signedOut(message: message)
     }
 
+    func parseSession(_ data: Data) throws -> AuthSession {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let access = json["access_token"] as? String,
+              let refresh = json["refresh_token"] as? String,
+              let userJSON = json["user"] as? [String: Any],
+              let id = userJSON["id"] as? String else {
+            throw CloudError.invalidResponse
+        }
+        let expiresAt: Date
+        if let at = json["expires_at"] as? Double {
+            expiresAt = Date(timeIntervalSince1970: at)
+        } else {
+            expiresAt = now().addingTimeInterval((json["expires_in"] as? Double) ?? 3600)
+        }
+        let appMeta = userJSON["app_metadata"] as? [String: Any] ?? [:]
+        let userMeta = userJSON["user_metadata"] as? [String: Any] ?? [:]
+        let user = AuthUser(id: id, email: userJSON["email"] as? String,
+                            name: (userMeta["full_name"] as? String) ?? (userMeta["name"] as? String),
+                            provider: (appMeta["provider"] as? String) == "google" ? "google" : "email")
+        return AuthSession(accessToken: access, refreshToken: refresh, expiresAt: expiresAt, user: user)
+    }
+
