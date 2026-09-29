@@ -56,3 +56,23 @@ public enum SpenDropSchemaV1: VersionedSchema {
         }
     }
 
+    @Model
+    public final class PayBookProfile {
+        @Attribute(.unique) public var id: UUID
+        public var name: String
+        @Attribute(.externalStorage) public var photoData: Data?
+        public var notes: String?
+        public var createdAt: Date
+        public var updatedAt: Date
+
+        @Relationship(deleteRule: .cascade, inverse: \PayBookPaymentMethod.profile)
+        public var paymentMethods: [PayBookPaymentMethod] = []
+
+        public init(id: UUID = UUID(), name: String) {
+            self.id = id
+            self.name = name
+            self.createdAt = Date()
+            self.updatedAt = Date()
+        }
+    }
+
