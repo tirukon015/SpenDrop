@@ -163,9 +163,35 @@ public struct PayBookDetailView: View {
                     }
                 }
 
-                // DELETE PERSON PROFILE BUTTON
+                // HISTORY
+                historySection
+
+                // FREQUENT / ARCHIVE
+                VStack(spacing: 0) {
+                    Toggle(isOn: $profile.isFrequent) {
+                        Label("Frequent", systemImage: "star.fill")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    Divider().padding(.leading, 16)
+                    Toggle(isOn: $profile.isArchived) {
+                        Label("Archived", systemImage: "archivebox")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .onChange(of: profile.isFrequent) { _, _ in profile.updatedAt = Date(); try? modelContext.save() }
+                .onChange(of: profile.isArchived) { _, _ in profile.updatedAt = Date(); try? modelContext.save() }
+
+                // DELETE PERSON PROFILE BUTTON (blocked while money is owed either way)
                 Button(role: .destructive, action: {
-                    showingDeleteProfileAlert = true
+                    if PersonLedger.canDelete(profile) {
+                        showingDeleteProfileAlert = true
+                    } else {
+                        showingCannotDeleteAlert = true
+                    }
                 }) {
                     Label("Delete Person Profile", systemImage: "trash.fill")
                         .font(.headline)
