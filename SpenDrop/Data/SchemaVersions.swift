@@ -101,3 +101,26 @@ public enum SpenDropSchemaV1: VersionedSchema {
         }
     }
 
+    @Model
+    public final class PayBookContact {
+        @Attribute(.unique) public var id: UUID
+        public var name: String
+        public var bankName: String
+        public var accountHolderName: String
+        public var accountNumber: String
+        public var phoneNumber: String?
+        public var createdAt: Date
+        public var updatedAt: Date
+
+        public init(id: UUID = UUID(), name: String) {
+            self.id = id
+            self.name = name
+            self.bankName = ""
+            self.accountHolderName = ""
+            self.accountNumber = ""
+            self.createdAt = Date()
+            self.updatedAt = Date()
+        }
+    }
+}
+
