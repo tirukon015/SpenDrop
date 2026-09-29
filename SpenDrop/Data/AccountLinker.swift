@@ -51,3 +51,19 @@ public enum AccountLinker {
         return account
     }
 
+    /// Makes `expense.account` match its `fundingAccount` text. Used when an expense is saved or edited,
+    /// so the link never goes stale. "Unknown"/empty text clears the link.
+    @discardableResult
+    public static func relink(_ expense: Expense, in context: ModelContext) -> Account? {
+        guard let key = normalizedKey(expense.fundingAccount) else {
+            expense.account = nil
+            return nil
+        }
+        if let current = expense.account, current.nameKey == key {
+            return current
+        }
+        let account = resolveAccount(named: expense.fundingAccount, currency: expense.currency, in: context)
+        expense.account = account
+        return account
+    }
+
