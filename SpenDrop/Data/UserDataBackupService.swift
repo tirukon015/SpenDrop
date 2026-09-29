@@ -1015,40 +1015,153 @@ public final class UserDataBackupService {
 
     // MARK: - Auto-Backup Management
 
-    /// Automatically writes a backup snapshot to the local Documents directory and App Group
-    public static func saveAutoBackup(from context: ModelContext) {
+    private static let backupHistoryFolderName = "SpenDropBackupHistory"
+    private static let maxDailyHistoryFiles = 7
+    private static let maxShrinkHistoryFiles = 5
+    private static var didSaveObserver: NSObjectProtocol?
+    private static var pendingAutoBackup: Task<Void, Never>?
+
+    /// Refreshes the auto-backup shortly after any SwiftData save (manual entry, edits, deletes, imports).
+    public static func startAutomaticBackups(for container: ModelContainer) {
+        guard didSaveObserver == nil else { return }
+        didSaveObserver = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                scheduleAutoBackup(from: container.mainContext)
+            }
+        }
+    }
+
+    /// Debounced backup so a burst of saves produces one write.
+    public static func scheduleAutoBackup(from context: ModelContext, delay: Duration = .seconds(2)) {
+        pendingAutoBackup?.cancel()
+        pendingAutoBackup = Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            saveAutoBackup(from: context)
+        }
+    }
+
+    /// Writes a backup snapshot to the local Documents directory and App Group.
+    /// Skipped in safe mode and for in-memory stores so a temporary store can never overwrite a real backup.
+    /// Before overwriting, the previous file is kept in `SpenDropBackupHistory/` (one per day, plus a copy
+    /// whenever the new backup contains fewer records than the old one).
+    @discardableResult
+    public static func saveAutoBackup(from context: ModelContext) -> Bool {
+        let isInMemory = context.container.configurations.allSatisfy { $0.isStoredInMemoryOnly }
+        guard !isInMemory, ExpenseDataContainer.isPersistentStoreHealthy, !ExpenseDataContainer.isUITesting else {
+            print("[SpenDrop][BackupService] Auto-backup skipped (in-memory or safe-mode store).")
+            return false
+        }
+
+        let payload = makePayload(from: context)
+        guard !payload.expenses.isEmpty || !payload.paybookProfiles.isEmpty || !(payload.moneyMovements ?? []).isEmpty else { return false }
+
+        guard let data = try? makeEncoder().encode(payload) else { return false }
+
+        var wroteAny = false
+        for url in [localAutoBackupURL, appGroupAutoBackupURL].compactMap({ $0 }) {
+            do {
+                try writeBackupData(data, to: url)
+                wroteAny = true
+                print("[SpenDrop][BackupService] Saved auto-backup to: \(url.path)")
+            } catch {
+                print("[SpenDrop][BackupService] Failed to write auto-backup to \(url.path): \(error)")
+            }
+        }
+        return wroteAny
+    }
+
+    /// Builds a complete version-2 backup of everything in the store.
+    static func makePayload(from context: ModelContext) -> BackupPayload {
         let expenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
         let profiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        let movements = (try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []
+        let rules = (try? context.fetch(FetchDescriptor<ClassificationRule>())) ?? []
 
-        guard !expenses.isEmpty || !profiles.isEmpty else { return }
-
-        let payload = BackupPayload(
-            version: 1,
+        var payload = BackupPayload(
+            version: BackupPayload.currentVersion,
             appName: "SpenDrop",
             accountName: defaultAccountName,
             exportDate: Date(),
             expenses: expenses.map { ExpenseDTO(from: $0) },
             paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }
         )
+        payload.accounts = accounts.map { AccountDTO(from: $0) }
+        payload.moneyMovements = movements.map { MoneyMovementDTO(from: $0) }
+        payload.classificationRules = rules.map { ClassificationRuleDTO(from: $0) }
+        return payload
+    }
 
+    /// Writes `data` to `url`, first preserving the file it replaces in the history folder next to it.
+    static func writeBackupData(_ data: Data, to url: URL, now: Date = Date()) throws {
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        if fm.fileExists(atPath: url.path) {
+            let historyDir = dir.appendingPathComponent(backupHistoryFolderName, isDirectory: true)
+            try fm.createDirectory(at: historyDir, withIntermediateDirectories: true)
+            let baseName = url.deletingPathExtension().lastPathComponent
+
+            // One copy per day, named after the day the old file was written.
+            let oldDate = ((try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date) ?? now
+            let dailyURL = historyDir.appendingPathComponent("\(baseName)_\(dayString(oldDate)).json")
+            if !fm.fileExists(atPath: dailyURL.path) {
+                try fm.copyItem(at: url, to: dailyURL)
+            }
+
+            // Extra copy whenever records would disappear from the backup.
+            if let oldPayload = decodePayload(at: url), let newPayload = try? makeDecoder().decode(BackupPayload.self, from: data),
+               newPayload.recordCount.isSmaller(than: oldPayload.recordCount) {
+                let shrinkURL = historyDir.appendingPathComponent("\(baseName)_before-shrink_\(ExpenseDataContainer.timestampString(now)).json")
+                try fm.copyItem(at: url, to: shrinkURL)
+                print("[SpenDrop][BackupService] Backup shrinks (\(oldPayload.expenses.count) -> \(newPayload.expenses.count) expenses). Kept previous copy at \(shrinkURL.lastPathComponent)")
+            }
+
+            pruneHistory(in: historyDir, prefix: "\(baseName)_before-shrink_", keep: maxShrinkHistoryFiles)
+            pruneHistory(in: historyDir, prefix: "\(baseName)_2", keep: maxDailyHistoryFiles)
+        }
+
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func pruneHistory(in dir: URL, prefix: String, keep: Int) {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names.filter({ $0.hasPrefix(prefix) }).sorted().dropLast(keep) {
+            try? fm.removeItem(at: dir.appendingPathComponent(name))
+        }
+    }
+
+    private static func dayString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
 
-        guard let data = try? encoder.encode(payload) else { return }
+    static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
 
-        // Save to local Documents
-        if let docURL = localAutoBackupURL {
-            try? data.write(to: docURL, options: .atomic)
-            print("[SpenDrop][BackupService] Saved auto-backup to: \(docURL.path)")
+    private static func decodePayload(at url: URL) -> BackupPayload? {
+        guard let data = try? Data(contentsOf: url),
+              let payload = try? makeDecoder().decode(BackupPayload.self, from: data) else { return nil }
+        guard BackupPayload.supportedVersions.contains(payload.version) else {
+            print("[SpenDrop][BackupService] Ignoring backup \(url.lastPathComponent): version \(payload.version) is not supported.")
+            return nil
         }
-
-        // Save to App Group Support if accessible
-        if let groupURL = appGroupAutoBackupURL {
-            let dir = groupURL.deletingLastPathComponent()
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try? data.write(to: groupURL, options: .atomic)
-        }
+        return payload
     }
 
     /// Attempts to restore data from the local auto-backup file if database is empty
