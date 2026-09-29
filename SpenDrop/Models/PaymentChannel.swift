@@ -8,6 +8,10 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
     case bankTransfer = "BANK_TRANSFER"
     case card = "CARD"
     case cash = "CASH"
+    // Added later; stored values of the cases above never change.
+    case duitNowQR = "DUITNOW_QR"
+    case onlineBanking = "ONLINE_BANKING"
+    case eWallet = "E_WALLET"
     case other = "OTHER"
     case unknown = "UNKNOWN"
 
@@ -20,6 +24,9 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .bankTransfer: return "Bank Transfer"
         case .card: return "Card"
         case .cash: return "Cash"
+        case .duitNowQR: return "DuitNow QR"
+        case .onlineBanking: return "Online Banking"
+        case .eWallet: return "E-Wallet"
         case .other: return "Other"
         case .unknown: return "Unknown"
         }
@@ -32,6 +39,9 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .bankTransfer: return "arrow.left.arrow.right"
         case .card: return "creditcard.fill"
         case .cash: return "banknote.fill"
+        case .duitNowQR: return "qrcode.viewfinder"
+        case .onlineBanking: return "globe"
+        case .eWallet: return "iphone"
         case .other: return "ellipsis.circle"
         case .unknown: return "questionmark.circle"
         }
@@ -44,6 +54,9 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .bankTransfer: return .teal
         case .card: return .purple
         case .cash: return .green
+        case .duitNowQR: return .pink
+        case .onlineBanking: return .cyan
+        case .eWallet: return .blue
         case .other: return .orange
         case .unknown: return .gray
         }

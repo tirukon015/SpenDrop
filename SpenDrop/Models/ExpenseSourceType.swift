@@ -6,6 +6,8 @@ public enum ExpenseSourceType: String, CaseIterable, Codable, Identifiable {
     case photo = "photo"
     case receipt = "receipt"
     case shareExtension = "shareExtension"
+    /// Created by the Shortcuts Wallet automation through the "Log Apple Pay Purchase" App Intent.
+    case appleWallet = "appleWallet"
 
     public var id: String { rawValue }
 
@@ -16,6 +18,7 @@ public enum ExpenseSourceType: String, CaseIterable, Codable, Identifiable {
         case .photo: return "Photo"
         case .receipt: return "Receipt"
         case .shareExtension: return "Share Extension"
+        case .appleWallet: return "Apple Pay Automation"
         }
     }
 
@@ -26,6 +29,7 @@ public enum ExpenseSourceType: String, CaseIterable, Codable, Identifiable {
         case .photo: return "camera.fill"
         case .receipt: return "doc.text.fill"
         case .shareExtension: return "square.and.arrow.up"
+        case .appleWallet: return "wallet.pass"
         }
     }
 }

@@ -203,11 +203,15 @@ public struct TransactionReconciliationEngine {
         try? context.save()
         context.processPendingChanges()
 
+        #if DEBUG
         print("[SpenDrop][Reconcile] Reconciled expense ID \(existing.id) -> \(existing.displayFundingAndChannel) (\(existing.formattedAmount))")
+        #endif
         return existing
     }
 
     /// Scans the entire database and consolidates any existing duplicate records into single reconciled transactions
+    /// DATA SAFETY: this deletes records without asking the user. It is intentionally not called anywhere.
+    @available(*, deprecated, message: "Deletes expenses without user confirmation. Do not call; duplicates must be confirmed by the user.")
     public func consolidateExistingDuplicates(in context: ModelContext) -> Int {
         var descriptor = FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date, order: .reverse)])
         guard let allExpenses = try? context.fetch(descriptor) else { return 0 }
@@ -237,7 +241,12 @@ public struct TransactionReconciliationEngine {
                 let sameMerchant = !candM1.isEmpty && candM1 != "unknown" &&
                                    (candM1 == candM2 || candM1.contains(candM2) || candM2.contains(candM1))
 
-                let isDuplicate = sameAmount && within48Hours && (sameRef || sameMerchant || timeDiff < 3600)
+                // Never merge records that carry financial relationships (splits, payer, refunds):
+                // deleting one would silently destroy them.
+                let hasRelationships = !itemA.shares.isEmpty || !itemB.shares.isEmpty ||
+                                       !itemA.linkedMovements.isEmpty || !itemB.linkedMovements.isEmpty ||
+                                       !itemA.paidByMe || !itemB.paidByMe
+                let isDuplicate = !hasRelationships && sameAmount && within48Hours && (sameRef || sameMerchant || timeDiff < 3600)
 
                 if isDuplicate {
                     // Merge itemB into itemA

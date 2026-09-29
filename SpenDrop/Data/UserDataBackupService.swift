@@ -13,12 +13,28 @@ public final class UserDataBackupService {
     // MARK: - Codable DTOs for Persistent Backup
 
     public struct BackupPayload: Codable {
+        /// 1 = expenses + PayBook only. 2 = adds accounts, money movements, splits, payer and account links.
+        /// 3 = adds locally learned classification rules.
+        public static let currentVersion = 3
+        public static let supportedVersions = 1...currentVersion
+
         public let version: Int
         public let appName: String
         public let accountName: String
         public let exportDate: Date
         public let expenses: [ExpenseDTO]
         public let paybookProfiles: [PayBookProfileDTO]
+        // Version 2 (absent in version 1 files)
+        public var accounts: [AccountDTO]? = nil
+        public var moneyMovements: [MoneyMovementDTO]? = nil
+        // Version 3
+        public var classificationRules: [ClassificationRuleDTO]? = nil
+
+        public var recordCount: RecordCount {
+            RecordCount(expenses: expenses.count, profiles: paybookProfiles.count,
+                        accounts: accounts?.count ?? 0, movements: moneyMovements?.count ?? 0,
+                        rules: classificationRules?.count ?? 0)
+        }
 
         public init(
             version: Int = 1,
@@ -34,6 +50,20 @@ public final class UserDataBackupService {
             self.exportDate = exportDate
             self.expenses = expenses
             self.paybookProfiles = paybookProfiles
+        }
+    }
+
+    public struct RecordCount: Equatable {
+        public var expenses: Int
+        public var profiles: Int
+        public var accounts: Int
+        public var movements: Int
+        public var rules: Int = 0
+
+        /// True when any kind of record would disappear.
+        public func isSmaller(than other: RecordCount) -> Bool {
+            expenses < other.expenses || profiles < other.profiles || accounts < other.accounts ||
+            movements < other.movements || rules < other.rules
         }
     }
 
@@ -57,6 +87,19 @@ public final class UserDataBackupService {
         public let fundingAccount: String?
         public let fundingInstrument: String?
         public let matchingStatusRaw: String?
+        // Added in Phase 0 (optional so older backup files still decode)
+        public var imageRelativePath: String? = nil
+        public var confidence: Double? = nil
+        public var externalTransactionId: String? = nil
+        public var matchingConfidence: Double? = nil
+        public var updatedAt: Date? = nil
+        // Version 2: relationships are stored as ids, never as names
+        public var accountId: UUID? = nil
+        public var paidByMe: Bool? = nil
+        public var payerId: UUID? = nil
+        public var payerNameSnapshot: String? = nil
+        public var splitMethodRaw: String? = nil
+        public var shares: [ExpenseShareDTO]? = nil
 
         public init(from expense: Expense) {
             self.id = expense.id
@@ -78,6 +121,17 @@ public final class UserDataBackupService {
             self.fundingAccount = expense.effectiveFundingAccount
             self.fundingInstrument = expense.fundingInstrument
             self.matchingStatusRaw = expense.matchingStatusRaw
+            self.imageRelativePath = expense.imageRelativePath
+            self.confidence = expense.confidence
+            self.externalTransactionId = expense.externalTransactionId
+            self.matchingConfidence = expense.matchingConfidence
+            self.updatedAt = expense.updatedAt
+            self.accountId = expense.account?.id
+            self.paidByMe = expense.paidByMe
+            self.payerId = expense.payer?.id
+            self.payerNameSnapshot = expense.payerNameSnapshot
+            self.splitMethodRaw = expense.splitMethodRaw
+            self.shares = expense.shares.sorted { $0.sortIndex < $1.sortIndex }.map { ExpenseShareDTO(from: $0) }
         }
 
         public init(
@@ -131,6 +185,8 @@ public final class UserDataBackupService {
         public let accountIdentifier: String
         public let label: String?
         public let notes: String?
+        public var createdAt: Date? = nil
+        public var updatedAt: Date? = nil
 
         public init(from method: PayBookPaymentMethod) {
             self.id = method.id
@@ -140,6 +196,8 @@ public final class UserDataBackupService {
             self.accountIdentifier = method.accountIdentifier
             self.label = method.label
             self.notes = method.notes
+            self.createdAt = method.createdAt
+            self.updatedAt = method.updatedAt
         }
 
         public init(
@@ -166,12 +224,20 @@ public final class UserDataBackupService {
         public let name: String
         public let notes: String?
         public let paymentMethods: [PayBookMethodDTO]
+        public var createdAt: Date? = nil
+        public var updatedAt: Date? = nil
+        public var isFrequent: Bool? = nil
+        public var isArchived: Bool? = nil
 
         public init(from profile: PayBookProfile) {
             self.id = profile.id
             self.name = profile.name
             self.notes = profile.notes
             self.paymentMethods = profile.paymentMethods.map { PayBookMethodDTO(from: $0) }
+            self.createdAt = profile.createdAt
+            self.updatedAt = profile.updatedAt
+            self.isFrequent = profile.isFrequent
+            self.isArchived = profile.isArchived
         }
 
         public init(
@@ -184,6 +250,114 @@ public final class UserDataBackupService {
             self.name = name
             self.notes = notes
             self.paymentMethods = paymentMethods
+        }
+    }
+
+    public struct AccountDTO: Codable {
+        public let id: UUID
+        public let name: String
+        public let typeRaw: String
+        public let currency: String
+        public let icon: String?
+        public let isArchived: Bool
+        public let createdAt: Date
+        public let sortIndex: Int
+
+        public init(from account: Account) {
+            self.id = account.id
+            self.name = account.name
+            self.typeRaw = account.typeRaw
+            self.currency = account.currency
+            self.icon = account.icon
+            self.isArchived = account.isArchived
+            self.createdAt = account.createdAt
+            self.sortIndex = account.sortIndex
+        }
+    }
+
+    public struct ExpenseShareDTO: Codable {
+        public let id: UUID
+        public let personId: UUID?
+        public let isMe: Bool
+        public let nameSnapshot: String
+        public let amountMinor: Int
+        public let parts: Int?
+        public let enteredMinor: Int?
+        public let sortIndex: Int
+
+        public init(from share: ExpenseShare) {
+            self.id = share.id
+            self.personId = share.person?.id
+            self.isMe = share.isMe
+            self.nameSnapshot = share.nameSnapshot
+            self.amountMinor = share.amountMinor
+            self.parts = share.parts
+            self.enteredMinor = share.enteredMinor
+            self.sortIndex = share.sortIndex
+        }
+    }
+
+    public struct MoneyMovementDTO: Codable {
+        public let id: UUID
+        public let directionRaw: String
+        public let kindRaw: String
+        public let amountMinor: Int
+        public let currency: String
+        public let date: Date
+        public let personId: UUID?
+        public let personNameSnapshot: String?
+        public let linkedExpenseId: UUID?
+        public let linkedExpenseSnapshot: String?
+        public let accountId: UUID?
+        public let counterAccountId: UUID?
+        public let note: String?
+        public let transactionReference: String?
+        public let sourceTypeRaw: String
+        public let paymentChannelRaw: String
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(from movement: MoneyMovement) {
+            self.id = movement.id
+            self.directionRaw = movement.directionRaw
+            self.kindRaw = movement.kindRaw
+            self.amountMinor = movement.amountMinor
+            self.currency = movement.currency
+            self.date = movement.date
+            self.personId = movement.person?.id
+            self.personNameSnapshot = movement.personNameSnapshot
+            self.linkedExpenseId = movement.linkedExpense?.id
+            self.linkedExpenseSnapshot = movement.linkedExpenseSnapshot
+            self.accountId = movement.account?.id
+            self.counterAccountId = movement.counterAccount?.id
+            self.note = movement.note
+            self.transactionReference = movement.transactionReference
+            self.sourceTypeRaw = movement.sourceTypeRaw
+            self.paymentChannelRaw = movement.paymentChannelRaw
+            self.createdAt = movement.createdAt
+            self.updatedAt = movement.updatedAt
+        }
+    }
+
+    public struct ClassificationRuleDTO: Codable {
+        public let id: UUID
+        public let merchantKey: String
+        public let categoryRaw: String?
+        public let suggestedTypeRaw: String?
+        public let accountId: UUID?
+        public let hitCount: Int
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(from rule: ClassificationRule) {
+            self.id = rule.id
+            self.merchantKey = rule.merchantKey
+            self.categoryRaw = rule.categoryRaw
+            self.suggestedTypeRaw = rule.suggestedTypeRaw
+            self.accountId = rule.accountId
+            self.hitCount = rule.hitCount
+            self.createdAt = rule.createdAt
+            self.updatedAt = rule.updatedAt
         }
     }
 
@@ -841,40 +1015,153 @@ public final class UserDataBackupService {
 
     // MARK: - Auto-Backup Management
 
-    /// Automatically writes a backup snapshot to the local Documents directory and App Group
-    public static func saveAutoBackup(from context: ModelContext) {
+    private static let backupHistoryFolderName = "SpenDropBackupHistory"
+    private static let maxDailyHistoryFiles = 7
+    private static let maxShrinkHistoryFiles = 5
+    private static var didSaveObserver: NSObjectProtocol?
+    private static var pendingAutoBackup: Task<Void, Never>?
+
+    /// Refreshes the auto-backup shortly after any SwiftData save (manual entry, edits, deletes, imports).
+    public static func startAutomaticBackups(for container: ModelContainer) {
+        guard didSaveObserver == nil else { return }
+        didSaveObserver = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                scheduleAutoBackup(from: container.mainContext)
+            }
+        }
+    }
+
+    /// Debounced backup so a burst of saves produces one write.
+    public static func scheduleAutoBackup(from context: ModelContext, delay: Duration = .seconds(2)) {
+        pendingAutoBackup?.cancel()
+        pendingAutoBackup = Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            saveAutoBackup(from: context)
+        }
+    }
+
+    /// Writes a backup snapshot to the local Documents directory and App Group.
+    /// Skipped in safe mode and for in-memory stores so a temporary store can never overwrite a real backup.
+    /// Before overwriting, the previous file is kept in `SpenDropBackupHistory/` (one per day, plus a copy
+    /// whenever the new backup contains fewer records than the old one).
+    @discardableResult
+    public static func saveAutoBackup(from context: ModelContext) -> Bool {
+        let isInMemory = context.container.configurations.allSatisfy { $0.isStoredInMemoryOnly }
+        guard !isInMemory, ExpenseDataContainer.isPersistentStoreHealthy, !ExpenseDataContainer.isUITesting else {
+            print("[SpenDrop][BackupService] Auto-backup skipped (in-memory or safe-mode store).")
+            return false
+        }
+
+        let payload = makePayload(from: context)
+        guard !payload.expenses.isEmpty || !payload.paybookProfiles.isEmpty || !(payload.moneyMovements ?? []).isEmpty else { return false }
+
+        guard let data = try? makeEncoder().encode(payload) else { return false }
+
+        var wroteAny = false
+        for url in [localAutoBackupURL, appGroupAutoBackupURL].compactMap({ $0 }) {
+            do {
+                try writeBackupData(data, to: url)
+                wroteAny = true
+                print("[SpenDrop][BackupService] Saved auto-backup to: \(url.path)")
+            } catch {
+                print("[SpenDrop][BackupService] Failed to write auto-backup to \(url.path): \(error)")
+            }
+        }
+        return wroteAny
+    }
+
+    /// Builds a complete version-2 backup of everything in the store.
+    static func makePayload(from context: ModelContext) -> BackupPayload {
         let expenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
         let profiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        let movements = (try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []
+        let rules = (try? context.fetch(FetchDescriptor<ClassificationRule>())) ?? []
 
-        guard !expenses.isEmpty || !profiles.isEmpty else { return }
-
-        let payload = BackupPayload(
-            version: 1,
+        var payload = BackupPayload(
+            version: BackupPayload.currentVersion,
             appName: "SpenDrop",
             accountName: defaultAccountName,
             exportDate: Date(),
             expenses: expenses.map { ExpenseDTO(from: $0) },
             paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }
         )
+        payload.accounts = accounts.map { AccountDTO(from: $0) }
+        payload.moneyMovements = movements.map { MoneyMovementDTO(from: $0) }
+        payload.classificationRules = rules.map { ClassificationRuleDTO(from: $0) }
+        return payload
+    }
 
+    /// Writes `data` to `url`, first preserving the file it replaces in the history folder next to it.
+    static func writeBackupData(_ data: Data, to url: URL, now: Date = Date()) throws {
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        if fm.fileExists(atPath: url.path) {
+            let historyDir = dir.appendingPathComponent(backupHistoryFolderName, isDirectory: true)
+            try fm.createDirectory(at: historyDir, withIntermediateDirectories: true)
+            let baseName = url.deletingPathExtension().lastPathComponent
+
+            // One copy per day, named after the day the old file was written.
+            let oldDate = ((try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date) ?? now
+            let dailyURL = historyDir.appendingPathComponent("\(baseName)_\(dayString(oldDate)).json")
+            if !fm.fileExists(atPath: dailyURL.path) {
+                try fm.copyItem(at: url, to: dailyURL)
+            }
+
+            // Extra copy whenever records would disappear from the backup.
+            if let oldPayload = decodePayload(at: url), let newPayload = try? makeDecoder().decode(BackupPayload.self, from: data),
+               newPayload.recordCount.isSmaller(than: oldPayload.recordCount) {
+                let shrinkURL = historyDir.appendingPathComponent("\(baseName)_before-shrink_\(ExpenseDataContainer.timestampString(now)).json")
+                try fm.copyItem(at: url, to: shrinkURL)
+                print("[SpenDrop][BackupService] Backup shrinks (\(oldPayload.expenses.count) -> \(newPayload.expenses.count) expenses). Kept previous copy at \(shrinkURL.lastPathComponent)")
+            }
+
+            pruneHistory(in: historyDir, prefix: "\(baseName)_before-shrink_", keep: maxShrinkHistoryFiles)
+            pruneHistory(in: historyDir, prefix: "\(baseName)_2", keep: maxDailyHistoryFiles)
+        }
+
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func pruneHistory(in dir: URL, prefix: String, keep: Int) {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names.filter({ $0.hasPrefix(prefix) }).sorted().dropLast(keep) {
+            try? fm.removeItem(at: dir.appendingPathComponent(name))
+        }
+    }
+
+    private static func dayString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
 
-        guard let data = try? encoder.encode(payload) else { return }
+    static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
 
-        // Save to local Documents
-        if let docURL = localAutoBackupURL {
-            try? data.write(to: docURL, options: .atomic)
-            print("[SpenDrop][BackupService] Saved auto-backup to: \(docURL.path)")
+    private static func decodePayload(at url: URL) -> BackupPayload? {
+        guard let data = try? Data(contentsOf: url),
+              let payload = try? makeDecoder().decode(BackupPayload.self, from: data) else { return nil }
+        guard BackupPayload.supportedVersions.contains(payload.version) else {
+            print("[SpenDrop][BackupService] Ignoring backup \(url.lastPathComponent): version \(payload.version) is not supported.")
+            return nil
         }
-
-        // Save to App Group Support if accessible
-        if let groupURL = appGroupAutoBackupURL {
-            let dir = groupURL.deletingLastPathComponent()
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try? data.write(to: groupURL, options: .atomic)
-        }
+        return payload
     }
 
     /// Attempts to restore data from the local auto-backup file if database is empty
@@ -885,19 +1172,14 @@ public final class UserDataBackupService {
         let count = (try? context.fetchCount(desc)) ?? 0
         guard count == 0 else { return false }
 
-        // Look for auto-backup file
-        let candidateURLs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap { $0 }
+        // Look for auto-backup file, then the most recent readable history copy
+        let candidateURLs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap { $0 } + historyBackupURLsNewestFirst()
         for url in candidateURLs {
-            if FileManager.default.fileExists(atPath: url.path),
-               let data = try? Data(contentsOf: url) {
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                if let payload = try? decoder.decode(BackupPayload.self, from: data) {
-                    print("[SpenDrop][BackupService] Restoring from auto-backup file: \(url.path)")
-                    applyBackupPayload(payload, into: context)
-                    try? context.save()
-                    return true
-                }
+            if let payload = decodePayload(at: url) {
+                print("[SpenDrop][BackupService] Restoring from auto-backup file: \(url.path)")
+                applyBackupPayload(payload, into: context)
+                try? context.save()
+                return true
             }
         }
 
@@ -906,27 +1188,27 @@ public final class UserDataBackupService {
         return true
     }
 
+    private static func historyBackupURLsNewestFirst() -> [URL] {
+        let fm = FileManager.default
+        let dirs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap {
+            $0?.deletingLastPathComponent().appendingPathComponent(backupHistoryFolderName, isDirectory: true)
+        }
+        let files = dirs.flatMap { dir -> [URL] in
+            let names = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+            return names.filter { $0.hasSuffix(".json") }.map { dir.appendingPathComponent($0) }
+        }
+        return files.sorted {
+            let a = ((try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date) ?? .distantPast
+            let b = ((try? fm.attributesOfItem(atPath: $1.path))?[.modificationDate] as? Date) ?? .distantPast
+            return a > b
+        }
+    }
+
     // MARK: - Export and Import JSON
 
     /// Creates an exportable JSON file and returns its URL for ShareSheet / saving
     public static func generateExportJSONFile(from context: ModelContext) -> URL? {
-        let expenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
-        let profiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
-
-        let payload = BackupPayload(
-            version: 1,
-            appName: "SpenDrop",
-            accountName: defaultAccountName,
-            exportDate: Date(),
-            expenses: expenses.map { ExpenseDTO(from: $0) },
-            paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }
-        )
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-
-        guard let data = try? encoder.encode(payload) else { return nil }
+        guard let data = try? makeEncoder().encode(makePayload(from: context)) else { return nil }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
@@ -943,97 +1225,183 @@ public final class UserDataBackupService {
         }
     }
 
+    /// Result of applying a backup file. Records are matched by `id` only.
+    public struct ImportSummary: Equatable {
+        public var expensesAdded = 0
+        public var expensesUpdated = 0
+        public var expensesKeptNewer = 0
+        public var possibleDuplicateExpenses = 0
+        public var profilesAdded = 0
+        public var profilesUpdated = 0
+        public var profilesKeptNewer = 0
+        public var profilesSharingName = 0
+        public var methodsAdded = 0
+        public var methodsUpdated = 0
+        public var accountsAdded = 0
+        public var accountsMatchedByName = 0
+        public var sharesRestored = 0
+        public var movementsAdded = 0
+        public var movementsUpdated = 0
+        public var movementsKeptNewer = 0
+        public var rulesRestored = 0
+        /// Relationship ids in the backup that point to records missing from both the backup and this device.
+        /// The link is left empty; name snapshots keep the history readable.
+        public var missingReferences = 0
+
+        public var message: String {
+            var lines = [
+                "Expenses: \(expensesAdded) added, \(expensesUpdated) updated.",
+                "PayBook people: \(profilesAdded) added, \(profilesUpdated) updated."
+            ]
+            if movementsAdded + movementsUpdated > 0 {
+                lines.append("Money movements: \(movementsAdded) added, \(movementsUpdated) updated.")
+            }
+            if accountsAdded > 0 {
+                lines.append("Accounts: \(accountsAdded) added.")
+            }
+            let keptNewer = expensesKeptNewer + profilesKeptNewer + movementsKeptNewer
+            if keptNewer > 0 {
+                lines.append("\(keptNewer) records on this device were newer and were kept.")
+            }
+            if possibleDuplicateExpenses > 0 {
+                lines.append("\(possibleDuplicateExpenses) imported expenses look similar to existing ones. They were imported, not skipped. Please review them.")
+            }
+            if profilesSharingName > 0 {
+                lines.append("\(profilesSharingName) imported people share a name with an existing person. They were kept separate.")
+            }
+            if missingReferences > 0 {
+                lines.append("\(missingReferences) links pointed to records that no longer exist and were left empty.")
+            }
+            return lines.joined(separator: "\n")
+        }
+    }
+
     /// Imports backup JSON file from an external URL (e.g. from Files picker)
     @discardableResult
-    public static func importFromJSON(at url: URL, into context: ModelContext) throws -> (expensesAdded: Int, profilesAdded: Int) {
+    public static func importFromJSON(at url: URL, into context: ModelContext) throws -> ImportSummary {
+        let targetIsInMemory = context.container.configurations.allSatisfy { $0.isStoredInMemoryOnly }
+        guard !(ExpenseDataContainer.didFailToOpenStore && targetIsInMemory) else {
+            throw NSError(domain: "SpenDropBackup", code: 2, userInfo: [NSLocalizedDescriptionKey: "SpenDrop is in safe mode because your database could not be opened. Import is disabled so nothing is lost."])
+        }
         guard url.startAccessingSecurityScopedResource() || true else {
             throw NSError(domain: "SpenDropBackup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Permission denied accessing backup file"])
         }
         defer { url.stopAccessingSecurityScopedResource() }
 
         let data = try Data(contentsOf: url)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let payload = try decoder.decode(BackupPayload.self, from: data)
+        let payload = try makeDecoder().decode(BackupPayload.self, from: data)
+        guard BackupPayload.supportedVersions.contains(payload.version) else {
+            throw NSError(domain: "SpenDropBackup", code: 3, userInfo: [NSLocalizedDescriptionKey: "This backup was made by a newer version of SpenDrop (format \(payload.version)). Please update the app before importing it. Nothing was imported."])
+        }
         let result = applyBackupPayload(payload, into: context)
         try context.save()
         saveAutoBackup(from: context)
         return result
     }
 
+    /// Applies a backup using `id` as the only identity:
+    /// - existing id: the record is updated from the backup (unless the device copy is newer)
+    /// - new id: the record is imported, even if it looks like an existing one (reported, never skipped)
+    /// - people are never merged because their names match
+    /// - accounts are matched by id, then by name (one "Maybank" account per user)
+    /// - version-2 fields are only applied from version-2 files; a version-1 file never clears them
     @discardableResult
-    private static func applyBackupPayload(_ payload: BackupPayload, into context: ModelContext) -> (expensesAdded: Int, profilesAdded: Int) {
-        let existingExpenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
-        var existingRefs = Set<String>()
-        var existingSignatures = Set<String>()
+    static func applyBackupPayload(_ payload: BackupPayload, into context: ModelContext) -> ImportSummary {
+        var summary = ImportSummary()
+        let isV2 = payload.version >= 2
 
-        for exp in existingExpenses {
-            if let ref = exp.transactionReference, !ref.isEmpty { existingRefs.insert(ref) }
-            let sig = "\(exp.merchant.lowercased())_\(exp.amount)_\(Calendar.current.component(.day, from: exp.date))"
-            existingSignatures.insert(sig)
+        // 1. Accounts
+        let existingAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        var accountsById = Dictionary(existingAccounts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var accountsByKey: [String: Account] = [:]
+        for account in existingAccounts {
+            if let key = account.nameKey, accountsByKey[key] == nil { accountsByKey[key] = account }
+        }
+        for aDTO in payload.accounts ?? [] {
+            if let found = accountsById[aDTO.id] {
+                found.name = aDTO.name
+                found.typeRaw = aDTO.typeRaw
+                found.currency = aDTO.currency
+                found.icon = aDTO.icon
+                found.isArchived = aDTO.isArchived
+                found.sortIndex = aDTO.sortIndex
+            } else if let key = AccountLinker.normalizedKey(aDTO.name), let sameName = accountsByKey[key] {
+                accountsById[aDTO.id] = sameName
+                summary.accountsMatchedByName += 1
+            } else {
+                let account = Account(id: aDTO.id, name: aDTO.name, type: AccountType(rawValue: aDTO.typeRaw) ?? .other,
+                                      currency: aDTO.currency, icon: aDTO.icon, isArchived: aDTO.isArchived,
+                                      createdAt: aDTO.createdAt, sortIndex: aDTO.sortIndex)
+                context.insert(account)
+                accountsById[aDTO.id] = account
+                if let key = account.nameKey { accountsByKey[key] = account }
+                summary.accountsAdded += 1
+            }
+        }
+        func account(_ id: UUID?) -> Account? {
+            guard let id else { return nil }
+            if let found = accountsById[id] { return found }
+            summary.missingReferences += 1
+            return nil
         }
 
-        var expensesAdded = 0
-        for dto in payload.expenses {
-            if let ref = dto.transactionReference, existingRefs.contains(ref) { continue }
-            let sig = "\(dto.merchant.lowercased())_\(dto.amount)_\(Calendar.current.component(.day, from: dto.date))"
-            if existingSignatures.contains(sig) { continue }
-
-            let cat = ExpenseCategory(rawValue: dto.categoryRaw) ?? .personal
-            let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
-            let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
-            let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
-            let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
-            let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
-            let matching = dto.matchingStatusRaw ?? "UNMATCHED"
-
-            let expense = Expense(
-                id: dto.id,
-                amount: dto.amount,
-                currency: dto.currency,
-                merchant: dto.merchant,
-                category: cat,
-                paymentSource: src,
-                underlyingBank: bank,
-                paymentMethod: dto.paymentMethodRaw,
-                date: dto.date,
-                notes: dto.notes,
-                transactionReference: dto.transactionReference,
-                sourceType: sType,
-                ocrText: dto.ocrText,
-                isSampleData: dto.isSampleData,
-                paymentChannel: channel,
-                fundingAccount: funding,
-                fundingInstrument: dto.fundingInstrument,
-                matchingStatus: matching
-            )
-            context.insert(expense)
-            expensesAdded += 1
-        }
-
+        // 2. People and their payment methods
         let existingProfiles = (try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []
-        var existingProfNames = Set(existingProfiles.map { $0.name.lowercased() })
-        var profilesAdded = 0
+        var profilesById = Dictionary(existingProfiles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let existingNames = Set(existingProfiles.map { $0.name.lowercased() })
+        let existingMethods = (try? context.fetch(FetchDescriptor<PayBookPaymentMethod>())) ?? []
+        var methodsById = Dictionary(existingMethods.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         for pDTO in payload.paybookProfiles {
             let prof: PayBookProfile
-            if let found = existingProfiles.first(where: { $0.name.lowercased() == pDTO.name.lowercased() }) {
+            if let found = profilesById[pDTO.id] {
                 prof = found
+                if let backupDate = pDTO.updatedAt, found.updatedAt > backupDate {
+                    summary.profilesKeptNewer += 1
+                } else {
+                    found.name = pDTO.name
+                    found.notes = pDTO.notes
+                    if let frequent = pDTO.isFrequent { found.isFrequent = frequent }
+                    if let archived = pDTO.isArchived { found.isArchived = archived }
+                    if let updated = pDTO.updatedAt { found.updatedAt = updated }
+                    summary.profilesUpdated += 1
+                }
             } else {
-                prof = PayBookProfile(id: pDTO.id, name: pDTO.name, notes: pDTO.notes)
+                if existingNames.contains(pDTO.name.lowercased()) {
+                    summary.profilesSharingName += 1
+                }
+                prof = PayBookProfile(
+                    id: pDTO.id,
+                    name: pDTO.name,
+                    notes: pDTO.notes,
+                    createdAt: pDTO.createdAt ?? Date(),
+                    updatedAt: pDTO.updatedAt ?? Date()
+                )
+                prof.isFrequent = pDTO.isFrequent ?? false
+                prof.isArchived = pDTO.isArchived ?? false
                 context.insert(prof)
-                existingProfNames.insert(pDTO.name.lowercased())
-                profilesAdded += 1
+                profilesById[pDTO.id] = prof
+                summary.profilesAdded += 1
             }
 
             for mDTO in pDTO.paymentMethods {
-                let hasMethod = prof.paymentMethods.contains {
-                    $0.displayProvider.lowercased() == mDTO.provider.lowercased() &&
-                    $0.normalizedIdentifier == mDTO.accountIdentifier.filter { $0.isNumber || $0.isLetter }.lowercased()
-                }
-                if !hasMethod {
-                    let pType = PayBookPaymentType(rawValue: mDTO.paymentTypeRaw) ?? .bankAccount
+                let pType = PayBookPaymentType(rawValue: mDTO.paymentTypeRaw) ?? .bankAccount
+                if let method = methodsById[mDTO.id] {
+                    if let backupDate = mDTO.updatedAt, method.updatedAt > backupDate { continue }
+                    method.paymentType = pType
+                    method.provider = mDTO.provider
+                    method.customProviderName = mDTO.customProviderName
+                    method.accountIdentifier = mDTO.accountIdentifier
+                    method.label = mDTO.label
+                    method.notes = mDTO.notes
+                    if let updated = mDTO.updatedAt { method.updatedAt = updated }
+                    if method.profile?.id != prof.id {
+                        method.profile?.paymentMethods.removeAll { $0.id == method.id }
+                        method.profile = prof
+                        prof.paymentMethods.append(method)
+                    }
+                    summary.methodsUpdated += 1
+                } else {
                     let method = PayBookPaymentMethod(
                         id: mDTO.id,
                         paymentType: pType,
@@ -1042,14 +1410,224 @@ public final class UserDataBackupService {
                         accountIdentifier: mDTO.accountIdentifier,
                         label: mDTO.label,
                         notes: mDTO.notes,
+                        createdAt: mDTO.createdAt ?? Date(),
+                        updatedAt: mDTO.updatedAt ?? Date(),
                         profile: prof
                     )
                     context.insert(method)
                     prof.paymentMethods.append(method)
+                    methodsById[mDTO.id] = method
+                    summary.methodsAdded += 1
                 }
             }
         }
+        func person(_ id: UUID?) -> PayBookProfile? {
+            guard let id else { return nil }
+            if let found = profilesById[id] { return found }
+            summary.missingReferences += 1
+            return nil
+        }
 
-        return (expensesAdded, profilesAdded)
+        // 3. Expenses, with account, payer and split
+        let existingExpenses = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
+        var expensesById = Dictionary(existingExpenses.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var existingRefs = Set<String>()
+        var existingSignatures = Set<String>()
+        for exp in existingExpenses {
+            if let ref = exp.transactionReference, !ref.isEmpty { existingRefs.insert(ref) }
+            existingSignatures.insert(expenseSignature(merchant: exp.merchant, amount: exp.amount, date: exp.date))
+        }
+        let existingShares = (try? context.fetch(FetchDescriptor<ExpenseShare>())) ?? []
+        var sharesById = Dictionary(existingShares.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        for dto in payload.expenses {
+            let expense: Expense
+            if let existing = expensesById[dto.id] {
+                if let backupDate = dto.updatedAt, existing.updatedAt > backupDate {
+                    summary.expensesKeptNewer += 1
+                    continue
+                }
+                apply(dto, to: existing)
+                expense = existing
+                summary.expensesUpdated += 1
+            } else {
+                let sameRef = dto.transactionReference.map { !$0.isEmpty && existingRefs.contains($0) } ?? false
+                if sameRef || existingSignatures.contains(expenseSignature(merchant: dto.merchant, amount: dto.amount, date: dto.date)) {
+                    summary.possibleDuplicateExpenses += 1
+                }
+                expense = makeExpense(from: dto)
+                context.insert(expense)
+                expensesById[dto.id] = expense
+                summary.expensesAdded += 1
+            }
+
+            guard isV2 else { continue }
+            expense.account = account(dto.accountId)
+            expense.paidByMe = dto.paidByMe ?? true
+            expense.payer = person(dto.payerId)
+            expense.payerNameSnapshot = dto.payerNameSnapshot
+            expense.splitMethodRaw = dto.splitMethodRaw
+
+            // The backup's share list is the truth for this expense: update/insert by id, remove the rest.
+            let backupShares = dto.shares ?? []
+            let keepIds = Set(backupShares.map(\.id))
+            for stale in expense.shares where !keepIds.contains(stale.id) {
+                context.delete(stale)
+            }
+            for sDTO in backupShares {
+                let share = sharesById[sDTO.id] ?? {
+                    let created = ExpenseShare(id: sDTO.id, nameSnapshot: sDTO.nameSnapshot, amountMinor: sDTO.amountMinor)
+                    context.insert(created)
+                    sharesById[sDTO.id] = created
+                    return created
+                }()
+                share.expense = expense
+                share.person = sDTO.isMe ? nil : person(sDTO.personId)
+                share.isMe = sDTO.isMe
+                share.nameSnapshot = sDTO.nameSnapshot
+                share.amountMinor = sDTO.amountMinor
+                share.parts = sDTO.parts
+                share.enteredMinor = sDTO.enteredMinor
+                share.sortIndex = sDTO.sortIndex
+                summary.sharesRestored += 1
+            }
+        }
+
+        // 4. Money movements
+        let existingMovements = (try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []
+        var movementsById = Dictionary(existingMovements.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for mDTO in payload.moneyMovements ?? [] {
+            let movement: MoneyMovement
+            if let found = movementsById[mDTO.id] {
+                if found.updatedAt > mDTO.updatedAt {
+                    summary.movementsKeptNewer += 1
+                    continue
+                }
+                movement = found
+                summary.movementsUpdated += 1
+            } else {
+                movement = MoneyMovement(id: mDTO.id, kind: MoneyMovementKind(rawValue: mDTO.kindRaw) ?? .otherOut, amountMinor: mDTO.amountMinor)
+                context.insert(movement)
+                movementsById[mDTO.id] = movement
+                summary.movementsAdded += 1
+            }
+            movement.directionRaw = mDTO.directionRaw
+            movement.kindRaw = mDTO.kindRaw
+            movement.amountMinor = mDTO.amountMinor
+            movement.currency = mDTO.currency
+            movement.date = mDTO.date
+            movement.person = person(mDTO.personId)
+            movement.personNameSnapshot = mDTO.personNameSnapshot
+            if let expenseId = mDTO.linkedExpenseId {
+                movement.linkedExpense = expensesById[expenseId]
+                if movement.linkedExpense == nil { summary.missingReferences += 1 }
+            } else {
+                movement.linkedExpense = nil
+            }
+            movement.linkedExpenseSnapshot = mDTO.linkedExpenseSnapshot
+            movement.account = account(mDTO.accountId)
+            movement.counterAccount = account(mDTO.counterAccountId)
+            movement.note = mDTO.note
+            movement.transactionReference = mDTO.transactionReference
+            movement.sourceTypeRaw = mDTO.sourceTypeRaw
+            movement.paymentChannelRaw = mDTO.paymentChannelRaw
+            movement.createdAt = mDTO.createdAt
+            movement.updatedAt = mDTO.updatedAt
+        }
+
+        // 5. Learned classification rules (version 3): by id, then by merchant key (one rule per merchant)
+        let existingRules = (try? context.fetch(FetchDescriptor<ClassificationRule>())) ?? []
+        var rulesById = Dictionary(existingRules.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var rulesByKey = Dictionary(existingRules.map { ($0.merchantKey, $0) }, uniquingKeysWith: { first, _ in first })
+        for rDTO in payload.classificationRules ?? [] {
+            let rule = rulesById[rDTO.id] ?? rulesByKey[rDTO.merchantKey]
+            if let rule {
+                guard rDTO.updatedAt >= rule.updatedAt else { continue }
+                rule.categoryRaw = rDTO.categoryRaw
+                rule.suggestedTypeRaw = rDTO.suggestedTypeRaw
+                rule.accountId = rDTO.accountId
+                rule.hitCount = rDTO.hitCount
+                rule.updatedAt = rDTO.updatedAt
+            } else {
+                let created = ClassificationRule(id: rDTO.id, merchantKey: rDTO.merchantKey, categoryRaw: rDTO.categoryRaw,
+                                                 suggestedTypeRaw: rDTO.suggestedTypeRaw, accountId: rDTO.accountId,
+                                                 hitCount: rDTO.hitCount, createdAt: rDTO.createdAt, updatedAt: rDTO.updatedAt)
+                context.insert(created)
+                rulesById[rDTO.id] = created
+                rulesByKey[rDTO.merchantKey] = created
+            }
+            summary.rulesRestored += 1
+        }
+
+        return summary
+    }
+
+    private static func expenseSignature(merchant: String, amount: Double, date: Date) -> String {
+        "\(merchant.lowercased())_\(amount)_\(Calendar.current.component(.day, from: date))"
+    }
+
+    private static func makeExpense(from dto: ExpenseDTO) -> Expense {
+        let cat = ExpenseCategory(rawValue: dto.categoryRaw) ?? .personal
+        let src = PaymentSource(rawValue: dto.paymentSourceRaw) ?? .touchNGo
+        let bank = dto.underlyingBankRaw != nil ? PaymentSource(rawValue: dto.underlyingBankRaw!) : nil
+        let sType = ExpenseSourceType(rawValue: dto.sourceTypeRaw) ?? .screenshot
+        let channel = dto.paymentChannelRaw != nil ? (PaymentChannel(rawValue: dto.paymentChannelRaw!) ?? .unknown) : .unknown
+        let funding = dto.fundingAccount ?? bank?.rawValue ?? (src != .applePay && src != .qrPayment && src != .bankTransfer && src != .physicalCard && src != .unknown ? src.rawValue : "Unknown")
+        let matching = dto.matchingStatusRaw ?? "UNMATCHED"
+
+        return Expense(
+            id: dto.id,
+            amount: dto.amount,
+            currency: dto.currency,
+            merchant: dto.merchant,
+            category: cat,
+            paymentSource: src,
+            underlyingBank: bank,
+            paymentMethod: dto.paymentMethodRaw,
+            date: dto.date,
+            notes: dto.notes,
+            transactionReference: dto.transactionReference,
+            imageRelativePath: dto.imageRelativePath,
+            sourceType: sType,
+            ocrText: dto.ocrText,
+            confidence: dto.confidence,
+            isSampleData: dto.isSampleData,
+            createdAt: dto.createdAt,
+            updatedAt: dto.updatedAt ?? dto.createdAt,
+            paymentChannel: channel,
+            fundingAccount: funding,
+            fundingInstrument: dto.fundingInstrument,
+            externalTransactionId: dto.externalTransactionId,
+            matchingStatus: matching,
+            matchingConfidence: dto.matchingConfidence
+        )
+    }
+
+    /// Updates an existing expense from a backup record. Fields added after backup version 1 are only
+    /// applied when the backup contains them, so an older file never clears newer data.
+    private static func apply(_ dto: ExpenseDTO, to expense: Expense) {
+        expense.amount = dto.amount
+        expense.currency = dto.currency
+        expense.merchant = dto.merchant
+        expense.categoryRaw = dto.categoryRaw
+        expense.paymentSourceRaw = dto.paymentSourceRaw
+        expense.underlyingBankRaw = dto.underlyingBankRaw
+        expense.paymentMethodRaw = dto.paymentMethodRaw
+        expense.date = dto.date
+        expense.notes = dto.notes
+        expense.transactionReference = dto.transactionReference
+        expense.sourceTypeRaw = dto.sourceTypeRaw
+        expense.ocrText = dto.ocrText
+        expense.isSampleData = dto.isSampleData
+        expense.createdAt = dto.createdAt
+        if let channel = dto.paymentChannelRaw { expense.paymentChannelRaw = channel }
+        if let funding = dto.fundingAccount { expense.fundingAccount = funding }
+        expense.fundingInstrument = dto.fundingInstrument
+        if let matching = dto.matchingStatusRaw { expense.matchingStatusRaw = matching }
+        if let path = dto.imageRelativePath { expense.imageRelativePath = path }
+        if let confidence = dto.confidence { expense.confidence = confidence }
+        if let externalId = dto.externalTransactionId { expense.externalTransactionId = externalId }
+        if let matchingConfidence = dto.matchingConfidence { expense.matchingConfidence = matchingConfidence }
+        if let updated = dto.updatedAt { expense.updatedAt = updated }
     }
 }
