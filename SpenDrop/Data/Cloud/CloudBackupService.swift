@@ -129,3 +129,19 @@ public final class CloudBackupService {
     private static let lastBackupKey = "SpenDrop.cloudLastBackupDate"
     private static let lastHashKey = "SpenDrop.cloudLastBackupHash"
 
+    public init(auth: AuthService, transport: HTTPTransport, defaults: UserDefaults, device: Device,
+                contextProvider: @escaping () -> ModelContext, canUseLocalStore: @escaping () -> Bool,
+                makeSafetyBackup: @escaping (ModelContext) -> Bool) {
+        self.auth = auth
+        self.transport = transport
+        self.defaults = defaults
+        self.device = device
+        self.contextProvider = contextProvider
+        self.canUseLocalStore = canUseLocalStore
+        self.makeSafetyBackup = makeSafetyBackup
+        self.lastBackupDate = defaults.object(forKey: Self.lastBackupKey) as? Date
+        self.status = auth.config == nil ? .notConfigured : (auth.currentUser == nil ? .notSignedIn : .idle)
+    }
+
+    // MARK: Automatic backups
+
