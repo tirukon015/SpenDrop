@@ -104,3 +104,27 @@ public struct Phase7Tests {
                     actual: "account=\(incoming.account?.name ?? "nil") to=\(topUp.counterAccount?.name ?? "nil") unknown=\(unknownAccount.account?.name ?? "nil") source=\(saved?.sourceType.rawValue ?? "nil")")
         }
 
+        // MARK: Apple Pay automation
+        do {
+            let ctx = TestKit.context()
+            TransactionClassifier.learn(merchant: "Starbucks", category: .food, in: ctx)
+            TransactionClassifier.learn(merchant: "Starbucks", category: .food, in: ctx)
+            let first = ApplePayAutomation.record(amount: 18.9, merchant: "Starbucks", card: "Maybank Visa Debit", in: ctx)
+            let repeated = ApplePayAutomation.record(amount: 18.9, merchant: "starbucks", card: "Maybank Visa Debit", in: ctx)
+            let invalid = ApplePayAutomation.record(amount: 0, merchant: "X", card: nil, in: ctx)
+            let unknownCard = ApplePayAutomation.record(amount: 5, merchant: "Kiosk", card: "My Card", in: ctx)
+            let expenses = TestKit.fetch(Expense.self, in: ctx)
+            let starbucks = expenses.first { $0.merchant == "Starbucks" }
+            let kiosk = expenses.first { $0.merchant == "Kiosk" }
+            var savedID: UUID?
+            if case .saved(let id) = first { savedID = id }
+            t.check("Apple Pay automation: saved as Apple Pay expense (learned category, Maybank linked); repeat skipped; invalid rejected",
+                    savedID == starbucks?.id && starbucks?.paymentChannel == .applePay && starbucks?.sourceType == .appleWallet &&
+                    starbucks?.category == .food && starbucks?.account?.name == "Maybank" && starbucks?.amountMinor == 1890 &&
+                    repeated == .duplicate && invalid != .duplicate && expenses.count == 2 &&
+                    kiosk?.fundingAccount == "Unknown" && kiosk?.account == nil,
+                    expected: "1 Starbucks + 1 Kiosk; duplicate skipped; unknown card unlinked",
+                    actual: "expenses=\(expenses.count) repeat=\(repeated) account=\(starbucks?.account?.name ?? "nil") kiosk=\(kiosk?.fundingAccount ?? "nil")")
+            _ = unknownCard
+        }
+
