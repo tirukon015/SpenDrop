@@ -407,6 +407,31 @@ add_group(paybook_group_id, "PayBook", "PayBook", [
     file_refs["SpenDrop/Views/PayBook/PayBookPickerSheet.swift"]
 ])
 
+more_group_id = gen_id("GROUP_Views_More")
+add_group(more_group_id, "More", "More", [
+    file_refs["SpenDrop/Views/More/MoreView.swift"]
+])
+
+accounts_group_id = gen_id("GROUP_Views_Accounts")
+add_group(accounts_group_id, "Accounts", "Accounts", [
+    file_refs["SpenDrop/Views/Accounts/AccountsView.swift"]
+])
+
+money_group_id = gen_id("GROUP_Views_Money")
+add_group(money_group_id, "Money", "Money", [
+    file_refs["SpenDrop/Views/Money/MoneyMovementFormView.swift"]
+])
+
+split_group_id = gen_id("GROUP_split_group_id")
+add_group(split_group_id, "Split", "Split", [
+    file_refs["SpenDrop/Views/Split/SplitEditorView.swift"]
+])
+
+account_views_group_id = gen_id("GROUP_account_views_group_id")
+add_group(account_views_group_id, "Account", "Account", [
+    file_refs["SpenDrop/Views/Account/AccountView.swift"]
+])
+
 views_group_id = gen_id("GROUP_Views")
 add_group(views_group_id, "Views", "Views", [
     dash_group_id,
