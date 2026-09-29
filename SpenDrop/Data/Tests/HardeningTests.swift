@@ -44,3 +44,59 @@ public struct HardeningTests {
                     passed, expected: "all kept", actual: actual)
         }
 
+        // MARK: Full local backup round trip: export → wipe → import
+        do {
+            let original = TestKit.context()
+            let maybank = Account(name: "Maybank", type: .bank), tng = Account(name: "Touch 'n Go", type: .eWallet), wise = Account(name: "Wise", isArchived: true)
+            [maybank, tng, wise].forEach { original.insert($0) }
+            let bijoy = PayBookProfile(name: "Bijoy"), shadin = PayBookProfile(name: "Shadin")
+            original.insert(bijoy); original.insert(shadin)
+            bijoy.isFrequent = true
+            let dinner = Expense(amount: 30, merchant: "Dinner", fundingAccount: "Maybank"); original.insert(dinner); dinner.account = maybank
+            var split = SplitDraft(); split.method = .parts; split.add(bijoy); split.setParts(2, for: split.participants[1].id); split.apply(to: dinner, in: original)
+            let usd = Expense(amount: 10, currency: "USD", merchant: "Abroad"); original.insert(usd)
+            let purchase = Expense(amount: 100, merchant: "Uniqlo"); original.insert(purchase)
+            let movements = [
+                MoneyMovement(kind: .refund, amountMinor: 3000, linkedExpense: purchase, account: maybank),
+                MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: shadin, account: maybank),
+                MoneyMovement(kind: .ownTransfer, amountMinor: 20000, account: maybank, counterAccount: tng),
+                MoneyMovement(kind: .income, amountMinor: 300000, account: maybank, note: "Salary")
+            ]
+            movements.forEach { original.insert($0) }
+            TransactionClassifier.learn(merchant: "Dinner", category: .food, in: original)
+            try? original.save()
+
+            var passed = false
+            var actual = "export failed"
+            if let url = UserDataBackupService.generateExportJSONFile(from: original) {
+                let wiped = TestKit.context()
+                let summary = try? UserDataBackupService.importFromJSON(at: url, into: wiped)
+                let again = try? UserDataBackupService.importFromJSON(at: url, into: wiped)       // duplicate import
+                try? FileManager.default.removeItem(at: url)
+                let e = TestKit.fetch(Expense.self, in: wiped), m = TestKit.fetch(MoneyMovement.self, in: wiped)
+                let rDinner = e.first { $0.id == dinner.id }
+                let rRefund = m.first { $0.kind == .refund }
+                let rLoan = m.first { $0.kind == .loanGiven }
+                let rTransfer = m.first { $0.kind == .ownTransfer }
+                let rShadin = TestKit.fetch(PayBookProfile.self, in: wiped).first { $0.id == shadin.id }
+                let rBijoy = TestKit.fetch(PayBookProfile.self, in: wiped).first { $0.id == bijoy.id }
+                let sameTimes = abs((rDinner?.createdAt ?? .distantPast).timeIntervalSince(dinner.createdAt)) < 1 &&
+                                abs((rLoan?.updatedAt ?? .distantPast).timeIntervalSince(movements[1].updatedAt)) < 1
+                let totalsRM = FinancialCalculator.summary(expenses: e, movements: m) == FinancialCalculator.summary(expenses: [dinner, usd, purchase], movements: movements)
+                let totalsUSD = FinancialCalculator.summary(expenses: e, movements: m, currency: "USD").spendingMinor == 1000
+                passed = summary?.expensesAdded == 3 && again?.expensesAdded == 0 && again?.movementsAdded == 0 &&
+                    e.count == 3 && m.count == 4 && TestKit.count(ExpenseShare.self, in: wiped) == 2 && TestKit.count(Account.self, in: wiped) == 3 &&
+                    TestKit.count(ClassificationRule.self, in: wiped) == 1 &&
+                    rDinner?.account?.id == maybank.id && rDinner?.splitMethod == .parts && rDinner?.myShareMinor == 1000 &&
+                    rDinner?.shares.first { !$0.isMe }?.person?.id == bijoy.id && rDinner?.shares.first { !$0.isMe }?.parts == 2 &&
+                    rRefund?.linkedExpense?.id == purchase.id && rRefund?.linkedExpenseSnapshot?.hasPrefix("Uniqlo") == true &&
+                    rLoan?.person?.id == shadin.id && rLoan?.personNameSnapshot == "Shadin" &&
+                    rTransfer?.account?.id == maybank.id && rTransfer?.counterAccount?.id == tng.id &&
+                    TestKit.fetch(Account.self, in: wiped).first { $0.id == wise.id }?.isArchived == true && rBijoy?.isFrequent == true &&
+                    rShadin.map { PersonLedger.balances(for: $0)["RM"] } == 15000 && sameTimes && totalsRM && totalsUSD
+                actual = "added=\(summary?.expensesAdded ?? -1) again=\(again?.expensesAdded ?? -1) e=\(e.count) m=\(m.count) totals=\(totalsRM)/\(totalsUSD) times=\(sameTimes)"
+            }
+            t.check("Local backup round trip (export → wipe → import, twice): every record, link, snapshot, timestamp and total",
+                    passed, expected: "identical, second import adds nothing", actual: actual)
+        }
+
