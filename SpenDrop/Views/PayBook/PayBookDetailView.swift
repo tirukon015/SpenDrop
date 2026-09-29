@@ -14,6 +14,12 @@ public struct PayBookDetailView: View {
     @State private var showingDeleteProfileAlert: Bool = false
     @State private var showingDeleteMethodAlert: Bool = false
 
+    // Balances & history (Phase 5)
+    @State private var repayment: PrefilledMovement?
+    @State private var selectedExpense: Expense?
+    @State private var selectedMovement: MoneyMovement?
+    @State private var showingCannotDeleteAlert: Bool = false
+
     // Copy Feedback states
     @State private var isNameCopied: Bool = false
     @State private var copiedMethodId: UUID?
@@ -90,6 +96,9 @@ public struct PayBookDetailView: View {
                 .padding(.vertical, 24)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                // BALANCE (always calculated; positive = they owe me)
+                balanceSection
 
                 // PAYMENT METHODS SECTION
                 VStack(alignment: .leading, spacing: 14) {
