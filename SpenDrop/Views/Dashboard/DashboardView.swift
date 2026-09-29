@@ -162,7 +162,7 @@ public struct DashboardView: View {
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
-                                Text("Dashboard")
+                                Text("Home")
                                     .font(.largeTitle)
                                     .fontWeight(.bold)
                             }
@@ -225,6 +225,10 @@ public struct DashboardView: View {
                             }
                         }
                         .padding(.horizontal)
+
+                        // SECONDARY CARDS (only when relevant)
+                        secondaryCards
+                            .padding(.horizontal)
 
                         // TODAY'S EXPENSES LIST
                         VStack(alignment: .leading, spacing: 14) {
@@ -507,9 +511,11 @@ public struct DashboardView: View {
         do {
             ocrResult = try await OCRService.shared.recognizeText(from: uiImage)
             print("[SpenDrop][IMAGE] OCR completed: SUCCESS (lines: \(ocrResult.lines.count), avgConfidence: \(ocrResult.averageConfidence), textLength: \(ocrResult.fullText.count))")
+            #if DEBUG
             for (idx, line) in ocrResult.lines.prefix(5).enumerated() {
                 print("[SpenDrop][IMAGE] Line \(idx + 1): \"\(line.text)\" (conf: \(line.confidence))")
             }
+            #endif
         } catch {
             print("[SpenDrop][IMAGE] OCR FAILED: \(error)")
             handleImportFailure(stage: "Vision OCR", error: error)
@@ -519,7 +525,9 @@ public struct DashboardView: View {
         // Stage 8: Parser
         print("[SpenDrop][IMAGE] Parser started")
         let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: uiImage)
+        #if DEBUG
         print("[SpenDrop][IMAGE] Parser completed: amount: \(parsed.amount != nil ? "RM\(parsed.amount!)" : "nil"), merchant: \(parsed.merchant ?? "nil"), source: \(parsed.paymentSource?.rawValue ?? "nil"), category: \(parsed.category?.rawValue ?? "nil"), confidence: \(parsed.confidence.rawValue), isBalance: \(parsed.isBalanceOrLimitOnly), isFailed: \(parsed.isFailedTransaction)")
+        #endif
 
         isProcessingOCR = false
         selectedPhotoItem = nil
