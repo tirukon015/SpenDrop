@@ -285,3 +285,27 @@ private extension AccountDetailView {
 
 // MARK: - Records without an account
 
+struct UnlinkedMovementsView: View {
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var movements: [MoneyMovement]
+    @State private var selectedMovement: MoneyMovement?
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(movements.filter { $0.account == nil && $0.counterAccount == nil }) { movement in
+                    Button { selectedMovement = movement } label: {
+                        MovementRow(movement: movement, incoming: movement.kind.direction == .moneyIn)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } footer: {
+                Text("Money In and Money Out records saved without an account. Tap one to edit it or add an account.")
+            }
+        }
+        .navigationTitle("Not Linked")
+        .sheet(item: $selectedMovement) { movement in
+            MoneyMovementEditSheet(movement: movement)
+        }
+    }
+}
+
