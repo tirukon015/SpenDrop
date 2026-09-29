@@ -34,3 +34,25 @@ public struct TestKit {
 /// Runs every in-app suite and reports per-suite totals. `--run-all-tests`
 @MainActor
 public enum AllTestSuites {
+    public struct SuiteResult {
+        public let name: String
+        public let results: [TestCaseResult]
+        public var passed: Int { results.filter(\.passed).count }
+    }
+
+    public static let suites: [(name: String, flag: String, run: () -> [TestCaseResult])] = [
+        ("Existing", "--run-tests", { TransactionParserTests.runAllTests() }),
+        ("Data safety", "--run-data-safety-tests", { DataSafetyTests.runAllTests() }),
+        ("Phase 2", "--run-financial-tests", { FinancialModelTests.runAllTests() }),
+        ("Phase 3", "--run-account-tests", { AccountFeatureTests.runAllTests() }),
+        ("Phase 4", "--run-split-tests", { SplitFeatureTests.runAllTests() }),
+        ("Phase 5", "--run-people-tests", { PeopleBalanceTests.runAllTests() }),
+        ("Phase 6", "--run-timeline-tests", { ActivityFeedTests.runAllTests() }),
+        ("Phase 7", "--run-phase7-tests", { Phase7Tests.runAllTests() }),
+        ("Phase 8", "--run-hardening-tests", { HardeningTests.runAllTests() }),
+        ("Authentication", "--run-auth-tests", { blocking { await AuthTests.runAllTests() } }),
+        ("Cloud Backup", "--run-cloud-tests", { blocking { await CloudBackupTests.runAllTests() } }),
+        // Must stay last: proves none of the suites above touched the user's real database.
+        ("Test isolation", "--run-all-tests", { isolationCheck() })
+    ]
+
