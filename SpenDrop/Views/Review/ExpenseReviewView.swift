@@ -4,6 +4,7 @@ import SwiftData
 public struct ExpenseReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Account.sortIndex) private var accounts: [Account]
 
     public let initialParsed: ParsedTransaction
     public var onSaved: ((Expense) -> Void)?
@@ -30,6 +31,12 @@ public struct ExpenseReviewView: View {
     // PayBook Integration State
     @State private var showingSaveToPayBookSheet = false
 
+    // Save as Expense / Money In / Money Out / Transfer (suggested from clear wording only; user confirms)
+    @State private var saveAs: TransactionEntryType
+    @State private var pendingMovement: PrefilledMovement?
+    @State private var movementDuplicateMessage: String?
+    @State private var categoryTouched = false
+
     public init(parsed: ParsedTransaction, onSaved: ((Expense) -> Void)? = nil) {
         self.initialParsed = parsed
         self.onSaved = onSaved
@@ -44,6 +51,7 @@ public struct ExpenseReviewView: View {
         _date = State(initialValue: parsed.date ?? Date())
         _notes = State(initialValue: parsed.suggestedRemark ?? "")
         _transactionReference = State(initialValue: parsed.transactionReference)
+        _saveAs = State(initialValue: parsed.suggestedMovementKind.map(TransactionEntryType.init(kind:)) ?? .expense)
     }
 
     private var parsedAmount: Double {
