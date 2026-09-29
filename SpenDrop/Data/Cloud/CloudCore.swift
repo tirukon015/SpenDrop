@@ -80,3 +80,22 @@ public struct URLSessionTransport: HTTPTransport {
         self.session = session
     }
 
+    public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudError.invalidResponse }
+            return (data, http)
+        } catch let error as URLError {
+            switch error.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff:
+                throw CloudError.offline
+            case .cancelled:
+                throw CloudError.cancelled
+            default:
+                throw CloudError.server(status: error.errorCode, message: error.localizedDescription)
+            }
+        }
+    }
+}
+
