@@ -6,6 +6,8 @@ public enum PayBookPickerMode {
     case selectForPayment
     /// Save current payment details to an existing person or new profile
     case saveRecipient(name: String, provider: String, account: String)
+    /// Pick a person (no payment method needed), or add a new one by name
+    case selectPerson
 }
 
 public struct PayBookPickerSheet: View {
@@ -16,19 +18,24 @@ public struct PayBookPickerSheet: View {
     public let mode: PayBookPickerMode
     public var onSelect: ((PayBookProfile, PayBookPaymentMethod) -> Void)?
     public var onSaved: (() -> Void)?
+    public var onSelectPerson: ((PayBookProfile) -> Void)?
 
     @State private var searchText: String = ""
     @State private var selectedProfileForAccounts: PayBookProfile?
     @State private var showingCreateNewSheet: Bool = false
+    @State private var showingNewPersonAlert: Bool = false
+    @State private var newPersonName: String = ""
 
     public init(
         mode: PayBookPickerMode = .selectForPayment,
         onSelect: ((PayBookProfile, PayBookPaymentMethod) -> Void)? = nil,
-        onSaved: (() -> Void)? = nil
+        onSaved: (() -> Void)? = nil,
+        onSelectPerson: ((PayBookProfile) -> Void)? = nil
     ) {
         self.mode = mode
         self.onSelect = onSelect
         self.onSaved = onSaved
+        self.onSelectPerson = onSelectPerson
     }
 
     private var filteredProfiles: [PayBookProfile] {
