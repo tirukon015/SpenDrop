@@ -481,9 +481,10 @@ public final class TransactionFilterEngine {
     }
 
     // MARK: - Aggregated KPIs
+    // Spending = full amount when I paid, my share when someone else paid (identical to `amount` for normal expenses).
 
     public var totalSpending: Double {
-        filteredExpenses.reduce(0.0) { $0 + $1.amount }
+        filteredExpenses.reduce(0.0) { $0 + $1.spendingAmount }
     }
 
     public var transactionCount: Int {
@@ -593,7 +594,7 @@ public final class TransactionFilterEngine {
         while currentDate <= finalDate {
             let key = fullFormatter.string(from: currentDate)
             let dayExpenses = expensesByDay[key] ?? []
-            let sum = dayExpenses.reduce(0.0) { $0 + $1.amount }
+            let sum = dayExpenses.reduce(0.0) { $0 + $1.spendingAmount }
             let count = dayExpenses.count
 
             let label: String
@@ -633,7 +634,7 @@ public final class TransactionFilterEngine {
         let total = totalSpending
         let grouped = Dictionary(grouping: filteredExpenses, by: { $0.category })
         return grouped.map { (cat, items) in
-            let sum = items.reduce(0.0) { $0 + $1.amount }
+            let sum = items.reduce(0.0) { $0 + $1.spendingAmount }
             let pct = total > 0 ? (sum / total) * 100.0 : 0.0
             return CategoryBreakdownItem(category: cat, total: sum, count: items.count, percentage: pct)
         }.sorted { $0.total > $1.total }
@@ -643,7 +644,7 @@ public final class TransactionFilterEngine {
         let total = totalSpending
         let grouped = Dictionary(grouping: filteredExpenses, by: { $0.paymentChannel })
         return grouped.map { (channel, items) in
-            let sum = items.reduce(0.0) { $0 + $1.amount }
+            let sum = items.reduce(0.0) { $0 + $1.spendingAmount }
             let pct = total > 0 ? (sum / total) * 100.0 : 0.0
             return ChannelBreakdownItem(channel: channel, total: sum, count: items.count, percentage: pct)
         }.sorted { $0.total > $1.total }
@@ -653,7 +654,7 @@ public final class TransactionFilterEngine {
         let total = totalSpending
         let grouped = Dictionary(grouping: filteredExpenses, by: { $0.effectiveFundingAccount })
         return grouped.map { (account, items) in
-            let sum = items.reduce(0.0) { $0 + $1.amount }
+            let sum = items.reduce(0.0) { $0 + $1.spendingAmount }
             let pct = total > 0 ? (sum / total) * 100.0 : 0.0
             let ps = PaymentSource.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(account) == .orderedSame })
             return FundingBreakdownItem(name: account, total: sum, count: items.count, percentage: pct, paymentSource: ps)
@@ -704,7 +705,7 @@ public final class TransactionFilterEngine {
             return true
         }
 
-        let prevTotal = prevExpenses.reduce(0.0) { $0 + $1.amount }
+        let prevTotal = prevExpenses.reduce(0.0) { $0 + $1.spendingAmount }
         let currentTotal = totalSpending
         let diff = currentTotal - prevTotal
 
