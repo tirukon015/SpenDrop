@@ -75,3 +75,23 @@ public enum FinancialCalculator {
         public var netMinor: Int { inMinor - outMinor }
     }
 
+    /// - Out: expenses I paid from this account, money out from it, own transfers leaving it.
+    /// - In: money in to it, own transfers arriving in it.
+    /// - Expenses someone else paid are not counted (no money left the account). Other currencies are skipped.
+    public static func accountActivity(for account: Account) -> AccountActivity {
+        var result = AccountActivity()
+        for expense in account.expenses where expense.currency == account.currency {
+            result.outMinor += expense.cashOutMinor
+        }
+        for movement in account.movements where movement.currency == account.currency {
+            switch movement.kind.direction {
+            case .moneyIn: result.inMinor += movement.amountMinor
+            case .moneyOut, .internal: result.outMinor += movement.amountMinor
+            }
+        }
+        for transfer in account.incomingTransfers where transfer.currency == account.currency && transfer.kind == .ownTransfer {
+            result.inMinor += transfer.amountMinor
+        }
+        return result
+    }
+
