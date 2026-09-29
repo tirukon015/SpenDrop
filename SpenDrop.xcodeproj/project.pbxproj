@@ -1187,6 +1187,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		6D9C13688D3E312048D849D9 /* Build configuration list for PBXNativeTarget "SpenDropUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F673E2D349A1BDC9018FAE37 /* Debug */,
+				95D3A06B9E0D3154EEAD0E5B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = 213ACF315F27069E8A8A9830 /* Project object */;
