@@ -448,6 +448,25 @@ public struct ShareExtensionView: View {
                     )
                 }
 
+                // Save as
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Save as", selection: $viewModel.saveAs) {
+                        ForEach(ShareExtensionViewModel.SaveType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    if viewModel.suggestedMovementKind == .ownTransfer {
+                        Text("Looks like a top-up between your own accounts. Open SpenDrop to record it as a Transfer.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else if let reason = viewModel.directionReason {
+                        Text("Suggested from the screenshot: \(reason). Please confirm.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 // Screenshot Preview Thumbnail (Allows verifying while editing)
                 HStack(spacing: 12) {
                     Image(uiImage: image)
