@@ -91,3 +91,20 @@ final class FakeSupabase: HTTPTransport, @unchecked Sendable {
         }
     }
 
+    private func respond(_ status: Int, _ body: [String: Any]) -> (Data, HTTPURLResponse) {
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        return (data, HTTPURLResponse(url: URL(string: "https://fake.supabase.co")!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    }
+
+    private func respondArray(_ body: [[String: Any]]) -> (Data, HTTPURLResponse) {
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        return (data, HTTPURLResponse(url: URL(string: "https://fake.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+/// Opens nothing; returns a scripted callback URL (tests never launch a browser).
+@MainActor
+final class FakeWebAuthLauncher: WebAuthLauncher {
+    var lastURL: URL?
+    let callback: URL?
+    init(callback: URL?) { self.callback = callback }
