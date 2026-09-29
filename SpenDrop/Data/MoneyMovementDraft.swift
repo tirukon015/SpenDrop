@@ -148,3 +148,15 @@ public struct MoneyMovementDraft {
 
     public var isValid: Bool { issues.isEmpty }
 
+    /// Creates and inserts a new movement. Returns nil when the draft is invalid.
+    @discardableResult
+    public func insertMovement(into context: ModelContext, sourceType: ExpenseSourceType? = nil) -> MoneyMovement? {
+        guard isValid, let amountMinor else { return nil }
+        let movement = MoneyMovement(kind: kind, amountMinor: amountMinor, currency: currency, date: date,
+                                     transactionReference: transactionReference, sourceType: sourceType ?? self.sourceType,
+                                     paymentChannel: paymentChannel)
+        context.insert(movement)
+        apply(to: movement)
+        return movement
+    }
+
