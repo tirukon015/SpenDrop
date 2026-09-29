@@ -227,3 +227,53 @@ struct AccountDetailView: View {
     }
 }
 
+/// Shared row for a money movement, seen from one account (or from no account).
+struct MovementRow: View {
+    let movement: MoneyMovement
+    let incoming: Bool
+    /// Transactions timeline: transfers are shown neutrally ("Not spending") instead of in/out of one account.
+    var timelineStyle: Bool = false
+
+    private var isNeutralTransfer: Bool { timelineStyle && movement.kind == .ownTransfer }
+
+    var body: some View {
+        HStack {
+            Image(systemName: movement.kind == .ownTransfer ? "arrow.left.arrow.right.circle" : (incoming ? "arrow.down.circle" : "arrow.up.right.circle"))
+                .foregroundStyle(incoming ? .green : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text((isNeutralTransfer ? "" : (incoming ? "+" : "-")) + formatMinor(movement.amountMinor, currency: movement.currency))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isNeutralTransfer ? Color.secondary : (incoming ? Color.green : Color.primary))
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var subtitle: String {
+        let date = movement.date.formatted(date: .abbreviated, time: .omitted)
+        if movement.kind == .ownTransfer {
+            return timelineStyle ? "Transfer · Not spending · \(date)" : "\(movement.kind.displayName) · \(date)"
+        }
+        if timelineStyle, let account = movement.account?.name {
+            return "\(movement.kind.displayName) · \(account) · \(date)"
+        }
+        return "\(movement.kind.displayName) · \(date)"
+    }
+
+    private var title: String {
+        if movement.kind == .ownTransfer {
+            return "\(movement.account?.name ?? "?") → \(movement.counterAccount?.name ?? "?")"
+        }
+        if let name = movement.person?.name ?? movement.personNameSnapshot {
+            return movement.kind.direction == .moneyIn ? "From \(name)" : "To \(name)"
+        }
+        return movement.note ?? movement.kind.displayName
+    }
+}
+
