@@ -1,87 +1,138 @@
 # SpenDrop 💧
 
-**Capture → Understand → Save.** A native, offline-first iOS expense tracker for Malaysian daily spending. Share a payment screenshot to SpenDrop and it becomes a categorised expense, parsed entirely on your iPhone with Apple Vision.
+**Capture → Understand → Save.** A native, local-first iOS expense tracker for Malaysian daily spending. Share a payment screenshot to SpenDrop and it becomes a categorised expense, parsed entirely on your iPhone with Apple Vision. Shared bills, loans, money in/out and cash flow are optional layers on top — normal expense entry stays one screen.
 
 > Full engineering documentation, security review, test evidence and case study: [`docs/SPENDROP_DOCUMENTATION.md`](docs/SPENDROP_DOCUMENTATION.md)
+> Optional account & cloud backup setup: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md)
 
 ## Overview
 
-Malaysians pay through many apps (Touch 'n Go eWallet, Maybank/MAE, CIMB OCTO, RHB, Public Bank, Bank Islam, GrabPay, Boost, DuitNow QR, Apple Pay) and none of them consolidate confirmations into one ledger. SpenDrop turns the screenshot you already take into a saved expense:
+Malaysians pay through many apps (Touch 'n Go eWallet, Maybank/MAE, CIMB OCTO, RHB, Public Bank, Bank Islam, GrabPay, Boost, DuitNow QR, Apple Pay) and none of them consolidate confirmations into one ledger. SpenDrop turns the screenshot you already take into a saved record:
 
 ```
 Payment done → Screenshot → Share → SpenDrop → auto-parse → confirm → saved
 ```
 
-- No backend, no cloud, no third-party dependencies, no network code.
-- OCR and parsing run on-device (Vision framework + custom rule-based parser).
-- Data lives in a SwiftData store inside an App Group shared by the app and its Share Extension.
+- **Local-first.** SwiftData on the device is the source of truth; everything works offline and without an account.
+- OCR and parsing run on-device (Vision + a custom rule-based parser). No paid or AI services.
+- Optional sign-in (Google or email) adds cloud **backup** on the Supabase free tier. It never replaces local data.
+
+## Core ideas (the financial model)
+
+| Concept | Answers | Rule |
+|---|---|---|
+| **Expense** | "What did I spend on?" | `amount` is always the full bill |
+| **Spending** | "How much did I spend?" | full amount if I paid; my share if someone else paid |
+| **Money In / Money Out** | "What came in / went out that isn't spending?" | income, refunds, loans, repayments; own-account transfers excluded |
+| **Net cash flow** | "What happened to my cash?" | Money In − Money Out (expenses I paid count as Money Out) |
+| **Person balance** | "Who owes whom?" | always calculated; + they owe me, − I owe them |
+
+All new money maths uses integer sen (never floating point). Splits always add up exactly.
 
 ## Features
 
-- **Screenshot / receipt import** from Photos or the iOS Share Sheet (PNG, JPEG, HEIC).
-- **Transaction parser** that extracts amount, merchant, payment provider, category, date/time, reference and status; understands `RM`, `MYR`, Bahasa Malaysia labels, negative notification amounts and multi-amount receipts (prefers Grand Total).
-- **False-positive protection**: rejects account balances, credit limits, reward points, advertisement prices, fees, cashback and discounts; flags failed/declined payments.
-- **Provider detection** including sender-vs-recipient bank disambiguation in interbank transfers and Apple Pay with its underlying bank.
-- **Review before save** with alternative amount candidates, confidence banner and editable fields.
-- **Duplicate detection** (same amount within 48 h, matching reference / merchant+day / within 1 h) with "Add Anyway".
-- **Quick Cash** manual entry with increment chips and merchant suggestions.
-- **Dashboard** (Today / This Week / This Month), **searchable & filterable history**, **Swift Charts analytics** (category donut, payment-source bars, top merchants).
-- **PayBook**: payee book with masked account numbers, one-tap copy, search, duplicate-payee alert.
-- **Built-in self-test runner**: 48 parser and persistence tests runnable from Settings or via a launch argument.
+**Capture**
+- Screenshot / receipt import from Photos or the iOS Share Sheet (PNG, JPEG, HEIC).
+- Parser extracts amount, merchant, provider, category, date/time, reference, status; understands `RM`/`MYR`, Bahasa Malaysia labels, negative amounts, multi-amount receipts; rejects balances, credit limits, points, ads, fees and cashback.
+- Suggests **Money In / refund / top-up** only from clear wording ("you have received", "refund", "reload"); you confirm on the review screen.
+- **Learned categories:** your saves and corrections teach SpenDrop (on-device) which category a merchant belongs to.
+- Duplicate protection for expenses and money records — always a warning, never a silent delete.
+- **Apple Pay automation:** a Shortcuts action ("Log Apple Pay Purchase") for the Wallet *Transaction* automation.
+
+**Track**
+- **Home:** Today / This Week / This Month spending; Cash Flow and Balances cards appear only when relevant.
+- **Transactions:** one timeline of expenses, Money In, Money Out and transfers with filters (All · Expenses · Money In · Money Out · Shared · Transfers). "Spent" is always shown separately from In/Out.
+- **Split with others:** Equally, by Parts, or exact Amounts; Paid by me or someone else; "Same as last time".
+- **PayBook:** people and their payment details, who owes you / who you owe, history, Record Repayment, Frequent / Archived people, delete blocked while money is owed.
+- **Accounts** (More → Accounts): recorded in / out / net per account (not a bank balance), rename, archive.
+- **Breakdown:** Spending | Cash Flow — categories, channels, accounts, top merchants, my share, refunds and net spending, daily/weekly/monthly trends.
+
+**Safety**
+- The database is never deleted on failure (safe mode); a copy is taken before every schema upgrade.
+- Automatic local backups with dated history; JSON export/import; versioned backup format (formats 1–3 supported).
+- Optional cloud backup: append-only, per device; restore merges by record id after a local safety copy.
+
+## Screenshots
+
+Simulator captures from the automated UI tests (synthetic data only). Older captures: [`docs/screenshots/`](docs/screenshots).
+
+| Home | Transactions | Split with others | PayBook |
+|---|---|---|---|
+| ![Home](docs/screenshots/v1.4/01-home-cash-flow.png) | ![Transactions](docs/screenshots/v1.4/02-transactions-transfers.png) | ![Split](docs/screenshots/v1.4/03-split-editor.png) | ![PayBook](docs/screenshots/v1.4/04-paybook-balances.png) |
+
+| Person balance | Accounts | Breakdown: Cash Flow | Account (optional) |
+|---|---|---|---|
+| ![Person](docs/screenshots/v1.4/05-person-detail.png) | ![Accounts](docs/screenshots/v1.4/06-accounts.png) | ![Cash flow](docs/screenshots/v1.4/07-breakdown-cash-flow.png) | ![Account](docs/screenshots/v1.4/10-more-account.png) |
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Language | Swift (async/await, `@MainActor`) |
+| Language | Swift 5 mode (async/await, `@MainActor`, `@Observable`) |
 | UI | SwiftUI, Swift Charts, PhotosUI; UIKit host for the Share Extension |
-| Persistence | SwiftData (`Expense`, `PayBookContact`) in a shared App Group container |
-| OCR | Apple Vision `VNRecognizeTextRequest` (`.accurate`, en-US / ms-MY / zh-Hans) |
-| Tooling | Xcode 27 (project targets iOS 17.0+), Python script that regenerates `project.pbxproj` |
-| Dependencies | None |
+| Persistence | SwiftData with explicit `VersionedSchema` V1 → V2 → V3 and a `SchemaMigrationPlan`, in a shared App Group container |
+| OCR | Apple Vision `VNRecognizeTextRequest` (on-device) |
+| Automation | App Intents (Shortcuts Wallet automation) |
+| Accounts & cloud (optional) | Supabase Auth + Storage + Postgres (Row Level Security) via its official HTTPS API; Google sign-in with OAuth PKCE in `ASWebAuthenticationSession`; session in the Keychain |
+| Tooling | Xcode 27 (iOS 17.0+ target), Python script that regenerates `project.pbxproj` |
+| Third-party packages | None |
 
 ## Architecture
 
 ```
-SpenDrop.app ─────────────┐                  ┌───────────── SpenDropShare.appex
- MainTabView (5 tabs)     │  shared sources  │  ShareViewController → ShareExtensionView
-                          ▼                  ▼
-   UIImage → OCRService → TransactionParser → ParsedTransaction → DuplicateDetector → Review UI
-                 (Vision)   ├ PaymentProviderDetector
-                            ├ MerchantDetector / CategoryDetector
-                            └ amount classification (MonetaryCandidate)
-                          │
-                          ▼
-   App Group container: SwiftData store · receipt JPEGs · diagnostics log
+SpenDrop.app ────────────────────┐               ┌──────────── SpenDropShare.appex
+ Home | Transactions | PayBook |  │ shared model  │  ShareViewController → ShareExtensionView
+ Breakdown | More                 │ + engine code │  (Save as Expense / Money In / Money Out)
+                                  ▼               ▼
+ UIImage → OCRService → TransactionParser → ParsedTransaction → classify → duplicate check → review → save
+                                                                                      │
+                                     ┌────────────────────────────────────────────────┴──────┐
+                                     ▼                                                        ▼
+                         Expense (+ ExpenseShare)                                     MoneyMovement
+                                     │     Account · PayBookProfile · ClassificationRule
+                                     ▼
+                FinancialCalculator / PersonLedger / ActivityFeed (calculated, never stored)
+                                     ▼
+                Home · Transactions · PayBook · Breakdown · Accounts
+
+ App Group container: SwiftData store · receipts · local backups + history · pre-upgrade copies
+ Optional: CloudBackupService ──HTTPS──► Supabase (auth, private bucket, backups table, RLS)
 ```
 
 ## Project Structure
 
 ```
 SpenDrop/
-├── App/            SpenDropApp.swift (entry, launch-argument hooks, seeding)
-├── Models/         Expense, PayBookContact, ExpenseCategory, PaymentSource, ExpenseSourceType
-├── Data/           ExpenseDataContainer (App Group store), DuplicateDetector, SampleData
-├── OCR/            OCRService, TransactionParser, PaymentProviderDetector, MerchantDetector,
-│                   CategoryDetector, MonetaryCandidate, ParsedTransaction, ImageStorageService,
-│                   ImagePipelineDiagnostics, TransactionParserTests
-├── Views/          Dashboard, Expenses, AddExpense, Review, PayBook, Analytics, Settings
-├── ShareExtension/ ShareViewController, ShareExtensionView, Info.plist, entitlements
-├── Resources/      Assets (app icon, provider logos), Info.plist, entitlements, diagnostic samples
-└── Utils/          CurrencyFormatter, HapticFeedback
-scripts/generate_xcodeproj.py   deterministic project generator
-docs/                           documentation and screenshots
+├── App/            SpenDropApp (entry, lifecycle backups, test launch flags), ApplePayIntent
+├── Models/         Expense, ExpenseShare, MoneyMovement, Account, PayBookProfile, PayBookPaymentMethod,
+│                   ClassificationRule, legacy PayBookContact, enums (category, source, channel)
+├── Data/           ExpenseDataContainer (safe open, pre-upgrade copies), SchemaVersions (V1–V3),
+│                   UserDataBackupService, AccountLinker, Money, SplitCalculator, SplitDraft,
+│                   FinancialCalculator, PersonLedger, ActivityFeed, PeriodGrouping,
+│                   TransactionClassifier, MovementDuplicateDetector, ApplePayAutomation,
+│                   TransactionFilterEngine, DuplicateDetector, TransactionReconciliationEngine
+│   ├── Cloud/      CloudCore (config, errors, HTTP, Keychain), AuthService, CloudBackupService
+│   └── Tests/      in-app test suites (see Testing)
+├── OCR/            OCRService, TransactionParser, DirectionDetector, provider/merchant/category detectors
+├── Views/          Dashboard (Home), Expenses (Transactions), PayBook, Analytics (Breakdown), More,
+│                   Accounts, Account, Money, Split, AddExpense, Review, Settings
+├── ShareExtension/ ShareViewController, ShareExtensionView
+└── Resources/      Assets, Info.plist, entitlements, CloudConfig/ (config template), diagnostic samples
+SpenDropUITests/    XCUITest flows (run with the SpenDropUITests scheme)
+supabase/           SQL for the optional cloud backend
+scripts/            deterministic Xcode project generator
+docs/               documentation, setup guide, screenshots
 ```
 
 ## Installation
 
-1. Requirements: macOS with Xcode 27 (the project was last upgraded with Xcode 27; iOS 17.0 deployment target).
+1. Requirements: macOS with Xcode 27; iOS 17.0+ deployment target.
 2. Clone the repository and open `SpenDrop.xcodeproj`.
-3. In **Signing & Capabilities**, select your team for both targets (`SpenDrop`, `SpenDropShare`). Automatic signing is configured; the App Group `group.com.spendrop.shared` must be available to your team for device builds.
+3. In **Signing & Capabilities**, select your team for `SpenDrop` and `SpenDropShare`. The App Group `group.com.spendrop.shared` must be available to your team for device builds.
 
-## Environment Variables
+## Configuration
 
-None. The app uses no secrets, keys or configuration files.
+Nothing is required. Cloud backup is optional: copy `SpenDrop/Resources/CloudConfig/SupabaseConfig.example.plist` to `SupabaseConfig.plist` (git-ignored) and follow [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md). Only the public anon key goes in the app, never a service-role key.
 
 ## Running Locally
 
@@ -93,81 +144,79 @@ xcodebuild -project SpenDrop.xcodeproj -scheme SpenDrop \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
-- Sample data (18 Malaysian expenses) is seeded on first launch and can be reloaded from **Settings → Load Sample Transactions**.
-- To test the Share Extension: take a screenshot of a payment, open it, tap **Share**, choose **SpenDrop**, review, **Save Expense**.
+- To test the Share Extension: open a payment screenshot in Photos → **Share** → **SpenDrop** → review → save.
 
-## Database Setup
+## Database
 
-Nothing to set up. SwiftData creates its store inside the App Group container on first launch. There are no migrations defined.
+SwiftData creates the store in the App Group container on first launch. The schema is explicitly versioned:
 
-## API
+| Version | Adds | Upgrade step |
+|---|---|---|
+| V1 | Expense and PayBook models (frozen copy of the original) | — |
+| V2 | Account, ExpenseShare, MoneyMovement; payer/split/account on Expense; isFrequent/isArchived on people | creates one Account per funding account and links expenses |
+| V3 | ClassificationRule | adds the table only |
 
-There is no HTTP API. Internal entry points: `OCRService.recognizeText`, `TransactionParser.parse`, `DuplicateDetector.checkDuplicate`, `ImageStorageService`. Launch arguments:
+Before any upgrade a copy of the store is saved in `SpenDropSafety/`; if a store can't be opened the app enters safe mode and leaves it untouched.
+
+## Launch Arguments
 
 | Argument | Effect |
 |---|---|
-| `--run-tests` | run the 48-case suite, print results, exit 0/1 |
-| `--run-image-diagnostics` | PNG/JPEG/HEIC pipeline diagnostics |
-| `--read-share-logs` | print the Share Extension log from the App Group |
-| `--tab <0-4>` | open a tab |
-| `--seed-paybook` / `--clear-paybook` | manage sample payees |
-| `--open-add` / `--open-detail <name>` / `--open-edit` / `--demo-copied` / `--demo-duplicate` | PayBook UI states |
+| `--run-all-tests` | run every in-app suite, print per-suite results, exit 0/1 |
+| `--run-tests`, `--run-data-safety-tests`, `--run-financial-tests`, `--run-account-tests`, `--run-split-tests`, `--run-people-tests`, `--run-timeline-tests`, `--run-phase7-tests`, `--run-hardening-tests`, `--run-auth-tests`, `--run-cloud-tests` | run one suite |
+| `--print-schema-fingerprints` | print the V1/V2/current schema fingerprints |
+| `--ui-testing` | fresh temporary database, no seeding, no backup writes (used by UI tests) |
+| `--run-image-diagnostics`, `--read-share-logs`, `--tab <0-4>`, PayBook demo flags | diagnostics and demos |
 
-## Authentication
+## Authentication (optional)
 
-None. Single-user, on-device app. No accounts, sessions or tokens. The iOS sandbox and App Group entitlement are the only access boundaries.
+Local use needs no account. More → Account offers **Continue with Google**, **Create Account** and **Sign In** (email/password) through Supabase Auth. Sessions are stored in the Keychain; passwords are never stored by SpenDrop. Signing out or deleting the cloud account never deletes data on the iPhone.
 
 ## Testing
 
-In-app suite (not an XCTest target) with 48 cases covering parsing, provider detection, false positives, duplicates, persistence and PayBook:
-
-- **On device:** Settings → *Run OCR & Parser Self-Test*.
-- **From the command line:**
+In-app suites run on in-memory stores or temporary folders only (a final isolation check proves the real database was never opened):
 
 ```bash
-xcrun simctl launch --console-pty booted com.spendrop.SpenDrop --run-tests
-# … [TEST_RUN_SUMMARY] 48/48 PASSED
+xcrun simctl launch --console-pty booted com.spendrop.SpenDrop --run-all-tests
+# [SUITE_SUMMARY] Existing: 93/93 PASSED … Test isolation: 1/1 PASSED
 ```
 
-Last verified: 2026-09-25 on iPhone 17 Simulator (iOS 27.0), 48/48 passed.
+| Suite | Checks |
+|---|---|
+| Existing (parser, providers, real samples, filters, PayBook, backup, share flow) | 93 |
+| Data safety (safe mode, pre-upgrade copies, frozen schemas, backups, import identity) | 18 |
+| Financial models (money, splits, accounts, migration, backup format) | 46 |
+| Accounts / Money In & Out | 10 |
+| Shared expenses | 15 |
+| PayBook balances | 11 |
+| Unified timeline | 12 |
+| Automation, learned rules, parser direction, V2 → V3 migration | 14 |
+| Hardening (V1 → V3 chain, full backup round trip, edge cases) | 6 |
+| Authentication (simulated Supabase server) | 14 |
+| Cloud backup and restore (simulated Supabase server) | 13 |
+| Test isolation | 1 |
+| **Total** | **274** |
+
+UI tests: choose the **SpenDropUITests** scheme and press **⌘U** (6 flows: tabs, expense, split + PayBook balance, accounts + Money In + transfer, Home/Breakdown cash flow, Account screen).
+
+Last verified 2026-09-29 on the iOS 27 simulator: 274/274 in-app checks and 6/6 UI tests passed; app and Share Extension build. Version 1.4.0 has not yet been verified on a physical iPhone.
 
 ## Deployment
 
-Local Xcode builds only. No CI/CD, no App Store or TestFlight distribution is configured in this repository. Bundle identifiers: `com.spendrop.SpenDrop` and `com.spendrop.SpenDrop.ShareExtension`.
-
-## Screenshots
-
-All captures are from the iPhone 17 Simulator with synthetic data only. The full set, with captions and how each was produced, is in [`docs/screenshots/case-study/README.md`](docs/screenshots/case-study/README.md).
-
-| Share to SpenDrop | Extension review after OCR | Candidate amounts |
-|---|---|---|
-| ![Share sheet](docs/screenshots/case-study/02-share-sheet.png) | ![Payment detected](docs/screenshots/case-study/03-extension-payment-detected.png) | ![Candidate amounts](docs/screenshots/case-study/04-in-app-candidate-amounts.png) |
-
-| Duplicate protection | Dashboard | Analytics |
-|---|---|---|
-| ![Duplicate](docs/screenshots/case-study/05-duplicate-protection.png) | ![Dashboard](docs/screenshots/case-study/01-dashboard.png) | ![Analytics](docs/screenshots/case-study/06-analytics.png) |
-
-| On-device tests | PayBook | Architecture |
-|---|---|---|
-| ![Self-test](docs/screenshots/case-study/07-self-test-48-of-48.png) | ![PayBook](docs/screenshots/case-study/08-paybook.png) | ![Architecture](docs/screenshots/case-study/09-architecture.png) |
+Local Xcode builds only. No CI/CD or App Store/TestFlight distribution is configured. Bundle identifiers: `com.spendrop.SpenDrop`, `com.spendrop.SpenDrop.ShareExtension`.
 
 ## Known Limitations
 
-- Currency preference in Settings is stored but not applied (all amounts are RM).
-- Camera capture is not implemented (usage string exists).
-- Deleting an expense does not delete its stored receipt image.
-- Persistence errors are swallowed with `try?`; the extension diagnostics log is unbounded.
-- PayBook account numbers are stored in plain text and copied to the general pasteboard without expiry.
-- Parser is keyword-based; unfamiliar layouts fall back to "Unknown" with low confidence. Column-aligned receipts can split a label from its amount in OCR, so the total may lose priority (the review screen then shows "Possible Expense Detected").
-- iPhone only, portrait only, English UI only. No schema migration plan.
-
-## Future Improvements
-
-Shared framework/Swift package for the engine · XCTest target and GitHub Actions CI · handled save errors · debug-only, rotated logging · expiring pasteboard and optional Face ID for PayBook · receipt cleanup on delete · schema versioning · apply currency setting · camera capture · Bahasa Malaysia localisation.
+- Account totals are *recorded* activity, not live bank balances (bank connections are intentionally out of scope).
+- Sign-in and cloud backup were tested against a simulated server; configure Supabase and follow the setup checklist to verify end to end.
+- Apple Pay automation only sees Apple Pay taps made through Wallet; bank-app, QR and other notifications can't be read by iOS apps.
+- Cloud backups are protected by HTTPS, authentication and Row Level Security, but are not end-to-end encrypted.
+- Receipt images are not included in backups; deleting an expense leaves its image file.
+- iPhone only, portrait only, English UI; the currency preference is stored but amounts are RM.
 
 ## Project Status
 
-Actively developed. Milestones 1–3 (core tracker, OCR/parser, Share Extension) and PayBook V1 are complete. Version 1.3.0. Not released. Fully named SpenDrop with automatic migration for legacy installs. The bundled diagnostic sample images are synthetic.
+Version **1.4.0** (Shared Money & Cloud Backup). Actively developed, not released.
 
 ## License
 
