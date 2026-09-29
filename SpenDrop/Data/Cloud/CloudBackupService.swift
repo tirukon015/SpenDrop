@@ -276,3 +276,23 @@ public final class CloudBackupService {
         return try CloudJSON.decoder().decode([CloudBackupRecord].self, from: data)
     }
 
+    /// Downloads, validates, saves a LOCAL safety copy, then merges the backup by stable id.
+    /// Nothing is applied if any step before the merge fails.
+    public func restore(_ record: CloudBackupRecord) async throws -> UserDataBackupService.ImportSummary {
+        guard let config = auth.config else { throw CloudError.notConfigured }
+        guard canUseLocalStore() else { throw CloudError.safetyBackupFailed }
+        status = .restoring
+        defer { if status == .restoring { status = .idle } }
+        let token = try await auth.validAccessToken()
+        let data = try await send(config: config, method: "GET", path: "storage/v1/object/authenticated/\(Self.bucket)/\(record.objectPath)", token: token)
+        let payload = try UserDataBackupService.makeDecoder().decode(UserDataBackupService.BackupPayload.self, from: data)
+        guard UserDataBackupService.BackupPayload.supportedVersions.contains(payload.version) else {
+            throw CloudError.unsupportedBackup(payload.version)
+        }
+        let context = contextProvider()
+        guard makeSafetyBackup(context) else { throw CloudError.safetyBackupFailed }
+        let summary = UserDataBackupService.applyBackupPayload(payload, into: context)
+        try context.save()
+        return summary
+    }
+
