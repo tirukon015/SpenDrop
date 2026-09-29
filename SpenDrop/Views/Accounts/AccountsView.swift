@@ -132,3 +132,74 @@ struct AccountDetailView: View {
     @State private var selectedExpense: Expense?
     @State private var selectedMovement: MoneyMovement?
 
+    private enum Item: Identifiable {
+        case expense(Expense)
+        case movement(MoneyMovement, incoming: Bool)
+
+        var id: UUID {
+            switch self {
+            case .expense(let e): return e.id
+            case .movement(let m, _): return m.id
+            }
+        }
+
+        var date: Date {
+            switch self {
+            case .expense(let e): return e.date
+            case .movement(let m, _): return m.date
+            }
+        }
+    }
+
+    private var items: [Item] {
+        let expenses = account.expenses.map { Item.expense($0) }
+        let outgoing = account.movements.map { Item.movement($0, incoming: $0.kind.direction == .moneyIn) }
+        let incoming = account.incomingTransfers.map { Item.movement($0, incoming: true) }
+        return (expenses + outgoing + incoming).sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        let activity = FinancialCalculator.accountActivity(for: account)
+        List {
+            Section {
+                row("Recorded In", formatMinor(activity.inMinor, currency: account.currency))
+                row("Recorded Out", formatMinor(activity.outMinor, currency: account.currency))
+                row("Recorded Net", formatMinor(activity.netMinor, currency: account.currency))
+            } footer: {
+                Text("Based only on what is recorded in SpenDrop. This is not your real \(account.name) balance.")
+            }
+
+            Section("Recorded Transactions") {
+                if items.isEmpty {
+                    Text("Nothing recorded for this account yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(items) { item in
+                    switch item {
+                    case .expense(let expense):
+                        Button { selectedExpense = expense } label: { expenseRow(expense) }
+                            .buttonStyle(.plain)
+                    case .movement(let movement, let incoming):
+                        Button { selectedMovement = movement } label: { movementRow(movement, incoming: incoming) }
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .navigationTitle(account.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") { showingEdit = true }
+            }
+        }
+        .sheet(isPresented: $showingEdit) {
+            AccountFormSheet(account: account)
+        }
+        .sheet(item: $selectedExpense) { expense in
+            ExpenseDetailView(expense: expense)
+        }
+        .sheet(item: $selectedMovement) { movement in
+            MoneyMovementEditSheet(movement: movement)
+        }
+    }
+
