@@ -44,3 +44,27 @@ public enum FinancialCalculator {
         public var netCashFlowMinor: Int { moneyInMinor - moneyOutMinor }
     }
 
+    /// - Spending: Σ expense spending (full amount if I paid, my share otherwise).
+    /// - Money In: Σ inbound movements (income, loans received, repayments received, refunds, other in).
+    /// - Money Out: Σ cash out on expenses I paid + outbound movements (loans given, repayments made, other out).
+    /// - Own transfers are excluded from everything.
+    public static func summary(expenses: [Expense], movements: [MoneyMovement], currency: String = "RM") -> Summary {
+        var result = Summary()
+        for expense in expenses where expense.currency == currency {
+            result.spendingMinor += expense.spendingMinor
+            result.moneyOutMinor += expense.cashOutMinor
+        }
+        for movement in movements where movement.currency == currency {
+            switch movement.kind.direction {
+            case .moneyIn:
+                result.moneyInMinor += movement.amountMinor
+                if movement.kind == .refund { result.refundsMinor += movement.amountMinor }
+            case .moneyOut:
+                result.moneyOutMinor += movement.amountMinor
+            case .internal:
+                break
+            }
+        }
+        return result
+    }
+
