@@ -147,3 +147,16 @@ public enum SpenDropSchemaV2: VersionedSchema {
     }
 }
 
+// MARK: - Schema V3 (current)
+
+/// V2 + ClassificationRule (a new, standalone table for locally learned suggestions). No V2 table changes.
+public enum SpenDropSchemaV3: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(3, 0, 0)
+
+    public static var models: [any PersistentModel.Type] {
+        SpenDropSchemaV2.models + [ClassificationRule.self]
+    }
+}
+
+// MARK: - Migration Plan
+
