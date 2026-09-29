@@ -67,3 +67,16 @@ public enum CloudError: LocalizedError, Equatable {
     }
 }
 
+// MARK: - HTTP
+
+public protocol HTTPTransport {
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+}
+
+public struct URLSessionTransport: HTTPTransport {
+    let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
+
