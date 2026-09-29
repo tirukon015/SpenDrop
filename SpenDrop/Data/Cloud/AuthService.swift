@@ -32,3 +32,23 @@ public protocol WebAuthLauncher: AnyObject {
 public final class SystemWebAuthLauncher: NSObject, WebAuthLauncher, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
 
+    public func start(url: URL, callbackScheme: String) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { callbackURL, error in
+                if let callbackURL {
+                    continuation.resume(returning: callbackURL)
+                } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                    continuation.resume(throwing: CloudError.cancelled)
+                } else {
+                    continuation.resume(throwing: error ?? CloudError.invalidResponse)
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            self.session = session
+            if !session.start() {
+                continuation.resume(throwing: CloudError.invalidResponse)
+            }
+        }
+    }
+
