@@ -17,3 +17,13 @@ final class FakeSupabase: HTTPTransport, @unchecked Sendable {
     var authResponses: [String: (Int, [String: Any])] = [:]   // key: "signup", "password", "pkce", "refresh_token"
     var deletedAccount = false
 
+    func fail(_ match: String, status: Int?, times: Int = 1) {
+        failures.append(Failure(match: match, status: status, remaining: times))
+    }
+
+    static func sessionJSON(token: String = "access-1", refresh: String = "refresh-1", expiresIn: Double = 3600,
+                            id: String = "user-123", email: String = "me@example.com", provider: String = "email") -> [String: Any] {
+        ["access_token": token, "refresh_token": refresh, "expires_in": expiresIn, "token_type": "bearer",
+         "user": ["id": id, "email": email, "app_metadata": ["provider": provider], "user_metadata": ["full_name": "Test User"]]]
+    }
+
