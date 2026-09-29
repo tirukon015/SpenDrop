@@ -404,3 +404,22 @@ enum AccountFormValidation {
     }
 }
 
+extension AccountType {
+    var displayName: String {
+        switch self {
+        case .bank: return "Bank"
+        case .eWallet: return "E-Wallet"
+        case .cash: return "Cash"
+        case .other: return "Other"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .bank: return "building.columns"
+        case .eWallet: return "iphone"
+        case .cash: return "banknote"
+        case .other: return "creditcard"
+        }
+    }
+}
