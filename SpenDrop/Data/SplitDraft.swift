@@ -169,3 +169,28 @@ public struct SplitDraft: Equatable {
         return true
     }
 
+    /// Makes the expense a normal (unshared) expense again: shares removed, I paid.
+    public static func removeSplit(from expense: Expense, in context: ModelContext) {
+        for share in expense.shares {
+            context.delete(share)
+        }
+        expense.shares = []
+        expense.splitMethod = nil
+        expense.setPayer(nil)
+        expense.updatedAt = Date()
+    }
+
+    /// After the amount of a shared expense changed: Equal and Parts are recalculated; Amounts are left
+    /// untouched and reported as needing attention. Returns true when the stored shares now match the amount.
+    @discardableResult
+    public static func recalculateAfterAmountChange(_ expense: Expense, in context: ModelContext) -> Bool {
+        guard expense.isShared else { return true }
+        guard let draft = SplitDraft(expense: expense) else { return true }
+        if draft.method == .amounts {
+            return expense.sharesMatchAmount
+        }
+        return draft.apply(to: expense, in: context)
+    }
+
+    // MARK: Same as last time
+
