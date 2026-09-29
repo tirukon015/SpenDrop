@@ -23,3 +23,29 @@ public enum DirectionDetector {
         "paid to", "payment to", "pay to", "transfer to", "transferred to", "sent to", "you paid", "you sent", "purchase at"
     ]
 
+    public static func detect(text: String) -> Result {
+        let lower = text.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        func has(_ phrases: [String]) -> String? { phrases.first { lower.contains($0) } }
+
+        let incoming = has(incomingPhrases)
+        let outgoing = has(outgoingPhrases)
+
+        if let phrase = has(refundPhrases) {
+            return Result(kind: .refund, reason: "Mentions \"\(phrase)\"")
+        }
+        if let phrase = has(ownTransferPhrases), incoming == nil {
+            return Result(kind: .ownTransfer, reason: "Looks like a top-up (\"\(phrase)\")")
+        }
+        if let phrase = incoming {
+            if let conflicting = outgoing {
+                // Both directions mentioned: do not guess.
+                return Result(kind: nil, reason: "Mentions both \"\(phrase)\" and \"\(conflicting)\"")
+            }
+            if has(salaryPhrases) != nil {
+                return Result(kind: .income, reason: "Salary received")
+            }
+            return Result(kind: .otherIn, reason: "Mentions \"\(phrase)\"")
+        }
+        return .none
+    }
+}
