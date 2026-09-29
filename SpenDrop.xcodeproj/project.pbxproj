@@ -402,6 +402,51 @@
 			path = "PayBook";
 			sourceTree = "<group>";
 		};
+		44EBE2926123DA64C68036B7 = {
+			isa = PBXGroup;
+			children = (
+				A2FFF646FE2FC4D7C75FEA8F,
+			);
+			name = "More";
+			path = "More";
+			sourceTree = "<group>";
+		};
+		5823F6671ABCF4593D3933EB = {
+			isa = PBXGroup;
+			children = (
+				103EE7EAEF81A5688D372E52,
+			);
+			name = "Accounts";
+			path = "Accounts";
+			sourceTree = "<group>";
+		};
+		BA6756C6BD827B74F5204584 = {
+			isa = PBXGroup;
+			children = (
+				820624DB7B23CE8AC1948279,
+			);
+			name = "Money";
+			path = "Money";
+			sourceTree = "<group>";
+		};
+		21116A3F136FA9212ADA65C9 = {
+			isa = PBXGroup;
+			children = (
+				E11689CE30F5D5BD24FD9519,
+			);
+			name = "Split";
+			path = "Split";
+			sourceTree = "<group>";
+		};
+		5CB4C81C090C8D7EAA340609 = {
+			isa = PBXGroup;
+			children = (
+				39CD71A9B591B958A10F17FB,
+			);
+			name = "Account";
+			path = "Account";
+			sourceTree = "<group>";
+		};
 		F3E5B61ACB3D942D0C643D2C = {
 			isa = PBXGroup;
 			children = (
