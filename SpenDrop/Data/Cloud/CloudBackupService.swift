@@ -296,3 +296,22 @@ public final class CloudBackupService {
         return summary
     }
 
+    /// Removes every cloud backup of this user (files first, then metadata). Used by account deletion.
+    public func deleteAllCloudData() async throws {
+        guard let config = auth.config else { throw CloudError.notConfigured }
+        let token = try await auth.validAccessToken()
+        let data = try await send(config: config, method: "GET", path: "rest/v1/backups?select=id,object_path", token: token)
+        let rows = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        let paths = rows.compactMap { $0["object_path"] as? String }
+        if !paths.isEmpty {
+            try await deleteObjects(paths, config: config, token: token)
+        }
+        try await send(config: config, method: "DELETE", path: "rest/v1/backups?id=not.is.null", token: token)
+        defaults.removeObject(forKey: Self.lastHashKey)
+        defaults.removeObject(forKey: Self.lastBackupKey)
+        lastBackupDate = nil
+        status = .notSignedIn
+    }
+
+    // MARK: Local safety copy
+
