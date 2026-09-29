@@ -25,13 +25,13 @@ public struct MainTabView: View {
         TabView(selection: $selectedTab) {
             DashboardView()
                 .tabItem {
-                    Label("Dashboard", systemImage: "house.fill")
+                    Label("Home", systemImage: "house.fill")
                 }
                 .tag(0)
 
             ExpensesView()
                 .tabItem {
-                    Label("Expenses", systemImage: "list.bullet.rectangle.portrait.fill")
+                    Label("Transactions", systemImage: "list.bullet.rectangle.portrait.fill")
                 }
                 .tag(1)
 
@@ -43,13 +43,13 @@ public struct MainTabView: View {
 
             AnalyticsView()
                 .tabItem {
-                    Label("Analytics", systemImage: "chart.bar.xaxis")
+                    Label("Breakdown", systemImage: "chart.bar.xaxis")
                 }
                 .tag(3)
 
-            SettingsView()
+            MoreView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
+                    Label("More", systemImage: "ellipsis.circle.fill")
                 }
                 .tag(4)
         }
