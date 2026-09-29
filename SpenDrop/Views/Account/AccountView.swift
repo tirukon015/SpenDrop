@@ -147,3 +147,23 @@ public struct AccountView: View {
         }
     }
 
+    private func signInWithGoogle() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await auth.signInWithGoogle(using: launcher)
+            afterSignIn()
+        } catch CloudError.cancelled {
+            // user closed the sheet
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// Never downloads or overwrites anything after sign-in; only offers to back up existing local data.
+    private func afterSignIn() {
+        cloud.refreshStatus()
+        cloud.startAutomaticBackups()
+        if !expenses.isEmpty { offerFirstBackup = true }
+    }
+
