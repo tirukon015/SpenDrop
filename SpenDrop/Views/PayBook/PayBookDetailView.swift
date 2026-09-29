@@ -511,3 +511,9 @@ public struct PayBookDetailView: View {
         dismiss()
     }
 }
+
+/// Identifiable wrapper so a prefilled draft can drive `.sheet(item:)`.
+struct PrefilledMovement: Identifiable {
+    let id = UUID()
+    let draft: MoneyMovementDraft
+}
