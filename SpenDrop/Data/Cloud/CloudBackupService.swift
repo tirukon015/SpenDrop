@@ -332,3 +332,26 @@ public final class CloudBackupService {
         }
     }
 
+    // MARK: HTTP
+
+    @discardableResult
+    private func send(config: SupabaseConfig, method: String, path: String, token: String, body: Data? = nil,
+                      headers: [String: String] = [:]) async throws -> Data {
+        guard let url = URL(string: path, relativeTo: config.url.appendingPathComponent("")) else { throw CloudError.invalidResponse }
+        var request = URLRequest(url: url.absoluteURL)
+        request.httpMethod = method
+        request.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if body != nil && headers["Content-Type"] == nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        request.httpBody = body
+        let (data, response) = try await transport.send(request)
+        guard (200..<300).contains(response.statusCode) else { throw CloudJSON.error(status: response.statusCode, data: data) }
+        return data
+    }
+
+    private func deleteObjects(_ paths: [String], config: SupabaseConfig, token: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["prefixes": paths])
+        try await send(config: config, method: "DELETE", path: "storage/v1/object/\(Self.bucket)", token: token, body: body)
+    }
+}
