@@ -46,3 +46,57 @@ public struct AccountFeatureTests {
                   expected: "in 20000, out 0", actual: "in \(t.inMinor), out \(t.outMinor)")
         }
 
+        // MARK: Resolving and relinking accounts
+        do {
+            let ctx = context()
+            let maybank = Account(name: "Maybank", type: .bank, sortIndex: 0)
+            let wise = Account(name: "Wise", type: .other, isArchived: true, sortIndex: 1)
+            ctx.insert(maybank); ctx.insert(wise)
+
+            let same = AccountLinker.resolveAccount(named: " maybank ", in: ctx)
+            let archived = AccountLinker.resolveAccount(named: "WISE", in: ctx)
+            let created = AccountLinker.resolveAccount(named: "Bank Rakyat", in: ctx)
+            let unknown = AccountLinker.resolveAccount(named: "Unknown", in: ctx)
+            try? ctx.save()
+            check("Resolve account: reuse by name (incl. archived), create new, ignore Unknown",
+                  same === maybank && archived === wise && created?.name == "Bank Rakyat" && created?.type == .bank &&
+                  created?.sortIndex == 2 && unknown == nil && count(Account.self, in: ctx) == 3,
+                  expected: "Maybank reused, Wise reused, Bank Rakyat created (bank), Unknown nil, 3 accounts",
+                  actual: "sameReused=\(same === maybank) archivedReused=\(archived === wise) created=\(created?.name ?? "nil")/\(created?.type.rawValue ?? "-") accounts=\(count(Account.self, in: ctx))")
+        }
+        do {
+            let ctx = context()
+            let maybank = Account(name: "Maybank", type: .bank), cimb = Account(name: "CIMB", type: .bank)
+            ctx.insert(maybank); ctx.insert(cimb)
+            let expense = Expense(amount: 12, merchant: "Kedai", fundingAccount: "Maybank")
+            ctx.insert(expense)
+            expense.account = maybank
+
+            AccountLinker.relink(expense, in: ctx)
+            let unchanged = expense.account === maybank
+            expense.fundingAccount = "CIMB"            // user edits the expense
+            AccountLinker.relink(expense, in: ctx)
+            let movedToCIMB = expense.account === cimb
+            expense.fundingAccount = "GXBank"
+            AccountLinker.relink(expense, in: ctx)
+            let createdNew = expense.account?.name == "GXBank"
+            expense.fundingAccount = "Unknown"
+            AccountLinker.relink(expense, in: ctx)
+            let cleared = expense.account == nil
+            try? ctx.save()
+            check("Editing an expense's funding account relinks it (no stale link)",
+                  unchanged && movedToCIMB && createdNew && cleared && count(Account.self, in: ctx) == 3,
+                  expected: "same -> Maybank, CIMB -> CIMB, GXBank -> new, Unknown -> none",
+                  actual: "unchanged=\(unchanged) cimb=\(movedToCIMB) new=\(createdNew) cleared=\(cleared) accounts=\(count(Account.self, in: ctx))")
+        }
+        do {
+            let ctx = context()
+            let dup = Account(name: "maybank", sortIndex: 0), extra = Account(name: "Bank Rakyat", type: .bank, sortIndex: 1)
+            let archived = Account(name: "Wise", isArchived: true, sortIndex: 2)
+            [dup, extra, archived].forEach { ctx.insert($0) }
+            let options = AccountLinker.fundingOptions(base: ["Maybank", "CIMB", "Wise", "Other"], accounts: [dup, extra, archived])
+            check("Funding options: existing list + user accounts, no duplicates, Other last",
+                  options == ["Maybank", "CIMB", "Wise", "Bank Rakyat", "Other"],
+                  expected: "[Maybank, CIMB, Wise, Bank Rakyat, Other]", actual: "\(options)")
+        }
+
