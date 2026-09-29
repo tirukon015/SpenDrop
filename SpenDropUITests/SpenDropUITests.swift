@@ -119,3 +119,34 @@ final class SpenDropUITests: XCTestCase {
         snap("Person detail")
     }
 
+    func test04_AccountsMoneyInAndTransfer() {
+        addAccount("Maybank")
+        addAccount("Touch n Go")
+
+        openAdd("Money In")
+        typeAmount("3500")
+        choose("Maybank", inPicker: "Into account")
+        snap("Money In form")
+        app.buttons["Save Money In"].tap()
+
+        openAdd("Transfer")
+        typeAmount("200")
+        choose("Maybank", inPicker: "From")
+        choose("Touch n Go", inPicker: "To")
+        snap("Transfer form")
+        app.buttons["Save Transfer"].tap()
+
+        tab("Transactions")
+        app.buttons["transactions.filter.transfers"].tap()
+        XCTAssertTrue(app.staticTexts["Maybank → Touch n Go"].waitForExistence(timeout: 5))
+        snap("Transactions transfers")
+        app.buttons["transactions.filter.moneyIn"].tap()
+        XCTAssertTrue(app.staticTexts["+RM 3,500.00"].firstMatch.waitForExistence(timeout: 5))
+        snap("Transactions money in")
+
+        tab("More")
+        app.buttons["more.accounts"].tap()
+        XCTAssertTrue(app.staticTexts["RM 3,500.00"].firstMatch.waitForExistence(timeout: 5))
+        snap("Accounts recorded")
+    }
+
