@@ -220,3 +220,35 @@ public struct SplitSummaryRow: View {
     let totalMinor: Int
     let currency: String
 
+    public init(draft: SplitDraft?, totalMinor: Int, currency: String = "RM") {
+        self.draft = draft
+        self.totalMinor = totalMinor
+        self.currency = currency
+    }
+
+    public var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.2.fill")
+                .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(draft == nil ? "Split with others" : "Shared · \(draft!.participants.count) people")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                if let draft {
+                    if let problem = draft.problem(totalMinor: totalMinor) {
+                        Text(problem).font(.caption).foregroundStyle(.orange)
+                    } else if let mine = draft.myShareMinor(totalMinor: totalMinor) {
+                        Text("Your share \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: mine), currency: currency)) · Paid by \(draft.payer?.name ?? "Me")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Optional").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+    }
+}
