@@ -956,6 +956,114 @@ pbx.append("\t};")
 pbx.append(f"\trootObject = {proj_id} /* Project object */;")
 pbx.append("}")
 
+# ---- UI test target entries, inserted into their sections ----
+def insert_before(marker, lines):
+    i = pbx.index(marker)
+    pbx[i:i] = lines
+
+def insert_after(anchor, lines):
+    i = pbx.index(anchor) + 1
+    pbx[i:i] = lines
+
+insert_before("/* End PBXBuildFile section */",
+    [f"\t\t{bf} /* {os.path.basename(p)} in UITest Sources */ = {{isa = PBXBuildFile; fileRef = {file_refs[p]} /* {os.path.basename(p)} */; }};" for p, bf in uit_build_files.items()])
+insert_before("/* End PBXContainerItemProxy section */", [
+    f"\t\t{uit_proxy_id} /* PBXContainerItemProxy */ = {{",
+    "\t\t\tisa = PBXContainerItemProxy;",
+    f"\t\t\tcontainerPortal = {proj_id} /* Project object */;",
+    "\t\t\tproxyType = 1;",
+    f"\t\t\tremoteGlobalIDString = {target_id};",
+    "\t\t\tremoteInfo = SpenDrop;",
+    "\t\t};"])
+insert_before("/* End PBXFileReference section */", [
+    f"\t\t{uit_product_id} /* SpenDropUITests.xctest */ = {{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpenDropUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};"])
+insert_before("/* End PBXFrameworksBuildPhase section */", [
+    f"\t\t{uit_frameworks_phase_id} /* Frameworks */ = {{",
+    "\t\t\tisa = PBXFrameworksBuildPhase;",
+    "\t\t\tbuildActionMask = 2147483647;",
+    "\t\t\tfiles = (",
+    "\t\t\t);",
+    "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+    "\t\t};"])
+insert_before("/* End PBXNativeTarget section */", [
+    f"\t\t{uit_target_id} /* SpenDropUITests */ = {{",
+    "\t\t\tisa = PBXNativeTarget;",
+    f"\t\t\tbuildConfigurationList = {uit_config_list_id} /* Build configuration list for PBXNativeTarget \"SpenDropUITests\" */;",
+    "\t\t\tbuildPhases = (",
+    f"\t\t\t\t{uit_sources_phase_id} /* Sources */,",
+    f"\t\t\t\t{uit_frameworks_phase_id} /* Frameworks */,",
+    f"\t\t\t\t{uit_resources_phase_id} /* Resources */,",
+    "\t\t\t);",
+    "\t\t\tbuildRules = (",
+    "\t\t\t);",
+    "\t\t\tdependencies = (",
+    f"\t\t\t\t{uit_dependency_id} /* PBXTargetDependency */,",
+    "\t\t\t);",
+    "\t\t\tname = SpenDropUITests;",
+    "\t\t\tproductName = SpenDropUITests;",
+    f"\t\t\tproductReference = {uit_product_id} /* SpenDropUITests.xctest */;",
+    "\t\t\tproductType = \"com.apple.product-type.bundle.ui-testing\";",
+    "\t\t};"])
+insert_before(f"\t\t\t\t\t{share_target_id} = {{", [
+    f"\t\t\t\t\t{uit_target_id} = {{",
+    "\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;",
+    "\t\t\t\t\t\tProvisioningStyle = Automatic;",
+    f"\t\t\t\t\t\tTestTargetID = {target_id};",
+    "\t\t\t\t\t};"])
+insert_after(f"\t\t\t\t{share_target_id} /* SpenDropShare */,", [f"\t\t\t\t{uit_target_id} /* SpenDropUITests */,"])
+insert_before("/* End PBXResourcesBuildPhase section */", [
+    f"\t\t{uit_resources_phase_id} /* Resources */ = {{",
+    "\t\t\tisa = PBXResourcesBuildPhase;",
+    "\t\t\tbuildActionMask = 2147483647;",
+    "\t\t\tfiles = (",
+    "\t\t\t);",
+    "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+    "\t\t};"])
+insert_before("/* End PBXSourcesBuildPhase section */",
+    [f"\t\t{uit_sources_phase_id} /* Sources */ = {{",
+     "\t\t\tisa = PBXSourcesBuildPhase;",
+     "\t\t\tbuildActionMask = 2147483647;",
+     "\t\t\tfiles = ("] +
+    [f"\t\t\t\t{bf} /* {os.path.basename(p)} in Sources */," for p, bf in uit_build_files.items()] +
+    ["\t\t\t);",
+     "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+     "\t\t};"])
+insert_before("/* End PBXTargetDependency section */", [
+    f"\t\t{uit_dependency_id} /* PBXTargetDependency */ = {{",
+    "\t\t\tisa = PBXTargetDependency;",
+    f"\t\t\ttarget = {target_id} /* SpenDrop */;",
+    f"\t\t\ttargetProxy = {uit_proxy_id} /* PBXContainerItemProxy */;",
+    "\t\t};"])
+def uit_config(cid, name):
+    return [f"\t\t{cid} /* {name} */ = {{",
+            "\t\t\tisa = XCBuildConfiguration;",
+            "\t\t\tbuildSettings = {",
+            "\t\t\t\tCODE_SIGN_STYLE = Automatic;",
+            "\t\t\t\tCURRENT_PROJECT_VERSION = 1;",
+            "\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;",
+            "\t\t\t\tGENERATE_INFOPLIST_FILE = YES;",
+            "\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;",
+            "\t\t\t\tMARKETING_VERSION = 1.0;",
+            "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDropUITests;",
+            "\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";",
+            "\t\t\t\tSWIFT_VERSION = 5.0;",
+            "\t\t\t\tTARGETED_DEVICE_FAMILY = \"1\";",
+            "\t\t\t\tTEST_TARGET_NAME = SpenDrop;",
+            "\t\t\t};",
+            f"\t\t\tname = {name};",
+            "\t\t};"]
+insert_before("/* End XCBuildConfiguration section */", uit_config(uit_debug_id, "Debug") + uit_config(uit_release_id, "Release"))
+insert_before("/* End XCConfigurationList section */", [
+    f"\t\t{uit_config_list_id} /* Build configuration list for PBXNativeTarget \"SpenDropUITests\" */ = {{",
+    "\t\t\tisa = XCConfigurationList;",
+    "\t\t\tbuildConfigurations = (",
+    f"\t\t\t\t{uit_debug_id} /* Debug */,",
+    f"\t\t\t\t{uit_release_id} /* Release */,",
+    "\t\t\t);",
+    "\t\t\tdefaultConfigurationIsVisible = 0;",
+    "\t\t\tdefaultConfigurationName = Release;",
+    "\t\t};"])
+
 output_dir = "SpenDrop.xcodeproj"
 os.makedirs(output_dir, exist_ok=True)
 pbx_path = os.path.join(output_dir, "project.pbxproj")
