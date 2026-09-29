@@ -65,3 +65,19 @@ public struct SplitDraft: Equatable {
         }
     }
 
+    // MARK: Editing
+
+    public var others: [Participant] { participants.filter { !$0.isMe } }
+
+    public func contains(_ person: PayBookProfile) -> Bool {
+        participants.contains { $0.person?.id == person.id }
+    }
+
+    /// Adds a person once. Returns false if they were already in the split.
+    @discardableResult
+    public mutating func add(_ person: PayBookProfile) -> Bool {
+        guard !contains(person) else { return false }
+        participants.append(Participant(person: person, name: person.name))
+        return true
+    }
+
