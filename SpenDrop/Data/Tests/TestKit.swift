@@ -56,3 +56,24 @@ public enum AllTestSuites {
         ("Test isolation", "--run-all-tests", { isolationCheck() })
     ]
 
+    /// Test runs happen before the app opens its database. If any suite had opened the real store,
+    /// `storeStatus` would no longer be the initial "not opened yet" state.
+    static func isolationCheck() -> [TestCaseResult] {
+        var untouched = false
+        if case .safeMode(_, let url) = ExpenseDataContainer.storeStatus, url == nil { untouched = true }
+        return [TestCaseResult(testName: "Test suites never open the real database", passed: untouched,
+                               expected: "store never opened", actual: untouched ? "never opened" : "OPENED: \(ExpenseDataContainer.storeStatus)",
+                               details: "Isolation")]
+    }
+
+    /// Runs an async suite to completion from the synchronous launch path by driving the main run loop
+    /// (test runs exit before any UI or the real database is created).
+    static func blocking(_ work: @escaping @MainActor () async -> [TestCaseResult]) -> [TestCaseResult] {
+        var output: [TestCaseResult]?
+        Task { @MainActor in output = await work() }
+        while output == nil {
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        return output ?? []
+    }
+
