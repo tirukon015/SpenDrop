@@ -181,3 +181,72 @@ public struct AccountView: View {
 
 /// Email sign-in / account creation form.
 struct EmailAuthView: View {
+    enum Mode: String, Identifiable {
+        case signIn, create
+        var id: String { rawValue }
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    let mode: Mode
+    let auth: AuthService
+    let onFinish: (Bool) -> Void
+
+    @State private var email = ""
+    @State private var password = ""
+    @State private var confirm = ""
+    @State private var busy = false
+    @State private var errorMessage: String?
+    @State private var infoMessage: String?
+
+    private var problem: String? {
+        AuthValidation.problem(email: email, password: password, confirm: mode == .create ? confirm : nil)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("auth.email")
+                    SecureField("Password", text: $password)
+                        .textContentType(mode == .create ? .newPassword : .password)
+                        .accessibilityIdentifier("auth.password")
+                    if mode == .create {
+                        SecureField("Confirm Password", text: $confirm)
+                            .textContentType(.newPassword)
+                            .accessibilityIdentifier("auth.confirm")
+                    }
+                } footer: {
+                    if let errorMessage {
+                        Text(errorMessage).foregroundStyle(.red)
+                    } else if let infoMessage {
+                        Text(infoMessage).foregroundStyle(.green)
+                    } else if let problem, !email.isEmpty || !password.isEmpty {
+                        Text(problem).foregroundStyle(.secondary)
+                    } else if mode == .create {
+                        Text("At least 8 characters. Your password is handled by the sign-in service and never stored by SpenDrop.")
+                    }
+                }
+                Section {
+                    Button(mode == .create ? "Create Account" : "Sign In") {
+                        Task { await submit() }
+                    }
+                    .disabled(problem != nil || busy)
+                    .accessibilityIdentifier("auth.submit")
+                }
+            }
+            .navigationTitle(mode == .create ? "Create Account" : "Sign In")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onFinish(false) }
+                }
+            }
+            .overlay { if busy { ProgressView() } }
+        }
+    }
+
