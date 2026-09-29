@@ -142,6 +142,87 @@ public final class TransactionFilterEngine {
         self.allExpenses = expenses
     }
 
+    public func update(movements: [MoneyMovement]) {
+        self.allMovements = movements
+    }
+
+    /// Money In / Money Out / Transfers in the selected date range. They have no category, so an active
+    /// category filter hides them. The account filter matches the movement's account or transfer destination.
+    public var filteredMovements: [MoneyMovement] {
+        guard selectedCategories.isEmpty else { return [] }
+        let (startDate, endDate) = dateInterval(for: selectedDateFilter)
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allMovements.filter { movement in
+            guard movement.date >= startDate && movement.date <= endDate else { return false }
+            if !selectedPaymentChannels.isEmpty && !selectedPaymentChannels.contains(movement.paymentChannel) {
+                return false
+            }
+            if !selectedFundingAccounts.isEmpty {
+                let names = [movement.account?.name, movement.counterAccount?.name].compactMap { $0 }
+                let match = names.contains { name in selectedFundingAccounts.contains { $0.caseInsensitiveCompare(name) == .orderedSame } }
+                if !match { return false }
+            }
+            if !term.isEmpty {
+                let fields = [movement.kind.displayName, movement.note ?? "", movement.person?.name ?? movement.personNameSnapshot ?? "",
+                              movement.account?.name ?? "", movement.counterAccount?.name ?? "",
+                              String(format: "%.2f", Money.majorAmount(fromMinor: movement.amountMinor))]
+                if !fields.contains(where: { $0.lowercased().contains(term) }) { return false }
+            }
+            return true
+        }
+    }
+
+    /// Shared expenses and refunds in the current filters (minor units, RM).
+    public struct SharedSpendingSummary: Equatable {
+        public var sharedCount = 0
+        /// Full bills of shared expenses.
+        public var sharedTotalMinor = 0
+        /// My share of those bills.
+        public var myShareMinor = 0
+        public var refundsMinor = 0
+        public var netSpendingMinor = 0
+    }
+
+    public var sharedSpendingSummary: SharedSpendingSummary {
+        let shared = filteredExpenses.filter(\.isShared)
+        let summary = cashFlowSummary
+        return SharedSpendingSummary(
+            sharedCount: shared.count,
+            sharedTotalMinor: shared.reduce(0) { $0 + $1.amountMinor },
+            myShareMinor: shared.reduce(0) { $0 + $1.myShareMinor },
+            refundsMinor: summary.refundsMinor,
+            netSpendingMinor: summary.netSpendingMinor
+        )
+    }
+
+    public struct MerchantBreakdownItem: Identifiable, Equatable {
+        public var id: String { name }
+        public let name: String
+        public let total: Double
+        public let count: Int
+    }
+
+    /// Spending per merchant for the current filters, largest first.
+    public var merchantBreakdown: [MerchantBreakdownItem] {
+        let grouped = Dictionary(grouping: filteredExpenses) { $0.merchant.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return grouped.map { name, items in
+            MerchantBreakdownItem(name: name.isEmpty ? "Unknown" : name, total: items.reduce(0.0) { $0 + $1.spendingAmount }, count: items.count)
+        }
+        .sorted { $0.total == $1.total ? $0.name < $1.name : $0.total > $1.total }
+    }
+
+    /// Money movements in the current filters grouped by kind (excluding own transfers), largest first.
+    public var movementKindBreakdown: [(kind: MoneyMovementKind, totalMinor: Int, count: Int)] {
+        let grouped = Dictionary(grouping: filteredMovements.filter { $0.kind != .ownTransfer }, by: \.kind)
+        return grouped.map { (kind: $0.key, totalMinor: $0.value.reduce(0) { $0 + $1.amountMinor }, count: $0.value.count) }
+            .sorted { $0.totalMinor > $1.totalMinor }
+    }
+
+    /// Spending, Money In, Money Out and Net Cash Flow for the current filters (RM).
+    public var cashFlowSummary: FinancialCalculator.Summary {
+        FinancialCalculator.summary(expenses: filteredExpenses, movements: filteredMovements)
+    }
+
     // MARK: - Dynamic Available Funding Accounts
     public var availableFundingAccounts: [String] {
         let standard = ["Maybank", "Wise", "CIMB", "RHB", "Touch 'n Go", "Cash"]
