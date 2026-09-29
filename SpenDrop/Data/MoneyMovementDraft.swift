@@ -160,3 +160,20 @@ public struct MoneyMovementDraft {
         return movement
     }
 
+    /// Writes the draft into an existing movement (edit). Returns false when the draft is invalid.
+    @discardableResult
+    public func apply(to movement: MoneyMovement) -> Bool {
+        guard isValid, let amountMinor else { return false }
+        movement.kind = kind
+        movement.amountMinor = amountMinor
+        movement.currency = currency
+        movement.date = date
+        movement.setPerson(kind.requiresPerson ? person : nil)
+        movement.account = account
+        movement.counterAccount = kind == .ownTransfer ? counterAccount : nil
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        movement.note = trimmed.isEmpty ? nil : trimmed
+        movement.updatedAt = Date()
+        return true
+    }
+}
