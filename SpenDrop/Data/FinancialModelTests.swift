@@ -257,3 +257,52 @@ public struct FinancialModelTests {
             check("Currencies are never mixed", rmOnly.spendingMinor == 10000, expected: "RM total excludes USD", actual: "\(rmOnly.spendingMinor)")
         }
 
+        // MARK: Person balances
+        do {
+            let ctx = context()
+            let bijoy = PayBookProfile(name: "Bijoy"), riyad = PayBookProfile(name: "Riyad"), labib = PayBookProfile(name: "Labib"), shadin = PayBookProfile(name: "Shadin")
+            [bijoy, riyad, labib, shadin].forEach { ctx.insert($0) }
+
+            let lunchIPaid = sharedExpense(ctx, amount: 30, payer: nil, people: [bijoy, riyad, labib])
+            var b = FinancialCalculator.personBalances(expenses: [lunchIPaid], movements: [])
+            check("Balance: I paid RM30 split 4 -> each owes me 7.50",
+                  b[bijoy.id] == 750 && b[riyad.id] == 750 && b[labib.id] == 750,
+                  expected: "750 each", actual: "\(b[bijoy.id] ?? 0)/\(b[riyad.id] ?? 0)/\(b[labib.id] ?? 0)")
+
+            let lunchBijoyPaid = sharedExpense(ctx, amount: 30, payer: bijoy, people: [bijoy, riyad, labib])
+            b = FinancialCalculator.personBalances(expenses: [lunchBijoyPaid], movements: [])
+            check("Balance: Bijoy paid -> I owe Bijoy 7.50; Riyad/Labib not involved with me",
+                  b[bijoy.id] == -750 && b[riyad.id] == nil && b[labib.id] == nil,
+                  expected: "Bijoy -750 only", actual: "\(b)")
+
+            let given1 = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: shadin)
+            let given2 = MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: shadin)
+            let back = MoneyMovement(kind: .repaymentReceived, amountMinor: 10000, person: shadin)
+            [given1, given2, back].forEach { ctx.insert($0) }
+            b = FinancialCalculator.personBalances(expenses: [], movements: [given1, given2])
+            let afterLoans = b[shadin.id]
+            b = FinancialCalculator.personBalances(expenses: [], movements: [given1, given2, back])
+            check("Balance: Shadin loan 150 + 50, repays 100 -> owes 100",
+                  afterLoans == 20000 && b[shadin.id] == 10000, expected: "20000 then 10000", actual: "\(afterLoans ?? 0) then \(b[shadin.id] ?? 0)")
+
+            let borrowed = MoneyMovement(kind: .loanReceived, amountMinor: 2000, person: riyad)
+            let repaid = MoneyMovement(kind: .repaymentMade, amountMinor: 2000, person: riyad)
+            [borrowed, repaid].forEach { ctx.insert($0) }
+            let owe = FinancialCalculator.personBalances(expenses: [], movements: [borrowed])[riyad.id]
+            let settled = FinancialCalculator.personBalances(expenses: [], movements: [borrowed, repaid])[riyad.id]
+            check("Balance: loan received -> I owe; repayment made -> settled", owe == -2000 && settled == 0,
+                  expected: "-2000 then 0", actual: "\(owe ?? 0) then \(settled ?? 0)")
+
+            let overpay = MoneyMovement(kind: .repaymentReceived, amountMinor: 1000, person: bijoy)
+            ctx.insert(overpay)
+            let mixed = FinancialCalculator.personBalances(expenses: [lunchIPaid, lunchBijoyPaid], movements: [overpay])
+            check("Balance: mixed (Bijoy owes 7.50, I owe 7.50, he pays 10) -> I owe him 10",
+                  mixed[bijoy.id] == -1000 && mixed[riyad.id] == 750, expected: "Bijoy -1000, Riyad 750", actual: "\(mixed[bijoy.id] ?? 0), \(mixed[riyad.id] ?? 0)")
+
+            let refund = MoneyMovement(kind: .refund, amountMinor: 500, person: bijoy)
+            let income = MoneyMovement(kind: .income, amountMinor: 500, person: bijoy)
+            [refund, income].forEach { ctx.insert($0) }
+            let noEffect = FinancialCalculator.personBalances(expenses: [], movements: [refund, income])
+            check("Balance: refunds and income never change a person balance", noEffect.isEmpty, expected: "empty", actual: "\(noEffect)")
+        }
+
