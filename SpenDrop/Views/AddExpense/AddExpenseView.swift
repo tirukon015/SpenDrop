@@ -5,6 +5,7 @@ import PhotosUI
 public struct AddExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Account.sortIndex) private var accounts: [Account]
 
     @State private var amountText: String = ""
     @State private var merchant: String = ""
@@ -15,6 +16,11 @@ public struct AddExpenseView: View {
     @State private var date: Date = Date()
     @State private var notes: String = ""
     @State private var currency: String = "RM"
+    @State private var entryType: TransactionEntryType = .expense
+    // Optional split (Phase 4). nil = normal expense.
+    @State private var splitDraft: SplitDraft?
+    @State private var showingSplitEditor = false
+    @State private var categoryTouched = false
 
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
@@ -38,390 +44,423 @@ public struct AddExpenseView: View {
         _selectedPaymentSource = State(initialValue: initialPaymentSource)
     }
 
+    /// Fixed list plus any account the user added in More → Accounts.
+    private var fundingOptions: [String] {
+        AccountLinker.fundingOptions(base: commonFundingAccounts, accounts: accounts)
+    }
+
     private var parsedAmount: Double {
         CurrencyFormatter.parse(string: amountText) ?? 0.0
     }
 
     private var isValid: Bool {
-        parsedAmount > 0
+        parsedAmount > 0 && (splitDraft?.isValid(totalMinor: Money.minorUnits(from: parsedAmount)) ?? true)
     }
 
     public var body: some View {
         NavigationStack {
-            ZStack {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // SCAN / IMPORT SCREENSHOT BUTTON (Milestone 2 core feature)
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images, preferredItemEncoding: .current) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "viewfinder.rectangular")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
+            Group {
+                if entryType == .expense {
+                ZStack {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            // SCAN / IMPORT SCREENSHOT BUTTON (Milestone 2 core feature)
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images, preferredItemEncoding: .current) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "viewfinder.rectangular")
+                                        .font(.title3)
+                                        .foregroundStyle(.blue)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Scan Screenshot or Receipt")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.primary)
-
-                                    Text("Auto-detect amount, merchant & category with Vision OCR")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(14)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                            )
-                        }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            print("[SpenDrop][PICKER_DIAG] AddExpenseView PhotosPicker tapped")
-                        })
-                        .onChange(of: selectedPhotoItem) { oldItem, newItem in
-                            print("[SpenDrop][PICKER_DIAG] AddExpenseView selectedPhotoItem changed: \(oldItem != nil ? "non-nil" : "nil") -> \(newItem != nil ? "non-nil" : "nil")")
-                            Task {
-                                await processSelectedImage(item: newItem)
-                            }
-                        }
-
-                        // HERO AMOUNT CARD
-                        VStack(spacing: 12) {
-                            Text("ENTER AMOUNT")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(1.2)
-
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(currency)
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-
-                                TextField("0.00", text: $amountText)
-                                    .font(.system(size: 48, weight: .heavy, design: .rounded))
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.leading)
-                                    .fixedSize(horizontal: true, vertical: false)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-
-                            // Quick Amount Adders
-                            HStack(spacing: 10) {
-                                ForEach(quickAmounts, id: \.self) { increment in
-                                    Button(action: {
-                                        HapticFeedback.impact(.light)
-                                        let current = parsedAmount
-                                        let newTotal = current + increment
-                                        amountText = String(format: "%.2f", newTotal)
-                                    }) {
-                                        Text("+\(currency)\(Int(increment))")
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Scan Screenshot or Receipt")
                                             .font(.subheadline)
                                             .fontWeight(.semibold)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color(uiColor: .tertiarySystemFill))
-                                            .clipShape(Capsule())
-                                    }
-                                }
+                                            .foregroundStyle(.primary)
 
-                                if parsedAmount > 0 {
-                                    Button(action: {
-                                        HapticFeedback.selection()
-                                        amountText = ""
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.subheadline)
+                                        Text("Auto-detect amount, merchant & category with Vision OCR")
+                                            .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(14)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                                )
+                            }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                print("[SpenDrop][PICKER_DIAG] AddExpenseView PhotosPicker tapped")
+                            })
+                            .onChange(of: selectedPhotoItem) { oldItem, newItem in
+                                print("[SpenDrop][PICKER_DIAG] AddExpenseView selectedPhotoItem changed: \(oldItem != nil ? "non-nil" : "nil") -> \(newItem != nil ? "non-nil" : "nil")")
+                                Task {
+                                    await processSelectedImage(item: newItem)
                                 }
                             }
-                        }
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                        // FUNDING ACCOUNT PICKER (Where money came from)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("FUNDING ACCOUNT (WHERE MONEY CAME FROM)")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(0.8)
-                                .padding(.horizontal, 4)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(commonFundingAccounts, id: \.self) { acc in
-                                        Button(action: {
-                                            HapticFeedback.selection()
-                                            fundingAccount = acc
-                                        }) {
-                                            Text(acc)
-                                                .font(.subheadline)
-                                                .fontWeight(fundingAccount == acc ? .semibold : .regular)
-                                                .padding(.horizontal, 14)
-                                                .padding(.vertical, 8)
-                                                .background(
-                                                    fundingAccount == acc
-                                                        ? Color.blue
-                                                        : Color(uiColor: .secondarySystemGroupedBackground)
-                                                )
-                                                .foregroundStyle(
-                                                    fundingAccount == acc
-                                                        ? Color.white
-                                                        : Color.primary
-                                                )
-                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // PAYMENT CHANNEL PICKER (How payment was made)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("PAYMENT CHANNEL (HOW PAYMENT WAS MADE)")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(0.8)
-                                .padding(.horizontal, 4)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(PaymentChannel.allCases) { channel in
-                                        Button(action: {
-                                            HapticFeedback.selection()
-                                            selectedPaymentChannel = channel
-                                        }) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: channel.iconName)
-                                                Text(channel.displayName)
-                                                    .font(.subheadline)
-                                                    .fontWeight(selectedPaymentChannel == channel ? .semibold : .regular)
-                                            }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .background(
-                                                selectedPaymentChannel == channel
-                                                    ? channel.tintColor
-                                                    : Color(uiColor: .secondarySystemGroupedBackground)
-                                            )
-                                            .foregroundStyle(
-                                                selectedPaymentChannel == channel
-                                                    ? Color.white
-                                                    : Color.primary
-                                            )
-                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // CATEGORY PICKER GRID
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("CATEGORY")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(1.0)
-                                .padding(.horizontal, 4)
-
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 95), spacing: 10)], spacing: 10) {
-                                ForEach(ExpenseCategory.allCases) { category in
-                                    Button(action: {
-                                        HapticFeedback.selection()
-                                        selectedCategory = category
-                                    }) {
-                                        VStack(spacing: 6) {
-                                            Image(systemName: category.icon)
-                                                .font(.title3)
-                                            Text(category.rawValue)
-                                                .font(.caption)
-                                                .fontWeight(.medium)
-                                                .lineLimit(1)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            selectedCategory == category
-                                                ? category.color
-                                                : Color(uiColor: .secondarySystemGroupedBackground)
-                                        )
-                                        .foregroundStyle(
-                                            selectedCategory == category
-                                                ? Color.white
-                                                : Color.primary
-                                        )
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                    }
-                                }
-                            }
-                        }
-
-                        // MERCHANT INPUT & QUICK SUGGESTIONS
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("MERCHANT / RECIPIENT")
+                            // HERO AMOUNT CARD
+                            VStack(spacing: 12) {
+                                Text("ENTER AMOUNT")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundStyle(.secondary)
-                                    .tracking(1.0)
+                                    .tracking(1.2)
 
-                                Spacer()
+                                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                    Text(currency)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.secondary)
 
-                                Button(action: {
-                                    showingPayBookPicker = true
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "person.crop.rectangle.stack")
-                                        Text("Select from PayBook")
-                                    }
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.blue)
+                                    TextField("0.00", text: $amountText)
+                                        .font(.system(size: 48, weight: .heavy, design: .rounded))
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: true, vertical: false)
                                 }
-                            }
-                            .padding(.horizontal, 4)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 8)
 
-                            TextField("e.g. McDonald's, Mamak, Rahim (optional)", text: $merchant)
-                                .padding()
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                            if !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Button(action: {
-                                    showingSaveToPayBookSheet = true
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "person.badge.plus")
-                                        Text("Save Recipient to PayBook")
-                                    }
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.blue)
-                                }
-                                .padding(.horizontal, 4)
-                            }
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(quickMerchants, id: \.self) { item in
+                                // Quick Amount Adders
+                                HStack(spacing: 10) {
+                                    ForEach(quickAmounts, id: \.self) { increment in
                                         Button(action: {
-                                            HapticFeedback.selection()
-                                            merchant = item
-                                            // Auto suggest category
-                                            if ["McDonald's", "Mamak", "Starbucks"].contains(item) {
-                                                selectedCategory = .food
-                                            } else if item == "Grab" {
-                                                selectedCategory = .transport
-                                            } else if ["MYDIN", "7-Eleven"].contains(item) {
-                                                selectedCategory = .groceries
-                                            } else if item == "Shell" {
-                                                selectedCategory = .transport
-                                            }
+                                            HapticFeedback.impact(.light)
+                                            let current = parsedAmount
+                                            let newTotal = current + increment
+                                            amountText = String(format: "%.2f", newTotal)
                                         }) {
-                                            Text(item)
-                                                .font(.caption)
-                                                .fontWeight(.medium)
+                                            Text("+\(currency)\(Int(increment))")
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 6)
                                                 .background(Color(uiColor: .tertiarySystemFill))
                                                 .clipShape(Capsule())
                                         }
                                     }
+
+                                    if parsedAmount > 0 {
+                                        Button(action: {
+                                            HapticFeedback.selection()
+                                            amountText = ""
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                             }
-                        }
+                            .padding(.vertical, 16)
+                            .frame(maxWidth: .infinity)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                        // DATE & TIME
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("DATE & TIME")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.secondary)
-                                .tracking(1.0)
-                                .padding(.horizontal, 4)
+                            // FUNDING ACCOUNT PICKER (Where money came from)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("FUNDING ACCOUNT (WHERE MONEY CAME FROM)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.secondary)
+                                    .tracking(0.8)
+                                    .padding(.horizontal, 4)
 
-                            DatePicker("Transaction Time", selection: $date)
-                                .datePickerStyle(.compact)
-                                .padding()
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(fundingOptions, id: \.self) { acc in
+                                            Button(action: {
+                                                HapticFeedback.selection()
+                                                fundingAccount = acc
+                                            }) {
+                                                Text(acc)
+                                                    .font(.subheadline)
+                                                    .fontWeight(fundingAccount == acc ? .semibold : .regular)
+                                                    .padding(.horizontal, 14)
+                                                    .padding(.vertical, 8)
+                                                    .background(
+                                                        fundingAccount == acc
+                                                            ? Color.blue
+                                                            : Color(uiColor: .secondarySystemGroupedBackground)
+                                                    )
+                                                    .foregroundStyle(
+                                                        fundingAccount == acc
+                                                            ? Color.white
+                                                            : Color.primary
+                                                    )
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                        // OPTIONAL DESCRIPTION / NOTES
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("DESCRIPTION")
+                            // PAYMENT CHANNEL PICKER (How payment was made)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("PAYMENT CHANNEL (HOW PAYMENT WAS MADE)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.secondary)
+                                    .tracking(0.8)
+                                    .padding(.horizontal, 4)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(PaymentChannel.allCases) { channel in
+                                            Button(action: {
+                                                HapticFeedback.selection()
+                                                selectedPaymentChannel = channel
+                                            }) {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: channel.iconName)
+                                                    Text(channel.displayName)
+                                                        .font(.subheadline)
+                                                        .fontWeight(selectedPaymentChannel == channel ? .semibold : .regular)
+                                                }
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    selectedPaymentChannel == channel
+                                                        ? channel.tintColor
+                                                        : Color(uiColor: .secondarySystemGroupedBackground)
+                                                )
+                                                .foregroundStyle(
+                                                    selectedPaymentChannel == channel
+                                                        ? Color.white
+                                                        : Color.primary
+                                                )
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // CATEGORY PICKER GRID
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("CATEGORY")
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundStyle(.secondary)
                                     .tracking(1.0)
+                                    .padding(.horizontal, 4)
 
-                                Spacer()
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 95), spacing: 10)], spacing: 10) {
+                                    ForEach(ExpenseCategory.allCases) { category in
+                                        Button(action: {
+                                            HapticFeedback.selection()
+                                            selectedCategory = category
+                                            categoryTouched = true
+                                        }) {
+                                            VStack(spacing: 6) {
+                                                Image(systemName: category.icon)
+                                                    .font(.title3)
+                                                Text(category.rawValue)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .lineLimit(1)
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(
+                                                selectedCategory == category
+                                                    ? category.color
+                                                    : Color(uiColor: .secondarySystemGroupedBackground)
+                                            )
+                                            .foregroundStyle(
+                                                selectedCategory == category
+                                                    ? Color.white
+                                                    : Color.primary
+                                            )
+                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        }
+                                    }
+                                }
+                            }
 
-                                Text("Optional")
+                            // MERCHANT INPUT & QUICK SUGGESTIONS
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("MERCHANT / RECIPIENT")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.secondary)
+                                        .tracking(1.0)
+
+                                    Spacer()
+
+                                    Button(action: {
+                                        showingPayBookPicker = true
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.crop.rectangle.stack")
+                                            Text("Select from PayBook")
+                                        }
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.blue)
+                                    }
+                                }
+                                .padding(.horizontal, 4)
+
+                                TextField("e.g. McDonald's, Mamak, Rahim (optional)", text: $merchant)
+                                    .onChange(of: merchant) { _, newMerchant in
+                                        // A trusted learned rule may pre-select the category, never over the user's own pick.
+                                        guard !categoryTouched,
+                                              let rule = TransactionClassifier.rule(for: newMerchant, in: modelContext),
+                                              rule.hitCount >= TransactionClassifier.trustedHitCount,
+                                              let learned = rule.category else { return }
+                                        selectedCategory = learned
+                                    }
+                                    .padding()
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                if !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Button(action: {
+                                        showingSaveToPayBookSheet = true
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.badge.plus")
+                                            Text("Save Recipient to PayBook")
+                                        }
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.blue)
+                                    }
+                                    .padding(.horizontal, 4)
+                                }
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(quickMerchants, id: \.self) { item in
+                                            Button(action: {
+                                                HapticFeedback.selection()
+                                                merchant = item
+                                                // Auto suggest category
+                                                if ["McDonald's", "Mamak", "Starbucks"].contains(item) {
+                                                    selectedCategory = .food
+                                                } else if item == "Grab" {
+                                                    selectedCategory = .transport
+                                                } else if ["MYDIN", "7-Eleven"].contains(item) {
+                                                    selectedCategory = .groceries
+                                                } else if item == "Shell" {
+                                                    selectedCategory = .transport
+                                                }
+                                            }) {
+                                                Text(item)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 6)
+                                                    .background(Color(uiColor: .tertiarySystemFill))
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // DATE & TIME
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("DATE & TIME")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.horizontal, 4)
-
-                            TextField("e.g. Lunch with team, monthly groceries", text: $notes)
-                                .padding()
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-
-                        // SAVE BUTTON
-                        Button(action: saveExpense) {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text("Save Expense")
                                     .fontWeight(.bold)
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(isValid ? Color.accentColor : Color.gray.opacity(0.4))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
-                        .disabled(!isValid)
-                        .padding(.top, 8)
-                        .padding(.bottom, 24)
-                    }
-                    .padding()
-                }
+                                    .foregroundStyle(.secondary)
+                                    .tracking(1.0)
+                                    .padding(.horizontal, 4)
 
-                // PROCESSING OVERLAY (Vision OCR)
-                if isProcessingOCR {
-                    ZStack {
-                        Color.black.opacity(0.4).ignoresSafeArea()
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                            Text("Reading transaction...")
+                                DatePicker("Transaction Time", selection: $date)
+                                    .datePickerStyle(.compact)
+                                    .padding()
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+
+                            // OPTIONAL DESCRIPTION / NOTES
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("DESCRIPTION")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.secondary)
+                                        .tracking(1.0)
+
+                                    Spacer()
+
+                                    Text("Optional")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 4)
+
+                                TextField("e.g. Lunch with team, monthly groceries", text: $notes)
+                                    .padding()
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+
+                            // OPTIONAL SPLIT (collapsed; only opens when asked)
+                            Button {
+                                showingSplitEditor = true
+                            } label: {
+                                SplitSummaryRow(draft: splitDraft, totalMinor: Money.minorUnits(from: parsedAmount), currency: currency)
+                                    .padding()
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("addExpense.split")
+
+                            // SAVE BUTTON
+                            Button(action: saveExpense) {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Save Expense")
+                                        .fontWeight(.bold)
+                                }
                                 .font(.headline)
                                 .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 54)
+                                .background(isValid ? Color.accentColor : Color.gray.opacity(0.4))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+                            .disabled(!isValid)
+                            .padding(.top, 8)
+                            .padding(.bottom, 24)
                         }
-                        .padding(28)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding()
                     }
+
+                    // PROCESSING OVERLAY (Vision OCR)
+                    if isProcessingOCR {
+                        ZStack {
+                            Color.black.opacity(0.4).ignoresSafeArea()
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                                Text("Reading transaction...")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(28)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                    }
+                }
+                } else {
+                    // Money In / Money Out / Transfer (Phase 3). Expense stays the default and is unchanged.
+                    MoneyMovementFormView(entryType: entryType) { dismiss() }
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
@@ -432,6 +471,33 @@ public struct AddExpenseView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                }
+                ToolbarItem(placement: .principal) {
+                    Menu {
+                        ForEach(TransactionEntryType.allCases) { type in
+                            Button {
+                                entryType = type
+                            } label: {
+                                Label(type.title, systemImage: type.icon)
+                            }
+                            .accessibilityIdentifier("addType.\(type.rawValue)")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(entryType == .expense ? "Add Expense" : "Add \(entryType.title)")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.down.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel("Record type: \(entryType.title)")
+                }
+            }
+            .sheet(isPresented: $showingSplitEditor) {
+                SplitEditorView(totalMinor: Money.minorUnits(from: parsedAmount), currency: currency, merchant: merchant, initial: splitDraft) { result in
+                    splitDraft = result
                 }
             }
             .sheet(item: $parsedTransaction) { parsed in
@@ -569,9 +635,11 @@ public struct AddExpenseView: View {
         do {
             ocrResult = try await OCRService.shared.recognizeText(from: uiImage)
             print("[SpenDrop][IMAGE] OCR completed: SUCCESS (lines: \(ocrResult.lines.count), avgConfidence: \(ocrResult.averageConfidence), textLength: \(ocrResult.fullText.count))")
+            #if DEBUG
             for (idx, line) in ocrResult.lines.prefix(5).enumerated() {
                 print("[SpenDrop][IMAGE] Line \(idx + 1): \"\(line.text)\" (conf: \(line.confidence))")
             }
+            #endif
         } catch {
             print("[SpenDrop][IMAGE] OCR FAILED: \(error)")
             handleImportFailure(stage: "Vision OCR", error: error)
@@ -581,7 +649,9 @@ public struct AddExpenseView: View {
         // Stage 8: Parser
         print("[SpenDrop][IMAGE] Parser started")
         let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: uiImage)
+        #if DEBUG
         print("[SpenDrop][IMAGE] Parser completed: amount: \(parsed.amount != nil ? "RM\(parsed.amount!)" : "nil"), merchant: \(parsed.merchant ?? "nil"), source: \(parsed.paymentSource?.rawValue ?? "nil"), category: \(parsed.category?.rawValue ?? "nil"), confidence: \(parsed.confidence.rawValue), isBalance: \(parsed.isBalanceOrLimitOnly), isFailed: \(parsed.isFailedTransaction)")
+        #endif
 
         isProcessingOCR = false
         selectedPhotoItem = nil
@@ -629,6 +699,11 @@ public struct AddExpenseView: View {
         )
 
         modelContext.insert(expense)
+        AccountLinker.relink(expense, in: modelContext)
+        if let splitDraft {
+            splitDraft.apply(to: expense, in: modelContext)
+        }
+        TransactionClassifier.learn(merchant: trimmedMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
         try? modelContext.save()
         modelContext.processPendingChanges()
 

@@ -5,6 +5,8 @@ import PhotosUI
 public struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var allMovements: [MoneyMovement]
+    @Query private var people: [PayBookProfile]
 
     @State private var showingAddExpense = false
     @State private var initialAddPaymentSource: PaymentSource = .cash
@@ -26,7 +28,7 @@ public struct DashboardView: View {
     }
 
     private var todayTotal: Double {
-        todayExpenses.reduce(0) { $0 + $1.amount }
+        todayExpenses.reduce(0) { $0 + $1.spendingAmount }
     }
 
     // This week's spend
@@ -36,7 +38,7 @@ public struct DashboardView: View {
     }
 
     private var thisWeekTotal: Double {
-        thisWeekExpenses.reduce(0) { $0 + $1.amount }
+        thisWeekExpenses.reduce(0) { $0 + $1.spendingAmount }
     }
 
     // This month's spend
@@ -46,7 +48,23 @@ public struct DashboardView: View {
     }
 
     private var thisMonthTotal: Double {
-        thisMonthExpenses.reduce(0) { $0 + $1.amount }
+        thisMonthExpenses.reduce(0) { $0 + $1.spendingAmount }
+    }
+
+    // Cash flow this month (own transfers excluded). Only shown once money in/out has been recorded.
+    private var thisMonthMovements: [MoneyMovement] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: now) else { return [] }
+        return allMovements.filter { monthInterval.contains($0.date) }
+    }
+
+    private var monthCashFlow: FinancialCalculator.Summary {
+        FinancialCalculator.summary(expenses: thisMonthExpenses, movements: thisMonthMovements)
+    }
+
+    private var sharedThisMonth: [Expense] { thisMonthExpenses.filter(\.isShared) }
+
+    private func formatMinor(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor))
     }
 
     private var currentMonthYearString: String {
@@ -56,6 +74,81 @@ public struct DashboardView: View {
     }
 
     public init() {}
+
+    @ViewBuilder
+    private var secondaryCards: some View {
+        let balances = PersonLedger.summary(of: people)
+        let owed = balances.owedToMe["RM"] ?? 0
+        let owe = balances.iOwe["RM"] ?? 0
+        VStack(spacing: 12) {
+            if !sharedThisMonth.isEmpty {
+                HStack {
+                    Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                    Text("My share of \(sharedThisMonth.count) shared expense\(sharedThisMonth.count == 1 ? "" : "s") this month")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatMinor(sharedThisMonth.reduce(0) { $0 + $1.myShareMinor }))
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            if !thisMonthMovements.isEmpty {
+                let flow = monthCashFlow
+                homeCard(title: "CASH FLOW · THIS MONTH", icon: "arrow.left.arrow.right", tint: .teal) {
+                    HStack {
+                        metric("Money In", formatMinor(flow.moneyInMinor), .green)
+                        metric("Money Out", formatMinor(flow.moneyOutMinor), .primary)
+                        metric("Net", (flow.netCashFlowMinor >= 0 ? "+" : "") + formatMinor(flow.netCashFlowMinor),
+                               flow.netCashFlowMinor >= 0 ? .green : .orange)
+                    }
+                }
+                .accessibilityIdentifier("home.cashFlow")
+            }
+
+            if owed != 0 || owe != 0 {
+                homeCard(title: "BALANCES", icon: "person.2", tint: .purple) {
+                    HStack {
+                        if owed != 0 { metric("Owed to you", formatMinor(owed), .green) }
+                        if owe != 0 { metric("You owe", formatMinor(owe), .orange) }
+                        Spacer()
+                    }
+                }
+                .accessibilityIdentifier("home.balances")
+            }
+        }
+    }
+
+    private func homeCard<Content: View>(title: String, icon: String, tint: Color, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(0.8)
+                Spacer()
+                Image(systemName: icon).foregroundStyle(tint)
+            }
+            content()
+        }
+        .padding()
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func metric(_ title: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     public var body: some View {
         NavigationStack {
@@ -69,7 +162,7 @@ public struct DashboardView: View {
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
-                                Text("Dashboard")
+                                Text("Home")
                                     .font(.largeTitle)
                                     .fontWeight(.bold)
                             }
@@ -132,6 +225,10 @@ public struct DashboardView: View {
                             }
                         }
                         .padding(.horizontal)
+
+                        // SECONDARY CARDS (only when relevant)
+                        secondaryCards
+                            .padding(.horizontal)
 
                         // TODAY'S EXPENSES LIST
                         VStack(alignment: .leading, spacing: 14) {
@@ -414,9 +511,11 @@ public struct DashboardView: View {
         do {
             ocrResult = try await OCRService.shared.recognizeText(from: uiImage)
             print("[SpenDrop][IMAGE] OCR completed: SUCCESS (lines: \(ocrResult.lines.count), avgConfidence: \(ocrResult.averageConfidence), textLength: \(ocrResult.fullText.count))")
+            #if DEBUG
             for (idx, line) in ocrResult.lines.prefix(5).enumerated() {
                 print("[SpenDrop][IMAGE] Line \(idx + 1): \"\(line.text)\" (conf: \(line.confidence))")
             }
+            #endif
         } catch {
             print("[SpenDrop][IMAGE] OCR FAILED: \(error)")
             handleImportFailure(stage: "Vision OCR", error: error)
@@ -426,7 +525,9 @@ public struct DashboardView: View {
         // Stage 8: Parser
         print("[SpenDrop][IMAGE] Parser started")
         let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: uiImage)
+        #if DEBUG
         print("[SpenDrop][IMAGE] Parser completed: amount: \(parsed.amount != nil ? "RM\(parsed.amount!)" : "nil"), merchant: \(parsed.merchant ?? "nil"), source: \(parsed.paymentSource?.rawValue ?? "nil"), category: \(parsed.category?.rawValue ?? "nil"), confidence: \(parsed.confidence.rawValue), isBalance: \(parsed.isBalanceOrLimitOnly), isFailed: \(parsed.isFailedTransaction)")
+        #endif
 
         isProcessingOCR = false
         selectedPhotoItem = nil

@@ -12,6 +12,11 @@ public struct ExpenseRowView: View {
         return PaymentSource.allCases.first { $0.rawValue.caseInsensitiveCompare(funding) == .orderedSame }
     }
 
+    /// My share for shared expenses (spending when someone else paid).
+    private var myShareText: String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: expense.myShareMinor), currency: expense.currency)
+    }
+
     public var body: some View {
         HStack(spacing: 12) {
             // Category Icon Badge
@@ -38,6 +43,13 @@ public struct ExpenseRowView: View {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption2)
                             .foregroundStyle(.blue)
+                    }
+
+                    if expense.isShared {
+                        Label("\(expense.shares.count)", systemImage: "person.2.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Shared with \(expense.shares.count) people")
                     }
                 }
 
@@ -80,10 +92,17 @@ public struct ExpenseRowView: View {
 
             // Amount & Date
             VStack(alignment: .trailing, spacing: 3) {
-                Text(expense.formattedAmount)
+                Text(expense.paidByMe ? expense.formattedAmount : myShareText)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
+
+                if expense.isShared {
+                    Text(expense.paidByMe ? "You \(myShareText)" : "Paid by \(expense.payer?.name ?? expense.payerNameSnapshot ?? "someone")")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                }
 
                 Text(expense.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption2)

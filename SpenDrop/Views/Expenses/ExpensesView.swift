@@ -4,11 +4,14 @@ import SwiftData
 public struct ExpensesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var allExpenses: [Expense]
+    @Query(sort: \MoneyMovement.date, order: .reverse) private var allMovements: [MoneyMovement]
 
     @Bindable private var engine = TransactionFilterEngine.shared
 
     @State private var searchText = ""
     @State private var selectedExpense: Expense?
+    @State private var selectedMovement: MoneyMovement?
+    @State private var activityFilter: ActivityFilter = .all
     @State private var showingAddExpense = false
 
     // Secondary controls state (moved inside ⋯)
@@ -25,27 +28,25 @@ public struct ExpensesView: View {
 
     public init() {}
 
-    // Group filtered expenses by calendar day
-    private var groupedExpenses: [(dateHeader: String, dateSubtitle: String?, date: Date, expenses: [Expense])] {
+    // Unified timeline (expenses + money movements), grouped by calendar day
+    private var timelineItems: [ActivityItem] {
+        ActivityFeed.items(expenses: engine.filteredExpenses, movements: engine.filteredMovements,
+                           filter: activityFilter, newestFirst: sortOrder == .newestFirst)
+    }
+
+    private var groupedItems: [(dateHeader: String, dateSubtitle: String?, date: Date, items: [ActivityItem])] {
         let calendar = Calendar.current
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "d MMM yyyy"
 
-        let sortedList = engine.filteredExpenses.sorted { exp1, exp2 in
-            sortOrder == .newestFirst ? exp1.date > exp2.date : exp1.date < exp2.date
-        }
+        let grouped = Dictionary(grouping: timelineItems) { dateFormatter.string(from: $0.date) }
 
-        let grouped = Dictionary(grouping: sortedList) { (expense: Expense) -> String in
-            dateFormatter.string(from: expense.date)
-        }
-
-        return grouped.compactMap { (dateKey: String, expenses: [Expense]) in
-            guard let firstDate = expenses.first?.date else { return nil }
+        return grouped.compactMap { (dateKey: String, items: [ActivityItem]) in
+            guard let firstDate = items.first?.date else { return nil }
             let dayStart = calendar.startOfDay(for: firstDate)
 
             let header: String
             let subtitle: String?
-
             if calendar.isDateInToday(firstDate) {
                 header = "Today"
                 subtitle = dateKey
@@ -56,8 +57,7 @@ public struct ExpensesView: View {
                 header = dateKey
                 subtitle = nil
             }
-
-            return (dateHeader: header, dateSubtitle: subtitle, date: dayStart, expenses: expenses)
+            return (dateHeader: header, dateSubtitle: subtitle, date: dayStart, items: items)
         }
         .sorted { g1, g2 in
             sortOrder == .newestFirst ? g1.date > g2.date : g1.date < g2.date
@@ -246,33 +246,77 @@ public struct ExpensesView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
 
-                // MARK: - EXPENSE LIST (Starts high on screen)
-                if allExpenses.isEmpty {
+                // MARK: - TYPE FILTER + SPENT / IN / OUT HEADER
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(ActivityFilter.allCases) { filter in
+                            Button {
+                                HapticFeedback.selection()
+                                activityFilter = filter
+                            } label: {
+                                Text(filter.title)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(activityFilter == filter ? Color.accentColor : Color(uiColor: .tertiarySystemFill))
+                                    .foregroundStyle(activityFilter == filter ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("transactions.filter.\(filter.rawValue)")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+
+                transactionsHeader
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+
+                // MARK: - TRANSACTION LIST (Starts high on screen)
+                if allExpenses.isEmpty && allMovements.isEmpty {
                     emptyState(
                         title: "No expenses recorded",
                         message: "Add your first cash expense or drop a transaction screenshot."
                     )
-                } else if engine.filteredExpenses.isEmpty {
+                } else if timelineItems.isEmpty {
                     emptyState(
-                        title: "No expenses yet",
-                        message: "Your expenses from \(engine.selectedDateFilter.displayName) will appear here."
+                        title: activityFilter == .all ? "Nothing recorded yet" : "No \(activityFilter.title.lowercased())",
+                        message: "Transactions from \(engine.selectedDateFilter.displayName) will appear here."
                     )
                 } else {
                     List {
-                        ForEach(groupedExpenses, id: \.dateHeader) { group in
+                        ForEach(groupedItems, id: \.dateHeader) { group in
                             Section {
-                                ForEach(group.expenses) { expense in
-                                    Button(action: {
-                                        selectedExpense = expense
-                                    }) {
-                                        ExpenseRowView(expense: expense)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            delete(expense: expense)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
+                                ForEach(group.items) { item in
+                                    switch item {
+                                    case .expense(let expense):
+                                        Button(action: {
+                                            selectedExpense = expense
+                                        }) {
+                                            ExpenseRowView(expense: expense)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                delete(expense: expense)
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        }
+                                    case .movement(let movement):
+                                        Button(action: {
+                                            selectedMovement = movement
+                                        }) {
+                                            MovementRow(movement: movement, incoming: movement.kind.direction == .moneyIn, timelineStyle: true)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                delete(movement: movement)
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }
@@ -295,7 +339,7 @@ public struct ExpensesView: View {
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Expenses")
+            .navigationTitle("Transactions")
             .searchable(text: $searchText, prompt: "Search merchant, amount, category...")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -309,6 +353,10 @@ public struct ExpensesView: View {
             }
             .sheet(item: $selectedExpense) { expense in
                 ExpenseDetailView(expense: expense)
+                    .environment(\.modelContext, modelContext)
+            }
+            .sheet(item: $selectedMovement) { movement in
+                MoneyMovementEditSheet(movement: movement)
                     .environment(\.modelContext, modelContext)
             }
             .sheet(isPresented: $showingAddExpense) {
@@ -329,9 +377,13 @@ public struct ExpensesView: View {
             }
             .onAppear {
                 engine.update(expenses: allExpenses)
+                engine.update(movements: allMovements)
             }
             .onChange(of: allExpenses) { _, newExpenses in
                 engine.update(expenses: newExpenses)
+            }
+            .onChange(of: allMovements) { _, newMovements in
+                engine.update(movements: newMovements)
             }
             .onChange(of: searchText) { _, newText in
                 engine.searchText = newText
@@ -362,6 +414,36 @@ public struct ExpensesView: View {
         if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
             engine.update(expenses: all)
         }
+    }
+
+    /// "Spent" leads; Money In / Money Out are shown separately and never combined with spending.
+    private var transactionsHeader: some View {
+        let summary = engine.cashFlowSummary
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("SPENT")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.spendingMinor)))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("In \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.moneyInMinor)))")
+                    .foregroundStyle(.green)
+                Text("Out \(CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: summary.moneyOutMinor)))")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 11, weight: .semibold))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("transactions.header")
+    }
+
+    private func delete(movement: MoneyMovement) {
+        HapticFeedback.notification(.warning)
+        modelContext.delete(movement)
+        try? modelContext.save()
     }
 
     private func emptyState(title: String, message: String) -> some View {

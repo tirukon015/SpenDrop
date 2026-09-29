@@ -12,6 +12,8 @@ public struct PayBookView: View {
     @State private var autoSelectedProfile: PayBookProfile?
     @State private var profileToDelete: PayBookProfile?
     @State private var showingDeleteAlert: Bool = false
+    @State private var showingArchived: Bool = false
+    @State private var blockedDeleteProfile: PayBookProfile?
 
     public init() {}
 
@@ -50,45 +52,35 @@ public struct PayBookView: View {
                     )
                 } else {
                     List {
-                        ForEach(filteredProfiles) { profile in
-                            NavigationLink(destination: PayBookDetailView(profile: profile)) {
-                                HStack(spacing: 14) {
-                                    // Profile Avatar
-                                    avatarView(profile: profile, size: 48)
-
-                                    // Name and Methods
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(profile.name)
-                                            .font(.headline)
-                                            .foregroundStyle(.primary)
-
-                                        HStack(spacing: 6) {
-                                            Text(profile.paymentMethodCountText)
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-
-                                            if !profile.paymentMethods.isEmpty {
-                                                Text("•")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-
-                                                Text(profile.providersSummary)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
-                                }
+                        // SUMMARY (only when someone owes money or has history)
+                        let summary = PersonLedger.summary(of: allProfiles)
+                        if !summary.isEmpty && searchText.isEmpty {
+                            Section {
+                                summaryView(summary)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    profileToDelete = profile
-                                    showingDeleteAlert = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                        }
+
+                        let groups = PayBookGrouping.groups(filteredProfiles)
+                        if !groups.frequent.isEmpty {
+                            Section("Frequent") {
+                                ForEach(groups.frequent) { profile in profileRow(profile) }
+                            }
+                        }
+                        if !groups.other.isEmpty {
+                            Section(groups.frequent.isEmpty ? "People" : "Other People") {
+                                ForEach(groups.other) { profile in profileRow(profile) }
+                            }
+                        }
+                        if !groups.archived.isEmpty {
+                            Section {
+                                if showingArchived {
+                                    ForEach(groups.archived) { profile in profileRow(profile) }
                                 }
+                            } header: {
+                                Button(showingArchived ? "Hide Archived (\(groups.archived.count))" : "Show Archived (\(groups.archived.count))") {
+                                    showingArchived.toggle()
+                                }
+                                .font(.caption.weight(.semibold))
                             }
                         }
                     }
@@ -123,6 +115,17 @@ public struct PayBookView: View {
                     }
                 }
             }
+            .alert("\(blockedDeleteProfile?.name ?? "This person") still has a balance",
+                   isPresented: Binding(get: { blockedDeleteProfile != nil }, set: { if !$0 { blockedDeleteProfile = nil } })) {
+                Button("Archive Instead") {
+                    blockedDeleteProfile?.isArchived = true
+                    try? modelContext.save()
+                    blockedDeleteProfile = nil
+                }
+                Button("Cancel", role: .cancel) { blockedDeleteProfile = nil }
+            } message: {
+                Text("Settle up first, or archive to hide them while keeping the balance and history.")
+            }
             .alert("Delete \(profileToDelete?.name ?? "Profile")?", isPresented: $showingDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     if let profile = profileToDelete {
@@ -137,10 +140,109 @@ public struct PayBookView: View {
                 }
             } message: {
                 if let profile = profileToDelete {
-                    Text("This will remove \(profile.name) and all saved payment methods under this profile.")
+                    Text("This removes \(profile.name) and their saved payment methods. Past shared expenses and money records are kept under their saved name.")
                 }
             }
         }
+    }
+
+    // MARK: - Rows & summary (Phase 5)
+
+    private func profileRow(_ profile: PayBookProfile) -> some View {
+        NavigationLink(destination: PayBookDetailView(profile: profile)) {
+            HStack(spacing: 14) {
+                avatarView(profile: profile, size: 48)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    HStack(spacing: 6) {
+                        Text(profile.paymentMethodCountText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        if !profile.paymentMethods.isEmpty {
+                            Text("•")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(profile.providersSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                Spacer()
+
+                balanceBadge(profile)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                if PersonLedger.canDelete(profile) {
+                    profileToDelete = profile
+                    showingDeleteAlert = true
+                } else {
+                    blockedDeleteProfile = profile
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                profile.isArchived.toggle()
+                try? modelContext.save()
+            } label: {
+                Label(profile.isArchived ? "Unarchive" : "Archive", systemImage: "archivebox")
+            }
+            .tint(.gray)
+        }
+    }
+
+    @ViewBuilder
+    private func balanceBadge(_ profile: PayBookProfile) -> some View {
+        let balances = PersonLedger.balances(for: profile)
+        if let first = balances.sorted(by: { $0.key < $1.key }).first {
+            let currency = first.key, value = first.value
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(value > 0 ? "owes you" : "you owe")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(PersonLedger.format(abs(value), currency) + (balances.count > 1 ? " +" : ""))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(value > 0 ? .green : .orange)
+            }
+        }
+    }
+
+    private func summaryView(_ summary: PersonLedger.Summary) -> some View {
+        HStack(spacing: 12) {
+            summaryColumn("Owed to you", summary.owedToMe, count: summary.owingMeCount, color: .green)
+            summaryColumn("You owe", summary.iOwe, count: summary.iOweCount, color: .orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Settled").font(.caption2).foregroundStyle(.secondary)
+                Text("\(summary.settledCount)").font(.subheadline.weight(.semibold))
+                Text("people").font(.caption2).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func summaryColumn(_ title: String, _ totals: [String: Int], count: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(totals.isEmpty ? PersonLedger.format(0, "RM")
+                 : totals.sorted { $0.key < $1.key }.map { PersonLedger.format($0.value, $0.key) }.joined(separator: "\n"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(totals.isEmpty ? .secondary : color)
+            Text("\(count) \(count == 1 ? "person" : "people")").font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func avatarView(profile: PayBookProfile, size: CGFloat) -> some View {

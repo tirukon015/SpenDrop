@@ -14,6 +14,12 @@ public struct PayBookDetailView: View {
     @State private var showingDeleteProfileAlert: Bool = false
     @State private var showingDeleteMethodAlert: Bool = false
 
+    // Balances & history (Phase 5)
+    @State private var repayment: PrefilledMovement?
+    @State private var selectedExpense: Expense?
+    @State private var selectedMovement: MoneyMovement?
+    @State private var showingCannotDeleteAlert: Bool = false
+
     // Copy Feedback states
     @State private var isNameCopied: Bool = false
     @State private var copiedMethodId: UUID?
@@ -91,6 +97,9 @@ public struct PayBookDetailView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
+                // BALANCE (always calculated; positive = they owe me)
+                balanceSection
+
                 // PAYMENT METHODS SECTION
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
@@ -154,9 +163,35 @@ public struct PayBookDetailView: View {
                     }
                 }
 
-                // DELETE PERSON PROFILE BUTTON
+                // HISTORY
+                historySection
+
+                // FREQUENT / ARCHIVE
+                VStack(spacing: 0) {
+                    Toggle(isOn: $profile.isFrequent) {
+                        Label("Frequent", systemImage: "star.fill")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    Divider().padding(.leading, 16)
+                    Toggle(isOn: $profile.isArchived) {
+                        Label("Archived", systemImage: "archivebox")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .onChange(of: profile.isFrequent) { _, _ in profile.updatedAt = Date(); try? modelContext.save() }
+                .onChange(of: profile.isArchived) { _, _ in profile.updatedAt = Date(); try? modelContext.save() }
+
+                // DELETE PERSON PROFILE BUTTON (blocked while money is owed either way)
                 Button(role: .destructive, action: {
-                    showingDeleteProfileAlert = true
+                    if PersonLedger.canDelete(profile) {
+                        showingDeleteProfileAlert = true
+                    } else {
+                        showingCannotDeleteAlert = true
+                    }
                 }) {
                     Label("Delete Person Profile", systemImage: "trash.fill")
                         .font(.headline)
@@ -189,13 +224,31 @@ public struct PayBookDetailView: View {
         .sheet(item: $methodToEdit) { method in
             EditPaymentMethodView(method: method)
         }
+        .sheet(item: $repayment) { item in
+            MoneyMovementCreateSheet(draft: item.draft)
+        }
+        .sheet(item: $selectedExpense) { expense in
+            ExpenseDetailView(expense: expense)
+        }
+        .sheet(item: $selectedMovement) { movement in
+            MoneyMovementEditSheet(movement: movement)
+        }
+        .alert("\(profile.name) still has a balance", isPresented: $showingCannotDeleteAlert) {
+            Button("Archive Instead") {
+                profile.isArchived = true
+                try? modelContext.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Settle up first, or archive \(profile.name) to hide them while keeping the balance and history.")
+        }
         .alert("Delete \(profile.name)?", isPresented: $showingDeleteProfileAlert) {
             Button("Delete", role: .destructive) {
                 deleteProfile()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will remove the profile and all saved payment methods under it.")
+            Text("This removes the profile and its saved payment methods. Past shared expenses and money records are kept under their saved name.")
         }
         .alert("Delete this payment method?", isPresented: $showingDeleteMethodAlert) {
             Button("Delete", role: .destructive) {
@@ -356,10 +409,111 @@ public struct PayBookDetailView: View {
         methodToDelete = nil
     }
 
+    // MARK: - Balance & History (Phase 5)
+
+    @ViewBuilder
+    private var balanceSection: some View {
+        let balances = PersonLedger.balances(for: profile)
+        if !balances.isEmpty || PersonLedger.hasHistory(profile) {
+            VStack(alignment: .leading, spacing: 10) {
+                if balances.isEmpty {
+                    Label("Settled — nothing owed either way", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                } else {
+                    ForEach(balances.sorted { $0.key < $1.key }, id: \.key) { currency, value in
+                        HStack {
+                            Image(systemName: value > 0 ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
+                                .foregroundStyle(value > 0 ? .green : .orange)
+                            Text(PersonLedger.directionText(name: profile.name, balanceMinor: value, currency: currency))
+                                .font(.headline)
+                            Spacer()
+                        }
+                        Button {
+                            if let draft = PersonLedger.repaymentDraft(for: profile, currency: currency) {
+                                repayment = PrefilledMovement(draft: draft)
+                            }
+                        } label: {
+                            Label(value > 0 ? "Record Repayment Received" : "Record Repayment Made", systemImage: "banknote")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .accessibilityIdentifier("person.recordRepayment")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var historySection: some View {
+        let entries = PersonLedger.entries(for: profile)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("HISTORY")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(1.0)
+                    .padding(.horizontal, 4)
+
+                VStack(spacing: 0) {
+                    ForEach(entries) { entry in
+                        Button {
+                            switch entry.source {
+                            case .expense(let expense): selectedExpense = expense
+                            case .movement(let movement): selectedMovement = movement
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.title).font(.subheadline.weight(.semibold))
+                                    Text("\(entry.date.formatted(date: .abbreviated, time: .omitted)) · \(entry.detail)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                if entry.effectMinor != 0 {
+                                    Text((entry.effectMinor > 0 ? "+" : "−") + PersonLedger.format(abs(entry.effectMinor), entry.currency))
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(entry.effectMinor > 0 ? .green : .orange)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if entry.id != entries.last?.id {
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                Text("+ means \(profile.name) owes you more; − means you owe \(profile.name) more (or they owe you less).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+
     private func deleteProfile() {
         HapticFeedback.notification(.warning)
         modelContext.delete(profile)
         try? modelContext.save()
         dismiss()
     }
+}
+
+/// Identifiable wrapper so a prefilled draft can drive `.sheet(item:)`.
+struct PrefilledMovement: Identifiable {
+    let id = UUID()
+    let draft: MoneyMovementDraft
 }

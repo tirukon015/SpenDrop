@@ -8,6 +8,7 @@ public struct ExpenseDetailView: View {
     @Bindable public var expense: Expense
     @State private var showingEditSheet = false
     @State private var showingDeleteAlert = false
+    @State private var showingSplitEditor = false
 
     public init(expense: Expense) {
         self.expense = expense
@@ -36,6 +37,12 @@ public struct ExpenseDetailView: View {
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
+
+                        if expense.isShared {
+                            Text("Your share \(format(expense.myShareMinor))")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.blue)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
@@ -79,6 +86,9 @@ public struct ExpenseDetailView: View {
                     }
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                    // SHARED EXPENSE
+                    splitSection
 
                     // NOTES SECTION
                     if let notes = expense.notes, !notes.isEmpty {
@@ -153,6 +163,17 @@ public struct ExpenseDetailView: View {
             .sheet(isPresented: $showingEditSheet) {
                 EditExpenseView(expense: expense)
             }
+            .sheet(isPresented: $showingSplitEditor) {
+                SplitEditorView(totalMinor: expense.amountMinor, currency: expense.currency, merchant: expense.merchant,
+                                initial: SplitDraft(expense: expense), editingExpenseID: expense.id) { result in
+                    if let result {
+                        result.apply(to: expense, in: modelContext)
+                    } else {
+                        SplitDraft.removeSplit(from: expense, in: modelContext)
+                    }
+                    try? modelContext.save()
+                }
+            }
             .alert("Delete Expense?", isPresented: $showingDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     HapticFeedback.notification(.warning)
@@ -163,6 +184,49 @@ public struct ExpenseDetailView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Are you sure you want to delete this expense of \(expense.formattedAmount)?")
+            }
+        }
+    }
+
+    private func format(_ minor: Int) -> String {
+        CurrencyFormatter.format(amount: Money.majorAmount(fromMinor: minor), currency: expense.currency)
+    }
+
+    @ViewBuilder
+    private var splitSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(expense.isShared ? "SHARED WITH \(expense.shares.count) PEOPLE" : "SHARED EXPENSE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+                    .tracking(1.0)
+                Spacer()
+                Button(expense.isShared ? "Edit Split" : "Split with others") {
+                    showingSplitEditor = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .accessibilityIdentifier("detail.split")
+            }
+            .padding(.horizontal, 4)
+
+            if expense.isShared {
+                VStack(spacing: 0) {
+                    detailRow(title: "Paid by", value: expense.paidByMe ? "Me" : (expense.payer?.name ?? expense.payerNameSnapshot ?? "Someone"),
+                              icon: "creditcard.fill", iconColor: .green)
+                    ForEach(expense.shares.sorted { ($0.isMe ? 0 : 1, $0.sortIndex) < ($1.isMe ? 0 : 1, $1.sortIndex) }) { share in
+                        Divider().padding(.leading, 48)
+                        detailRow(title: share.isMe ? "Me" : (share.person?.name ?? share.nameSnapshot),
+                                  value: format(share.amountMinor),
+                                  icon: share.isMe ? "person.crop.circle.fill" : "person.crop.circle", iconColor: .blue)
+                    }
+                    if !expense.sharesMatchAmount {
+                        Divider().padding(.leading, 48)
+                        detailRow(title: "Needs attention", value: "Shares don't add up", icon: "exclamationmark.triangle.fill", iconColor: .orange)
+                    }
+                }
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
     }
