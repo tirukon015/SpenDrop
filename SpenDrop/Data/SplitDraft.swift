@@ -142,3 +142,30 @@ public struct SplitDraft: Equatable {
 
     // MARK: Saving
 
+    /// Replaces the expense's shares with this split. Returns false (and changes nothing) when invalid.
+    @discardableResult
+    public func apply(to expense: Expense, in context: ModelContext) -> Bool {
+        guard let amounts = shares(totalMinor: expense.amountMinor) else { return false }
+        for old in expense.shares {
+            context.delete(old)
+        }
+        expense.shares = []
+        for (index, participant) in participants.enumerated() {
+            let share = ExpenseShare(
+                person: participant.isMe ? nil : participant.person,
+                isMe: participant.isMe,
+                nameSnapshot: participant.isMe ? "Me" : (participant.person?.name ?? participant.name),
+                amountMinor: amounts[index],
+                parts: method == .parts ? participant.parts : nil,
+                enteredMinor: method == .amounts ? Money.minorUnits(parsing: participant.amountText) : nil,
+                sortIndex: index
+            )
+            context.insert(share)
+            share.expense = expense
+        }
+        expense.splitMethod = method
+        expense.setPayer(payer)
+        expense.updatedAt = Date()
+        return true
+    }
+
