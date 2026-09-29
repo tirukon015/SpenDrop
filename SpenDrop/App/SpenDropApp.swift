@@ -3,6 +3,10 @@ import SwiftData
 
 @main
 struct SpenDropApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showingSafeModeAlert = false
+    @State private var safeModeFollowUpMessage: String?
+
     init() {
         print("[SPENDROP_BOOT] SpenDropApp.init started")
         fflush(stdout)
@@ -20,17 +24,9 @@ struct SpenDropApp: App {
             exit(1)
         }
 
-        if ProcessInfo.processInfo.arguments.contains("--run-tests") {
-            let results = TransactionParserTests.runAllTests()
-            for r in results {
-                let status = r.passed ? "PASS" : "FAIL"
-                print("[TEST] [\(status)] \(r.testName): Expected: \(r.expected) | Actual: \(r.actual)")
-            }
-            let passedCount = results.filter { $0.passed }.count
-            let totalCount = results.count
-            print("[TEST_RUN_SUMMARY] \(passedCount)/\(totalCount) PASSED")
-            fflush(stdout)
-            exit(passedCount == totalCount ? 0 : 1)
+        // In-app test suites (each runs on in-memory stores or temporary folders only), e.g. --run-all-tests
+        if let exitCode = AllTestSuites.runFromLaunchArguments(ProcessInfo.processInfo.arguments) {
+            exit(exitCode)
         }
     }
 
