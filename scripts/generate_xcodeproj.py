@@ -511,7 +511,25 @@ add_group(data_group_id, "Data", "Data", [
     file_refs["SpenDrop/Data/TransactionFilterEngine.swift"],
     file_refs["SpenDrop/Data/TransactionReconciliationEngine.swift"],
     file_refs["SpenDrop/Data/SampleData.swift"],
-    file_refs["SpenDrop/Data/UserDataBackupService.swift"]
+    file_refs["SpenDrop/Data/UserDataBackupService.swift"],
+    file_refs["SpenDrop/Data/DataSafetyTests.swift"],
+    file_refs["SpenDrop/Data/SchemaVersions.swift"],
+    file_refs["SpenDrop/Data/AccountLinker.swift"],
+    file_refs["SpenDrop/Data/Money.swift"],
+    file_refs["SpenDrop/Data/SplitCalculator.swift"],
+    file_refs["SpenDrop/Data/FinancialCalculator.swift"],
+    file_refs["SpenDrop/Data/FinancialModelTests.swift"],
+    file_refs["SpenDrop/Data/MoneyMovementDraft.swift"],
+    file_refs["SpenDrop/Data/AccountFeatureTests.swift"],
+    file_refs["SpenDrop/Data/SplitDraft.swift"],
+    data_tests_group_id,
+    file_refs["SpenDrop/Data/PersonLedger.swift"],
+    file_refs["SpenDrop/Data/ActivityFeed.swift"],
+    file_refs["SpenDrop/Data/TransactionClassifier.swift"],
+    file_refs["SpenDrop/Data/MovementDuplicateDetector.swift"],
+    file_refs["SpenDrop/Data/ApplePayAutomation.swift"],
+    file_refs["SpenDrop/Data/PeriodGrouping.swift"],
+    data_cloud_group_id
 ])
 
 utils_group_id = gen_id("GROUP_Utils")
