@@ -33,3 +33,33 @@ public final class Account {
     @Relationship(deleteRule: .nullify, inverse: \MoneyMovement.counterAccount)
     public var incomingTransfers: [MoneyMovement] = []
 
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        type: AccountType = .other,
+        currency: String = "RM",
+        icon: String? = nil,
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        sortIndex: Int = 0
+    ) {
+        self.id = id
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.typeRaw = type.rawValue
+        self.currency = currency
+        self.icon = icon
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.sortIndex = sortIndex
+    }
+
+    public var type: AccountType {
+        get { AccountType(rawValue: typeRaw) ?? .other }
+        set { typeRaw = newValue.rawValue }
+    }
+
+    /// Identity used to avoid duplicate accounts ("Maybank", " maybank ", "MAYBANK" are the same account).
+    public var nameKey: String? {
+        AccountLinker.normalizedKey(name)
+    }
+}
