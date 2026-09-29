@@ -249,7 +249,7 @@ public struct SettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text("1.3.1 (Backup & Recovery)")
+                    Text("1.4.0 (Shared Money & Cloud Backup)")
                         .foregroundStyle(.secondary)
                 }
 
