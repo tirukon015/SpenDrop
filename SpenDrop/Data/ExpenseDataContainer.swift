@@ -273,6 +273,12 @@ public final class ExpenseDataContainer {
     public static func seedInitialDataIfNeeded() {
         let context = ExpenseDataContainer.shared.mainContext
 
+        // In safe mode the real database is untouched on disk; do not fill the temporary store with backup data.
+        guard isPersistentStoreHealthy, !isUITesting else {
+            print("[ExpenseDataContainer] Safe mode: skipping data rehydration.")
+            return
+        }
+
         // 1. Ensure Paybook profiles exist
         var profileDescriptor = FetchDescriptor<PayBookProfile>()
         profileDescriptor.fetchLimit = 1
