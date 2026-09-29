@@ -27,3 +27,25 @@ public enum TransactionClassifier {
         return ignoredMerchants.contains(key) ? nil : key
     }
 
+    public static func rule(for merchant: String?, in context: ModelContext) -> ClassificationRule? {
+        guard let key = merchantKey(merchant) else { return nil }
+        var descriptor = FetchDescriptor<ClassificationRule>(predicate: #Predicate { $0.merchantKey == key })
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
+    /// The category to pre-select (never used when the user already picked one).
+    public static func suggestCategory(merchant: String?, deterministic: ExpenseCategory?, in context: ModelContext) -> (category: ExpenseCategory, source: Source) {
+        if let rule = rule(for: merchant, in: context), rule.hitCount >= trustedHitCount, let learned = rule.category {
+            return (learned, .learned)
+        }
+        if let deterministic, deterministic != .other {
+            return (deterministic, .deterministic)
+        }
+        if let merchant, merchantKey(merchant) != nil {
+            let generic = CategoryDetector.detect(text: merchant, detectedMerchant: merchant, merchantCategory: nil)
+            if generic != .other { return (generic, .generic) }
+        }
+        return (.other, .unknown)
+    }
+
