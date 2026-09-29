@@ -253,6 +253,114 @@ public final class UserDataBackupService {
         }
     }
 
+    public struct AccountDTO: Codable {
+        public let id: UUID
+        public let name: String
+        public let typeRaw: String
+        public let currency: String
+        public let icon: String?
+        public let isArchived: Bool
+        public let createdAt: Date
+        public let sortIndex: Int
+
+        public init(from account: Account) {
+            self.id = account.id
+            self.name = account.name
+            self.typeRaw = account.typeRaw
+            self.currency = account.currency
+            self.icon = account.icon
+            self.isArchived = account.isArchived
+            self.createdAt = account.createdAt
+            self.sortIndex = account.sortIndex
+        }
+    }
+
+    public struct ExpenseShareDTO: Codable {
+        public let id: UUID
+        public let personId: UUID?
+        public let isMe: Bool
+        public let nameSnapshot: String
+        public let amountMinor: Int
+        public let parts: Int?
+        public let enteredMinor: Int?
+        public let sortIndex: Int
+
+        public init(from share: ExpenseShare) {
+            self.id = share.id
+            self.personId = share.person?.id
+            self.isMe = share.isMe
+            self.nameSnapshot = share.nameSnapshot
+            self.amountMinor = share.amountMinor
+            self.parts = share.parts
+            self.enteredMinor = share.enteredMinor
+            self.sortIndex = share.sortIndex
+        }
+    }
+
+    public struct MoneyMovementDTO: Codable {
+        public let id: UUID
+        public let directionRaw: String
+        public let kindRaw: String
+        public let amountMinor: Int
+        public let currency: String
+        public let date: Date
+        public let personId: UUID?
+        public let personNameSnapshot: String?
+        public let linkedExpenseId: UUID?
+        public let linkedExpenseSnapshot: String?
+        public let accountId: UUID?
+        public let counterAccountId: UUID?
+        public let note: String?
+        public let transactionReference: String?
+        public let sourceTypeRaw: String
+        public let paymentChannelRaw: String
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(from movement: MoneyMovement) {
+            self.id = movement.id
+            self.directionRaw = movement.directionRaw
+            self.kindRaw = movement.kindRaw
+            self.amountMinor = movement.amountMinor
+            self.currency = movement.currency
+            self.date = movement.date
+            self.personId = movement.person?.id
+            self.personNameSnapshot = movement.personNameSnapshot
+            self.linkedExpenseId = movement.linkedExpense?.id
+            self.linkedExpenseSnapshot = movement.linkedExpenseSnapshot
+            self.accountId = movement.account?.id
+            self.counterAccountId = movement.counterAccount?.id
+            self.note = movement.note
+            self.transactionReference = movement.transactionReference
+            self.sourceTypeRaw = movement.sourceTypeRaw
+            self.paymentChannelRaw = movement.paymentChannelRaw
+            self.createdAt = movement.createdAt
+            self.updatedAt = movement.updatedAt
+        }
+    }
+
+    public struct ClassificationRuleDTO: Codable {
+        public let id: UUID
+        public let merchantKey: String
+        public let categoryRaw: String?
+        public let suggestedTypeRaw: String?
+        public let accountId: UUID?
+        public let hitCount: Int
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(from rule: ClassificationRule) {
+            self.id = rule.id
+            self.merchantKey = rule.merchantKey
+            self.categoryRaw = rule.categoryRaw
+            self.suggestedTypeRaw = rule.suggestedTypeRaw
+            self.accountId = rule.accountId
+            self.hitCount = rule.hitCount
+            self.createdAt = rule.createdAt
+            self.updatedAt = rule.updatedAt
+        }
+    }
+
     // MARK: - Auto-Backup Storage URLs
 
     private static var localAutoBackupURL: URL? {
