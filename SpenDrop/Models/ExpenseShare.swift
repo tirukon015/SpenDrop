@@ -27,3 +27,25 @@ public final class ExpenseShare {
     public var enteredMinor: Int?
     public var sortIndex: Int
 
+    public init(
+        id: UUID = UUID(),
+        expense: Expense? = nil,
+        person: PayBookProfile? = nil,
+        isMe: Bool = false,
+        nameSnapshot: String,
+        amountMinor: Int,
+        parts: Int? = nil,
+        enteredMinor: Int? = nil,
+        sortIndex: Int = 0
+    ) {
+        self.id = id
+        self.expense = expense
+        self.person = person
+        self.isMe = isMe
+        self.nameSnapshot = nameSnapshot
+        self.amountMinor = amountMinor
+        self.parts = parts
+        self.enteredMinor = enteredMinor
+        self.sortIndex = sortIndex
+    }
+}
