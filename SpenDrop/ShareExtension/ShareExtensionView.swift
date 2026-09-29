@@ -715,7 +715,7 @@ public struct ShareExtensionView: View {
                 Button(action: handleSaveButtonTapped) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text("Save Expense")
+                        Text(viewModel.saveAs == .expense ? "Save Expense" : "Save \(viewModel.saveAs.rawValue)")
                             .fontWeight(.bold)
                     }
                     .font(.headline)
@@ -730,6 +730,13 @@ public struct ShareExtensionView: View {
                 .padding(.bottom, 16)
             }
             .padding()
+        }
+        .alert("Possible Duplicate", isPresented: Binding(get: { viewModel.movementDuplicateMessage != nil },
+                                                         set: { if !$0 { viewModel.movementDuplicateMessage = nil } })) {
+            Button("Add Anyway") { saveMovement() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(viewModel.movementDuplicateMessage ?? "")
         }
         .alert("Possible Duplicate Expense", isPresented: $viewModel.showingDuplicateConfirmation) {
             Button("Add Anyway") {
