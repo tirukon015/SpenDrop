@@ -13,6 +13,20 @@ public final class PayBookProfile {
     @Relationship(deleteRule: .cascade, inverse: \PayBookPaymentMethod.profile)
     public var paymentMethods: [PayBookPaymentMethod] = []
 
+    // MARK: - People & Balances (Financial Architecture V2)
+    public var isFrequent: Bool = false
+    public var isArchived: Bool = false
+
+    /// Deleting a person keeps these records; their name snapshots keep history readable.
+    @Relationship(deleteRule: .nullify, inverse: \ExpenseShare.person)
+    public var shares: [ExpenseShare] = []
+
+    @Relationship(deleteRule: .nullify, inverse: \Expense.payer)
+    public var paidExpenses: [Expense] = []
+
+    @Relationship(deleteRule: .nullify, inverse: \MoneyMovement.person)
+    public var movements: [MoneyMovement] = []
+
     public init(
         id: UUID = UUID(),
         name: String,
