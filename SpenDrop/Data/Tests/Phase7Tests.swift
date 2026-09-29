@@ -128,3 +128,46 @@ public struct Phase7Tests {
             _ = unknownCard
         }
 
+        // MARK: Trends and breakdowns
+        do {
+            let ctx = TestKit.context()
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "UTC")!
+            cal.firstWeekday = 2
+            let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 29, hour: 12))!
+            let e1 = Expense(amount: 10, merchant: "A", date: now)
+            let e2 = Expense(amount: 20, merchant: "B", date: cal.date(byAdding: .month, value: -1, to: now)!)
+            let old = Expense(amount: 99, merchant: "Old", date: cal.date(byAdding: .year, value: -2, to: now)!)
+            [e1, e2, old].forEach { ctx.insert($0) }
+            let income = MoneyMovement(kind: .income, amountMinor: 50000, date: now)
+            let transfer = MoneyMovement(kind: .ownTransfer, amountMinor: 20000, date: now)
+            ctx.insert(income); ctx.insert(transfer)
+            let monthly = PeriodGrouping.buckets(expenses: [e1, e2, old], movements: [income, transfer], granularity: .monthly, count: 3, now: now, calendar: cal)
+            let weekly = PeriodGrouping.buckets(expenses: [e1], movements: [], granularity: .weekly, count: 4, now: now, calendar: cal)
+            t.check("Trend buckets: monthly totals, old records outside range ignored, own transfer excluded",
+                    monthly.count == 3 && monthly.map(\.spendingMinor) == [0, 2000, 1000] && monthly.last?.inMinor == 50000 &&
+                    monthly.last?.outMinor == 1000 && weekly.count == 4 && weekly.last?.spendingMinor == 1000,
+                    expected: "spending [0,2000,1000], in 50000, out 1000", actual: "\(monthly.map(\.spendingMinor)) in=\(monthly.last?.inMinor ?? -1) out=\(monthly.last?.outMinor ?? -1)")
+
+            let bijoy = PayBookProfile(name: "Bijoy"); ctx.insert(bijoy)
+            let dinner = Expense(amount: 30, merchant: "Dinner", date: Date())
+            let lunch = Expense(amount: 12, merchant: "Dinner", date: Date())
+            ctx.insert(dinner); ctx.insert(lunch)
+            var d = SplitDraft(); d.add(bijoy); d.apply(to: dinner, in: ctx)
+            let refund = MoneyMovement(kind: .refund, amountMinor: 500, date: Date(), linkedExpense: lunch)
+            ctx.insert(refund)
+            try? ctx.save()
+            let engine = TransactionFilterEngine()
+            engine.selectedDateFilter = .today
+            engine.update(expenses: [dinner, lunch])
+            engine.update(movements: [refund])
+            let shared = engine.sharedSpendingSummary
+            t.check("Breakdown: shared bills, my share, refunds and net spending; merchants grouped",
+                    shared.sharedCount == 1 && shared.sharedTotalMinor == 3000 && shared.myShareMinor == 1500 &&
+                    shared.refundsMinor == 500 && shared.netSpendingMinor == 4200 - 500 &&
+                    engine.merchantBreakdown.first?.name == "Dinner" && engine.merchantBreakdown.first?.count == 2 &&
+                    engine.movementKindBreakdown.first?.kind == .refund,
+                    expected: "1 shared, bill 3000, mine 1500, refund 500, net 3700",
+                    actual: "\(shared)")
+        }
+
