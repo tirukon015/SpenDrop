@@ -28,3 +28,39 @@ public enum ApplePayAutomation {
         return banks.first { lower.contains($0.rawValue.lowercased()) || lower.contains($0.shortName.lowercased()) }
     }
 
+    @MainActor
+    @discardableResult
+    public static func record(amount: Double, merchant: String?, card: String?, date: Date = Date(), in context: ModelContext) -> Outcome {
+        guard amount.isFinite, amount > 0 else { return .invalid("The amount must be above zero.") }
+        let name = merchant?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let finalMerchant = name.isEmpty ? "Apple Pay purchase" : name
+
+        let amountMinor = Money.minorUnits(from: amount)
+        let existing = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
+        if existing.contains(where: {
+            $0.amountMinor == amountMinor && $0.merchant.caseInsensitiveCompare(finalMerchant) == .orderedSame &&
+            abs($0.date.timeIntervalSince(date)) < repeatWindow
+        }) {
+            return .duplicate
+        }
+
+        let bank = bank(fromCardName: card)
+        let category = TransactionClassifier.suggestCategory(merchant: finalMerchant, deterministic: nil, in: context).category
+        let expense = Expense(
+            amount: Money.majorAmount(fromMinor: amountMinor),
+            merchant: finalMerchant,
+            category: category,
+            paymentSource: .applePay,
+            underlyingBank: bank,
+            date: date,
+            notes: "Recorded by Apple Pay automation",
+            sourceType: .appleWallet,
+            paymentChannel: .applePay,
+            fundingAccount: bank?.rawValue
+        )
+        context.insert(expense)
+        AccountLinker.relink(expense, in: context)
+        try? context.save()
+        return .saved(expense.id)
+    }
+}
