@@ -12,6 +12,8 @@ public struct PayBookView: View {
     @State private var autoSelectedProfile: PayBookProfile?
     @State private var profileToDelete: PayBookProfile?
     @State private var showingDeleteAlert: Bool = false
+    @State private var showingArchived: Bool = false
+    @State private var blockedDeleteProfile: PayBookProfile?
 
     public init() {}
 
