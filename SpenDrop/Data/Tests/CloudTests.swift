@@ -120,3 +120,196 @@ final class FakeWebAuthLauncher: WebAuthLauncher {
 public struct AuthTests {
     static let config = SupabaseConfig(url: URL(string: "https://fake.supabase.co")!, anonKey: "public-anon-key")
 
+    public static func runAllTests() async -> [TestCaseResult] {
+        var results: [TestCaseResult] = []
+        let t = TestKit(suite: "Authentication") { results.append($0) }
+
+        // PKCE (RFC 7636 test vector) and the Google authorize URL
+        do {
+            let challenge = AuthService.PKCE.challenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+            let pkce = AuthService.PKCE.make()
+            let auth = AuthService(config: config, transport: FakeSupabase(), store: MemorySecureStore())
+            let url = try? auth.googleAuthorizeURL(pkce: pkce)
+            let items = Dictionary(uniqueKeysWithValues: (URLComponents(url: url!, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+            t.check("Google: PKCE S256 matches RFC 7636; authorize URL uses Supabase Google provider + app redirect",
+                    challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" && pkce.verifier.count >= 43 &&
+                    AuthService.PKCE.challenge(for: pkce.verifier) == pkce.challenge &&
+                    url?.path == "/auth/v1/authorize" && items["provider"] == "google" && items["redirect_to"] == "spendrop://auth-callback" &&
+                    items["code_challenge"] == pkce.challenge && items["code_challenge_method"] == "s256",
+                    expected: "RFC vector + correct query", actual: "challenge=\(challenge) url=\(url?.absoluteString ?? "nil")")
+        }
+
+        // Google sign-in callback exchange
+        do {
+            let server = FakeSupabase()
+            server.authResponses["pkce"] = (200, FakeSupabase.sessionJSON(provider: "google"))
+            let store = MemorySecureStore()
+            let auth = AuthService(config: config, transport: server, store: store)
+            let launcher = FakeWebAuthLauncher(callback: URL(string: "spendrop://auth-callback?code=abc123"))
+            var ok = true
+            do { try await auth.signInWithGoogle(using: launcher) } catch { ok = false }
+            let exchange = server.requests.last
+            let body = (try? JSONSerialization.jsonObject(with: exchange?.httpBody ?? Data())) as? [String: String]
+            t.check("Google sign-in: code exchanged with PKCE verifier; session saved in secure store; provider Google",
+                    ok && exchange?.url?.query == "grant_type=pkce" && body?["auth_code"] == "abc123" && body?["code_verifier"]?.isEmpty == false &&
+                    auth.currentUser?.provider == "google" && store.read("session") != nil,
+                    expected: "signed in via pkce", actual: "ok=\(ok) query=\(exchange?.url?.query ?? "nil") provider=\(auth.currentUser?.provider ?? "nil")")
+
+            let denied = AuthService(config: config, transport: FakeSupabase(), store: MemorySecureStore())
+            var deniedError: Error?
+            do { try await denied.signInWithGoogle(using: FakeWebAuthLauncher(callback: URL(string: "spendrop://auth-callback?error=access_denied&error_description=Denied"))) } catch { deniedError = error }
+            var cancelled: CloudError?
+            do { try await denied.signInWithGoogle(using: FakeWebAuthLauncher(callback: nil)) } catch { cancelled = error as? CloudError }
+            t.check("Google sign-in: denied or cancelled leaves you signed out", deniedError != nil && cancelled == .cancelled && denied.currentUser == nil,
+                    expected: "error, cancelled, signed out", actual: "denied=\(deniedError != nil) cancelled=\(String(describing: cancelled))")
+        }
+
+        // Email sign-in, wrong password, backend unavailable
+        do {
+            let server = FakeSupabase()
+            let store = MemorySecureStore()
+            let auth = AuthService(config: config, transport: server, store: store)
+            try? await auth.signIn(email: " me@example.com ", password: "correct-horse")
+            let req = server.requests.last
+            let body = (try? JSONSerialization.jsonObject(with: req?.httpBody ?? Data())) as? [String: String]
+            t.check("Email sign-in: public anon key only, password grant, session stored in Keychain-style store (not SwiftData)",
+                    req?.url?.query == "grant_type=password" && req?.value(forHTTPHeaderField: "apikey") == "public-anon-key" &&
+                    req?.value(forHTTPHeaderField: "Authorization") == "Bearer public-anon-key" && body?["email"] == "me@example.com" &&
+                    auth.currentUser?.email == "me@example.com" && store.values.keys.sorted() == ["session"],
+                    expected: "signed in", actual: "user=\(auth.currentUser?.email ?? "nil") keys=\(store.values.keys.sorted())")
+
+            let wrong = FakeSupabase()
+            wrong.authResponses["password"] = (400, ["code": 400, "error_code": "invalid_credentials", "msg": "Invalid login credentials"])
+            let legacy = FakeSupabase()
+            legacy.authResponses["password"] = (400, ["error": "invalid_grant", "error_description": "Invalid login credentials"])
+            let down = FakeSupabase()
+            down.fail("/auth/v1/token", status: 503)
+            var errors: [CloudError?] = []
+            for server in [wrong, legacy, down] {
+                let a = AuthService(config: config, transport: server, store: MemorySecureStore())
+                do { try await a.signIn(email: "me@example.com", password: "wrong-pass"); errors.append(nil) } catch { errors.append(error as? CloudError) }
+                if a.currentUser != nil { errors.append(nil) }
+            }
+            t.check("Wrong password (new + legacy error formats) and backend unavailable are reported; still signed out",
+                    errors.count == 3 && errors[0] == .invalidCredentials && errors[1] == .invalidCredentials &&
+                    { if case .server(503, _)? = errors[2] { return true }; return false }(),
+                    expected: "invalidCredentials x2, server 503", actual: "\(errors.map { String(describing: $0) })")
+        }
+
+        // Account creation
+        do {
+            let immediate = FakeSupabase()
+            let confirmFirst = FakeSupabase()
+            confirmFirst.authResponses["signup"] = (200, ["id": "user-9", "email": "new@example.com", "confirmation_sent_at": "2026-09-29T10:00:00Z"])
+            let exists = FakeSupabase()
+            exists.authResponses["signup"] = (422, ["code": 422, "error_code": "user_already_exists", "msg": "User already registered"])
+            let a1 = AuthService(config: config, transport: immediate, store: MemorySecureStore())
+            let a2 = AuthService(config: config, transport: confirmFirst, store: MemorySecureStore())
+            let a3 = AuthService(config: config, transport: exists, store: MemorySecureStore())
+            let r1 = try? await a1.signUp(email: "new@example.com", password: "long-enough")
+            let r2 = try? await a2.signUp(email: "new@example.com", password: "long-enough")
+            var r3: CloudError?
+            do { _ = try await a3.signUp(email: "new@example.com", password: "long-enough") } catch { r3 = error as? CloudError }
+            t.check("Create account: signed in immediately, or asked to confirm email; existing email reported",
+                    r1 == .signedIn && a1.currentUser != nil && r2 == .confirmationRequired && a2.currentUser == nil && r3 == .emailAlreadyRegistered,
+                    expected: "signedIn, confirmationRequired, alreadyRegistered", actual: "\(String(describing: r1)) \(String(describing: r2)) \(String(describing: r3))")
+            let problems = [
+                AuthValidation.problem(email: "bad", password: "12345678", confirm: nil),
+                AuthValidation.problem(email: "a@b.co", password: "short", confirm: nil),
+                AuthValidation.problem(email: "a@b.co", password: "12345678", confirm: "different"),
+                AuthValidation.problem(email: "a@b.co", password: "12345678", confirm: "12345678")
+            ]
+            t.check("Create account form: email, 8+ character password, matching confirmation", problems.map { $0 != nil } == [true, true, true, false],
+                    expected: "[true, true, true, false]", actual: "\(problems.map { $0 != nil })")
+        }
+
+        // Session persistence, expiry, offline, sign out, not configured
+        do {
+            let store = MemorySecureStore()
+            let server = FakeSupabase()
+            let first = AuthService(config: config, transport: server, store: store)
+            try? await first.signIn(email: "me@example.com", password: "correct-horse")
+            let second = AuthService(config: config, transport: FakeSupabase(), store: store)
+            t.check("Signed-in session survives an app restart (restored from secure store, no network)",
+                    second.currentUser?.id == "user-123", expected: "user-123", actual: second.currentUser?.id ?? "nil")
+
+            var clock = Date()
+            let expiring = FakeSupabase()
+            expiring.authResponses["password"] = (200, FakeSupabase.sessionJSON(expiresIn: 30))
+            expiring.authResponses["refresh_token"] = (200, FakeSupabase.sessionJSON(token: "access-2"))
+            let a = AuthService(config: config, transport: expiring, store: MemorySecureStore(), now: { clock })
+            try? await a.signIn(email: "me@example.com", password: "correct-horse")
+            let refreshed = try? await a.validAccessToken()
+            clock = clock.addingTimeInterval(10)
+            let offlineServer = FakeSupabase()
+            offlineServer.authResponses["password"] = (200, FakeSupabase.sessionJSON(expiresIn: 30))
+            let b = AuthService(config: config, transport: offlineServer, store: MemorySecureStore())
+            try? await b.signIn(email: "me@example.com", password: "correct-horse")
+            offlineServer.fail("grant_type=refresh_token", status: nil)
+            var offlineError: CloudError?
+            do { _ = try await b.validAccessToken() } catch { offlineError = error as? CloudError }
+            t.check("Expiring token is refreshed; offline refresh keeps you signed in",
+                    refreshed == "access-2" && offlineError == .offline && b.currentUser != nil,
+                    expected: "access-2; offline; still signed in", actual: "\(refreshed ?? "nil") \(String(describing: offlineError)) \(b.currentUser != nil)")
+
+            let expiredServer = FakeSupabase()
+            expiredServer.authResponses["password"] = (200, FakeSupabase.sessionJSON(expiresIn: 1))
+            expiredServer.authResponses["refresh_token"] = (400, ["error_code": "refresh_token_not_found", "msg": "Invalid Refresh Token"])
+            let expiredStore = MemorySecureStore()
+            let c = AuthService(config: config, transport: expiredServer, store: expiredStore)
+            try? await c.signIn(email: "me@example.com", password: "correct-horse")
+            var expiredError: CloudError?
+            do { _ = try await c.validAccessToken() } catch { expiredError = error as? CloudError }
+            t.check("Expired session: signed out of the cloud with a clear message; secure store cleared",
+                    expiredError == .sessionExpired && c.currentUser == nil && expiredStore.values.isEmpty &&
+                    { if case .signedOut(let m) = c.state { return m?.contains("Local data remains") == true }; return false }(),
+                    expected: "sessionExpired, signed out", actual: "\(String(describing: expiredError)) \(c.state)")
+
+            let ctx = TestKit.context()
+            ctx.insert(Expense(amount: 12, merchant: "Local"))
+            try? ctx.save()
+            let outServer = FakeSupabase()
+            let outStore = MemorySecureStore()
+            let d = AuthService(config: config, transport: outServer, store: outStore)
+            try? await d.signIn(email: "me@example.com", password: "correct-horse")
+            await d.signOut()
+            t.check("Sign out: server logout called, session removed, local data untouched",
+                    outServer.requests.last?.url?.path == "/auth/v1/logout" && d.currentUser == nil && outStore.values.isEmpty &&
+                    TestKit.count(Expense.self, in: ctx) == 1,
+                    expected: "logout, signed out, 1 local expense", actual: "last=\(outServer.requests.last?.url?.path ?? "nil") expenses=\(TestKit.count(Expense.self, in: ctx))")
+            try? await d.signIn(email: "me@example.com", password: "correct-horse")
+            t.check("Sign back in works after signing out", d.currentUser != nil, expected: "signed in", actual: "\(d.state)")
+
+            let noServer = FakeSupabase()
+            let unconfigured = AuthService(config: nil, transport: noServer, store: MemorySecureStore())
+            var notConfigured: CloudError?
+            do { try await unconfigured.signIn(email: "me@example.com", password: "correct-horse") } catch { notConfigured = error as? CloudError }
+            t.check("Without Supabase config: no network calls, clear 'not set up' state", unconfigured.state == .notConfigured &&
+                    notConfigured == .notConfigured && noServer.requests.isEmpty,
+                    expected: "notConfigured, 0 requests", actual: "\(unconfigured.state) requests=\(noServer.requests.count)")
+        }
+
+        // Account deletion
+        do {
+            let server = FakeSupabase()
+            let auth = AuthService(config: config, transport: server, store: MemorySecureStore())
+            try? await auth.signIn(email: "me@example.com", password: "correct-horse")
+            let ctx = TestKit.context()
+            ctx.insert(Expense(amount: 5, merchant: "Stays local"))
+            try? ctx.save()
+            let cloud = CloudBackupTests.makeCloud(auth: auth, server: server, context: ctx)
+            _ = await cloud.backupNow()
+            let objectsBefore = server.objects.count
+            var failed = false
+            do { try await auth.deleteAccount { try await cloud.deleteAllCloudData() } } catch { failed = true }
+            t.check("Delete cloud account: backups removed, then server-side delete_my_account; local data kept; signed out",
+                    !failed && objectsBefore == 1 && server.objects.isEmpty && server.rows.isEmpty && server.deletedAccount &&
+                    auth.currentUser == nil && TestKit.count(Expense.self, in: ctx) == 1,
+                    expected: "cloud empty, account deleted, 1 local expense",
+                    actual: "failed=\(failed) objects=\(server.objects.count) rows=\(server.rows.count) deleted=\(server.deletedAccount) local=\(TestKit.count(Expense.self, in: ctx))")
+        }
+
+        return results
+    }
+}
+
