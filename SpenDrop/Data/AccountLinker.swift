@@ -82,3 +82,36 @@ public enum AccountLinker {
         return options
     }
 
+    @discardableResult
+    public static func linkUnlinkedExpenses(in context: ModelContext) -> (accountsCreated: Int, expensesLinked: Int) {
+        let accounts = (try? context.fetch(FetchDescriptor<Account>(sortBy: [SortDescriptor(\.sortIndex), SortDescriptor(\.createdAt)]))) ?? []
+        var accountsByKey: [String: Account] = [:]
+        for account in accounts {
+            if let key = account.nameKey, accountsByKey[key] == nil {
+                accountsByKey[key] = account
+            }
+        }
+        var nextSortIndex = (accounts.map(\.sortIndex).max() ?? -1) + 1
+
+        let expenses = (try? context.fetch(FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date)]))) ?? []
+        var created = 0
+        var linked = 0
+        for expense in expenses where expense.account == nil {
+            guard let key = normalizedKey(expense.fundingAccount) else { continue }
+            let account: Account
+            if let existing = accountsByKey[key] {
+                account = existing
+            } else {
+                let name = expense.fundingAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+                account = Account(name: name, type: inferredType(forName: name), currency: expense.currency, sortIndex: nextSortIndex)
+                context.insert(account)
+                accountsByKey[key] = account
+                nextSortIndex += 1
+                created += 1
+            }
+            expense.account = account
+            linked += 1
+        }
+        return (created, linked)
+    }
+}
