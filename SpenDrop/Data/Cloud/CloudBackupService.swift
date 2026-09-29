@@ -238,3 +238,22 @@ public final class CloudBackupService {
         return false
     }
 
+    /// Stable fingerprint of the backed-up content (ignores export time and fetch order).
+    static func contentHash(_ payload: UserDataBackupService.BackupPayload) -> String {
+        struct Content: Encodable {
+            let expenses: [UserDataBackupService.ExpenseDTO]
+            let profiles: [UserDataBackupService.PayBookProfileDTO]
+            let accounts: [UserDataBackupService.AccountDTO]
+            let movements: [UserDataBackupService.MoneyMovementDTO]
+            let rules: [UserDataBackupService.ClassificationRuleDTO]
+        }
+        let content = Content(
+            expenses: payload.expenses.sorted { $0.id.uuidString < $1.id.uuidString },
+            profiles: payload.paybookProfiles.sorted { $0.id.uuidString < $1.id.uuidString },
+            accounts: (payload.accounts ?? []).sorted { $0.id.uuidString < $1.id.uuidString },
+            movements: (payload.moneyMovements ?? []).sorted { $0.id.uuidString < $1.id.uuidString },
+            rules: (payload.classificationRules ?? []).sorted { $0.id.uuidString < $1.id.uuidString })
+        let data = (try? CloudJSON.encoder().encode(content)) ?? Data()
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
