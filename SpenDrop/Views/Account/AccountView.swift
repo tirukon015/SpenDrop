@@ -250,3 +250,25 @@ struct EmailAuthView: View {
         }
     }
 
+    private func submit() async {
+        busy = true
+        errorMessage = nil
+        defer { busy = false }
+        do {
+            if mode == .create {
+                switch try await auth.signUp(email: email, password: password) {
+                case .signedIn:
+                    onFinish(true)
+                case .confirmationRequired:
+                    infoMessage = "Check your email to confirm your account, then sign in."
+                }
+            } else {
+                try await auth.signIn(email: email, password: password)
+                onFinish(true)
+            }
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+}
+
