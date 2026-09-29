@@ -309,3 +309,15 @@ struct UnlinkedMovementsView: View {
     }
 }
 
+// MARK: - Add / edit / archive an account
+
+struct AccountFormSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var allAccounts: [Account]
+
+    let account: Account?
+
+    @State private var name: String
+    @State private var type: AccountType
+
