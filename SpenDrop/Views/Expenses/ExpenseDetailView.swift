@@ -8,6 +8,7 @@ public struct ExpenseDetailView: View {
     @Bindable public var expense: Expense
     @State private var showingEditSheet = false
     @State private var showingDeleteAlert = false
+    @State private var showingSplitEditor = false
 
     public init(expense: Expense) {
         self.expense = expense
@@ -36,6 +37,12 @@ public struct ExpenseDetailView: View {
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
+
+                        if expense.isShared {
+                            Text("Your share \(format(expense.myShareMinor))")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.blue)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
@@ -79,6 +86,9 @@ public struct ExpenseDetailView: View {
                     }
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                    // SHARED EXPENSE
+                    splitSection
 
                     // NOTES SECTION
                     if let notes = expense.notes, !notes.isEmpty {
@@ -152,6 +162,17 @@ public struct ExpenseDetailView: View {
             }
             .sheet(isPresented: $showingEditSheet) {
                 EditExpenseView(expense: expense)
+            }
+            .sheet(isPresented: $showingSplitEditor) {
+                SplitEditorView(totalMinor: expense.amountMinor, currency: expense.currency, merchant: expense.merchant,
+                                initial: SplitDraft(expense: expense), editingExpenseID: expense.id) { result in
+                    if let result {
+                        result.apply(to: expense, in: modelContext)
+                    } else {
+                        SplitDraft.removeSplit(from: expense, in: modelContext)
+                    }
+                    try? modelContext.save()
+                }
             }
             .alert("Delete Expense?", isPresented: $showingDeleteAlert) {
                 Button("Delete", role: .destructive) {
