@@ -462,3 +462,58 @@ public struct FinancialModelTests {
             check("Backup from a newer app version is refused, not half-imported", rejected, expected: "refused", actual: rejected ? "refused" : "imported")
         }
 
+        // MARK: Migration V1 -> V2 on a real on-disk store
+        do {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SpenDropMigrationTest-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let storeURL = dir.appendingPathComponent("default.store")
+            var ids: [UUID] = []
+            var profileId = UUID(), methodId = UUID()
+            do {
+                let v1 = Schema([SpenDropSchemaV1.Expense.self, SpenDropSchemaV1.PayBookProfile.self,
+                                 SpenDropSchemaV1.PayBookPaymentMethod.self, SpenDropSchemaV1.PayBookContact.self])
+                let container = try? ModelContainer(for: v1, configurations: [ModelConfiguration(schema: v1, url: storeURL)])
+                if let container {
+                    let ctx = ModelContext(container)
+                    for (index, funding) in ["Maybank", "Maybank", "CIMB", "Unknown"].enumerated() {
+                        let e = SpenDropSchemaV1.Expense(amount: Double(index + 1) * 10, merchant: "E\(index)", fundingAccount: funding)
+                        ctx.insert(e)
+                        ids.append(e.id)
+                    }
+                    let p = SpenDropSchemaV1.PayBookProfile(name: "Rahim")
+                    ctx.insert(p)
+                    let m = SpenDropSchemaV1.PayBookPaymentMethod(provider: "Maybank", accountIdentifier: "111", profile: p)
+                    ctx.insert(m)
+                    p.paymentMethods.append(m)
+                    profileId = p.id
+                    methodId = m.id
+                    try? ctx.save()
+                }
+            }
+            var actual = "migration failed"
+            var passed = false
+            let config = ModelConfiguration(schema: ExpenseDataContainer.currentSchema, url: storeURL)
+            if let container = try? ExpenseDataContainer.openPersistentContainer(configuration: config) {
+                let ctx = ModelContext(container)
+                let expenses = fetch(Expense.self, in: ctx)
+                let byId = Dictionary(uniqueKeysWithValues: expenses.map { ($0.id, $0) })
+                let accounts = fetch(Account.self, in: ctx)
+                let profile = fetch(PayBookProfile.self, in: ctx).first
+                let maybankA = byId[ids[0]]?.account, maybankB = byId[ids[1]]?.account
+                passed = expenses.count == 4 && Set(expenses.map(\.id)) == Set(ids) &&
+                    accounts.count == 2 && maybankA != nil && maybankA === maybankB && maybankA?.name == "Maybank" &&
+                    byId[ids[2]]?.account?.name == "CIMB" && byId[ids[3]]?.account == nil &&
+                    byId[ids[0]]?.fundingAccount == "Maybank" && byId[ids[3]]?.fundingAccount == "Unknown" &&
+                    expenses.allSatisfy { $0.paidByMe && $0.shares.isEmpty && $0.splitMethod == nil } &&
+                    profile?.id == profileId && profile?.paymentMethods.first?.id == methodId && profile?.isFrequent == false &&
+                    count(PayBookPaymentMethod.self, in: ctx) == 1
+                actual = "expenses=\(expenses.count) idsKept=\(Set(expenses.map(\.id)) == Set(ids)) accounts=\(accounts.map(\.name).sorted()) unknownLinked=\(byId[ids[3]]?.account != nil) profileKept=\(profile?.id == profileId) methods=\(count(PayBookPaymentMethod.self, in: ctx))"
+            }
+            check("Migration V1 -> V2: data and ids kept, accounts created and linked", passed,
+                  expected: "4 expenses (same ids), accounts [CIMB, Maybank], Unknown unlinked, text kept, person+method kept", actual: actual)
+        }
+
+        return results
+    }
+}
