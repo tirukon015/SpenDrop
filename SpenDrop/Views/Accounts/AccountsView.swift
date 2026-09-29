@@ -321,3 +321,58 @@ struct AccountFormSheet: View {
     @State private var name: String
     @State private var type: AccountType
 
+    init(account: Account?) {
+        self.account = account
+        _name = State(initialValue: account?.name ?? "")
+        _type = State(initialValue: account?.type ?? .bank)
+    }
+
+    private var validationMessage: String? {
+        AccountFormValidation.problem(name: name, editing: account, existing: allAccounts)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name (e.g. Maybank)", text: $name)
+                        .textInputAutocapitalization(.words)
+                    Picker("Type", selection: $type) {
+                        ForEach(AccountType.allCases) { type in
+                            Label(type.displayName, systemImage: type.iconName).tag(type)
+                        }
+                    }
+                } footer: {
+                    if let validationMessage, !name.isEmpty {
+                        Text(validationMessage).foregroundStyle(.orange)
+                    }
+                }
+
+                if let account {
+                    Section {
+                        Button(account.isArchived ? "Unarchive Account" : "Archive Account") {
+                            account.isArchived.toggle()
+                            try? modelContext.save()
+                            HapticFeedback.notification(.success)
+                            dismiss()
+                        }
+                        .foregroundStyle(account.isArchived ? .blue : .orange)
+                    } footer: {
+                        Text("Archived accounts are hidden from pickers. Their recorded transactions are kept.")
+                    }
+                }
+            }
+            .navigationTitle(account == nil ? "New Account" : "Edit Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .disabled(validationMessage != nil)
+                }
+            }
+        }
+    }
+
