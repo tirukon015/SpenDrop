@@ -34,10 +34,22 @@ struct SpenDropApp: App {
         WindowGroup {
             MainTabView()
                 .task {
+                    showingSafeModeAlert = !ExpenseDataContainer.isPersistentStoreHealthy
+                    UserDataBackupService.startAutomaticBackups(for: ExpenseDataContainer.shared)
+                    // Optional cloud backup (only when configured and signed in; never blocks local use).
+                    CloudBackupService.shared.startAutomaticBackups()
+
                     // Safe, non-blocking initial data setup on scene presentation
                     ExpenseDataContainer.migrateLegacyContactsIfNeeded(into: ExpenseDataContainer.shared.mainContext)
                     ExpenseDataContainer.seedInitialDataIfNeeded()
                     ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
+
+                    // Link expenses saved since the last launch (manual, scan, Share Extension) to their Account.
+                    if ExpenseDataContainer.isPersistentStoreHealthy {
+                        let context = ExpenseDataContainer.shared.mainContext
+                        let linked = AccountLinker.linkUnlinkedExpenses(in: context)
+                        if linked.expensesLinked > 0 { try? context.save() }
+                    }
 
                     if ProcessInfo.processInfo.arguments.contains("--restore-user-data") {
                         UserDataBackupService.restoreAccountData(into: ExpenseDataContainer.shared.mainContext, force: true)
