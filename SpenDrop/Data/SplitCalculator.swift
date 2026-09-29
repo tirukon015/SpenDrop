@@ -31,3 +31,36 @@ public enum SplitCalculator {
 
     public static let maxParts = 99
 
+    /// - Parameter iPaid: when true, leftover sen from rounding go to Me first so friends never owe an extra sen.
+    public static func calculate(totalMinor: Int, method: SplitMethod, participants: [Participant], iPaid: Bool = true) -> Result<[Int], SplitError> {
+        guard totalMinor > 0 else { return .failure(.nonPositiveTotal) }
+        guard participants.count >= 2 else { return .failure(.tooFewParticipants) }
+        let meCount = participants.filter(\.isMe).count
+        guard meCount > 0 else { return .failure(.missingMe) }
+        guard meCount == 1 else { return .failure(.moreThanOneMe) }
+
+        switch method {
+        case .equal:
+            return .success(largestRemainder(totalMinor: totalMinor, weights: participants.map { _ in 1 }, participants: participants, iPaid: iPaid))
+
+        case .parts:
+            var weights: [Int] = []
+            for (index, participant) in participants.enumerated() {
+                guard let parts = participant.parts, (1...maxParts).contains(parts) else { return .failure(.invalidParts(index: index)) }
+                weights.append(parts)
+            }
+            return .success(largestRemainder(totalMinor: totalMinor, weights: weights, participants: participants, iPaid: iPaid))
+
+        case .amounts:
+            var amounts: [Int] = []
+            for (index, participant) in participants.enumerated() {
+                guard let entered = participant.enteredMinor else { return .failure(.missingAmount(index: index)) }
+                guard entered >= 0 else { return .failure(.negativeAmount(index: index)) }
+                amounts.append(entered)
+            }
+            let difference = amounts.reduce(0, +) - totalMinor
+            guard difference == 0 else { return .failure(.amountsDoNotMatchTotal(differenceMinor: difference)) }
+            return .success(amounts)
+        }
+    }
+
