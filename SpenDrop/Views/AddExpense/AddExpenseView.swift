@@ -472,6 +472,33 @@ public struct AddExpenseView: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .principal) {
+                    Menu {
+                        ForEach(TransactionEntryType.allCases) { type in
+                            Button {
+                                entryType = type
+                            } label: {
+                                Label(type.title, systemImage: type.icon)
+                            }
+                            .accessibilityIdentifier("addType.\(type.rawValue)")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(entryType == .expense ? "Add Expense" : "Add \(entryType.title)")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.down.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel("Record type: \(entryType.title)")
+                }
+            }
+            .sheet(isPresented: $showingSplitEditor) {
+                SplitEditorView(totalMinor: Money.minorUnits(from: parsedAmount), currency: currency, merchant: merchant, initial: splitDraft) { result in
+                    splitDraft = result
+                }
             }
             .sheet(item: $parsedTransaction) { parsed in
                 ExpenseReviewView(parsed: parsed) { savedExpense in
