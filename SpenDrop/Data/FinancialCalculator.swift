@@ -28,3 +28,19 @@ public extension Expense {
     }
 }
 
+// MARK: - Totals
+
+/// Deterministic financial totals in integer minor units. Pure functions over the records passed in;
+/// callers choose the date range. Amounts in different currencies are never added together.
+public enum FinancialCalculator {
+    public struct Summary: Equatable {
+        public var spendingMinor = 0
+        public var refundsMinor = 0
+        public var moneyInMinor = 0
+        public var moneyOutMinor = 0
+
+        /// Gross spending minus refunds received in the same records.
+        public var netSpendingMinor: Int { spendingMinor - refundsMinor }
+        public var netCashFlowMinor: Int { moneyInMinor - moneyOutMinor }
+    }
+
