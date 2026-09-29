@@ -252,3 +252,26 @@ public final class AuthService {
         return AuthSession(accessToken: access, refreshToken: refresh, expiresAt: expiresAt, user: user)
     }
 
+    private func post(path: String, query: [URLQueryItem] = [], body: Data) async throws -> Data {
+        try await request(method: "POST", path: path, query: query, token: nil, body: body)
+    }
+
+    @discardableResult
+    func request(method: String, path: String, query: [URLQueryItem] = [], token: String?, body: Data?) async throws -> Data {
+        guard let config else { throw CloudError.notConfigured }
+        var components = URLComponents(url: config.url.appendingPathComponent(String(path.dropFirst())), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = method
+        request.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token ?? config.anonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        let (data, response) = try await transport.send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw CloudJSON.error(status: response.statusCode, data: data)
+        }
+        return data
+    }
+}
+
