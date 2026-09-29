@@ -283,7 +283,7 @@ No roadmap file exists in the repository. **Not verified from the available proj
 ## 8. Project Structure
 
 ```
-SpenDrop/                                   (repository root; folder on disk is still named "SpendDrop")
+SpenDrop/                                   (repository root; folder on disk renamed to "SpenDrop" on 2026-09-29)
 ├── SpenDrop.xcodeproj/                     Xcode project (2 targets, 2 shared schemes)
 │   └── xcshareddata/xcschemes/
 │       ├── SpenDrop.xcscheme
@@ -942,7 +942,7 @@ No XCTest/XCUITest targets, no UI automation suite (although launch arguments fo
 - iPhone-only, portrait-only, English UI only.
 - No schema migration plan; changing `@Model` properties may require reinstall.
 - Tests live in the app binary rather than a test target.
-- The repository folder on the developer's disk still uses the old name "SpendDrop"; the GitHub repository was renamed.
+- The repository folder on the developer's disk was renamed from "SpendDrop" to "SpenDrop" on 2026-09-29, matching the GitHub repository.
 
 ---
 

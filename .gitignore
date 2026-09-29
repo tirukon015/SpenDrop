@@ -33,3 +33,6 @@ Package.resolved
 .DS_Store
 *.swp
 *~.nib
+
+## SpenDrop cloud config (public client values, still kept out of git)
+SpenDrop/Resources/CloudConfig/SupabaseConfig.plist

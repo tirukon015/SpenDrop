@@ -19,6 +19,9 @@ all_files = [
     ("SpenDrop/Models/PayBookProfile.swift", False),
     ("SpenDrop/Models/PayBookPaymentMethod.swift", False),
     ("SpenDrop/Models/PayBookContact.swift", False),
+    ("SpenDrop/Models/Account.swift", False),
+    ("SpenDrop/Models/ExpenseShare.swift", False),
+    ("SpenDrop/Models/MoneyMovement.swift", False),
     # Data
     ("SpenDrop/Data/ExpenseDataContainer.swift", False),
     ("SpenDrop/Data/DuplicateDetector.swift", False),
@@ -26,6 +29,15 @@ all_files = [
     ("SpenDrop/Data/TransactionReconciliationEngine.swift", False),
     ("SpenDrop/Data/SampleData.swift", False),
     ("SpenDrop/Data/UserDataBackupService.swift", False),
+    ("SpenDrop/Data/DataSafetyTests.swift", False),
+    ("SpenDrop/Data/SchemaVersions.swift", False),
+    ("SpenDrop/Data/AccountLinker.swift", False),
+    ("SpenDrop/Data/Money.swift", False),
+    ("SpenDrop/Data/SplitCalculator.swift", False),
+    ("SpenDrop/Data/FinancialCalculator.swift", False),
+    ("SpenDrop/Data/FinancialModelTests.swift", False),
+    ("SpenDrop/Data/MoneyMovementDraft.swift", False),
+    ("SpenDrop/Data/AccountFeatureTests.swift", False),
     # Utils
     ("SpenDrop/Utils/CurrencyFormatter.swift", False),
     ("SpenDrop/Utils/HapticFeedback.swift", False),
@@ -63,13 +75,39 @@ all_files = [
     ("SpenDrop/Views/Analytics/AnalyticsView.swift", False),
     ("SpenDrop/Views/Settings/SettingsView.swift", False),
     ("SpenDrop/Views/Settings/Components/ParserSelfTestView.swift", False),
+    ("SpenDrop/Views/More/MoreView.swift", False),
+    ("SpenDrop/Views/Accounts/AccountsView.swift", False),
+    ("SpenDrop/Views/Money/MoneyMovementFormView.swift", False),
     # Share Extension (Milestone 3)
     ("SpenDrop/ShareExtension/ShareViewController.swift", False),
     ("SpenDrop/ShareExtension/ShareExtensionView.swift", False),
     ("SpenDrop/ShareExtension/Info.plist", False),
     ("SpenDrop/ShareExtension/ShareExtension.entitlements", False),
+    ("SpenDrop/Data/SplitDraft.swift", False),
+    ("SpenDrop/Data/Tests/TestKit.swift", False),
+    ("SpenDrop/Data/Tests/SplitFeatureTests.swift", False),
+    ("SpenDrop/Views/Split/SplitEditorView.swift", False),
+    ("SpenDrop/Data/PersonLedger.swift", False),
+    ("SpenDrop/Data/Tests/PeopleBalanceTests.swift", False),
+    ("SpenDrop/Data/ActivityFeed.swift", False),
+    ("SpenDrop/Data/Tests/ActivityFeedTests.swift", False),
+    ("SpenDrop/Models/ClassificationRule.swift", False),
+    ("SpenDrop/Data/TransactionClassifier.swift", False),
+    ("SpenDrop/Data/MovementDuplicateDetector.swift", False),
+    ("SpenDrop/OCR/DirectionDetector.swift", False),
+    ("SpenDrop/Data/ApplePayAutomation.swift", False),
+    ("SpenDrop/App/ApplePayIntent.swift", False),
+    ("SpenDrop/Data/PeriodGrouping.swift", False),
+    ("SpenDrop/Data/Tests/Phase7Tests.swift", False),
+    ("SpenDrop/Data/Cloud/CloudCore.swift", False),
+    ("SpenDrop/Data/Cloud/AuthService.swift", False),
+    ("SpenDrop/Data/Cloud/CloudBackupService.swift", False),
+    ("SpenDrop/Views/Account/AccountView.swift", False),
+    ("SpenDrop/Data/Tests/CloudTests.swift", False),
+    ("SpenDrop/Data/Tests/HardeningTests.swift", False),
     # Resources
     ("SpenDrop/Resources/Assets.xcassets", True),
+    ("SpenDrop/Resources/CloudConfig", True),
     ("SpenDrop/Resources/Info.plist", False),
     ("SpenDrop/Resources/SpenDrop.entitlements", False),
     ("SpenDrop/Resources/DiagnosticSamples/sample_screenshot.png", True),
@@ -95,7 +133,12 @@ share_source_paths = [
     "SpenDrop/Models/PayBookProfile.swift",
     "SpenDrop/Models/PayBookPaymentMethod.swift",
     "SpenDrop/Models/PayBookContact.swift",
+    "SpenDrop/Models/Account.swift",
+    "SpenDrop/Models/ExpenseShare.swift",
+    "SpenDrop/Models/MoneyMovement.swift",
     "SpenDrop/Data/ExpenseDataContainer.swift",
+    "SpenDrop/Data/SchemaVersions.swift",
+    "SpenDrop/Data/AccountLinker.swift",
     "SpenDrop/Data/DuplicateDetector.swift",
     "SpenDrop/Data/TransactionReconciliationEngine.swift",
     "SpenDrop/Data/SampleData.swift",
@@ -110,6 +153,11 @@ share_source_paths = [
     "SpenDrop/OCR/ImageStorageService.swift",
     "SpenDrop/Utils/CurrencyFormatter.swift",
     "SpenDrop/Utils/HapticFeedback.swift",
+    "SpenDrop/Models/ClassificationRule.swift",
+    "SpenDrop/Data/TransactionClassifier.swift",
+    "SpenDrop/Data/MovementDuplicateDetector.swift",
+    "SpenDrop/OCR/DirectionDetector.swift",
+    "SpenDrop/Data/Money.swift",
 ]
 
 # IDs for Main App Target
@@ -152,6 +200,24 @@ products_group_id = gen_id("SpenDrop_ProductsGroup")
 file_refs = {}
 for path, _ in all_files:
     file_refs[path] = gen_id(f"FREF_{path}")
+
+# UI test target (SpenDropUITests): launches the app with --ui-testing (fresh temporary database)
+# and drives it like a user. Not part of the app or the Share Extension.
+uit_source_paths = ["SpenDropUITests/SpenDropUITests.swift"]
+for path in uit_source_paths:
+    file_refs[path] = gen_id(f"FREF_{path}")
+uit_build_files = {path: gen_id(f"BF_UIT_{path}") for path in uit_source_paths}
+uit_target_id = gen_id("SpenDropUITests_NativeTarget")
+uit_product_id = gen_id("SpenDropUITests_Product")
+uit_sources_phase_id = gen_id("SpenDropUITests_SourcesPhase")
+uit_frameworks_phase_id = gen_id("SpenDropUITests_FrameworksPhase")
+uit_resources_phase_id = gen_id("SpenDropUITests_ResourcesPhase")
+uit_debug_id = gen_id("SpenDropUITests_Debug")
+uit_release_id = gen_id("SpenDropUITests_Release")
+uit_config_list_id = gen_id("SpenDropUITests_ConfigList")
+uit_proxy_id = gen_id("SpenDropUITests_ContainerItemProxy_App")
+uit_dependency_id = gen_id("SpenDropUITests_TargetDependency_App")
+uit_group_id = gen_id("GROUP_SpenDropUITests")
 
 # PBXBuildFile IDs for App target
 app_build_files = {}
@@ -236,6 +302,9 @@ for path, fref_id in file_refs.items():
         ft = "sourcecode.swift"
     elif path.endswith(".xcassets"):
         ft = "folder.assetcatalog"
+    elif path.endswith("/CloudConfig"):
+        # Folder reference: its contents (e.g. the git-ignored SupabaseConfig.plist) are copied when present.
+        ft = "folder"
     elif path.endswith(".plist"):
         ft = "text.plist.xml"
     elif path.endswith(".entitlements"):
@@ -338,6 +407,31 @@ add_group(paybook_group_id, "PayBook", "PayBook", [
     file_refs["SpenDrop/Views/PayBook/PayBookPickerSheet.swift"]
 ])
 
+more_group_id = gen_id("GROUP_Views_More")
+add_group(more_group_id, "More", "More", [
+    file_refs["SpenDrop/Views/More/MoreView.swift"]
+])
+
+accounts_group_id = gen_id("GROUP_Views_Accounts")
+add_group(accounts_group_id, "Accounts", "Accounts", [
+    file_refs["SpenDrop/Views/Accounts/AccountsView.swift"]
+])
+
+money_group_id = gen_id("GROUP_Views_Money")
+add_group(money_group_id, "Money", "Money", [
+    file_refs["SpenDrop/Views/Money/MoneyMovementFormView.swift"]
+])
+
+split_group_id = gen_id("GROUP_split_group_id")
+add_group(split_group_id, "Split", "Split", [
+    file_refs["SpenDrop/Views/Split/SplitEditorView.swift"]
+])
+
+account_views_group_id = gen_id("GROUP_account_views_group_id")
+add_group(account_views_group_id, "Account", "Account", [
+    file_refs["SpenDrop/Views/Account/AccountView.swift"]
+])
+
 views_group_id = gen_id("GROUP_Views")
 add_group(views_group_id, "Views", "Views", [
     dash_group_id,
@@ -347,7 +441,12 @@ add_group(views_group_id, "Views", "Views", [
     review_group_id,
     analytics_group_id,
     settings_group_id,
-    file_refs["SpenDrop/Views/MainTabView.swift"]
+    more_group_id,
+    accounts_group_id,
+    money_group_id,
+    file_refs["SpenDrop/Views/MainTabView.swift"],
+    split_group_id,
+    account_views_group_id
 ])
 
 ocr_group_id = gen_id("GROUP_OCR")
@@ -361,12 +460,14 @@ add_group(ocr_group_id, "OCR", "OCR", [
     file_refs["SpenDrop/OCR/TransactionParser.swift"],
     file_refs["SpenDrop/OCR/ImageStorageService.swift"],
     file_refs["SpenDrop/OCR/ImagePipelineDiagnostics.swift"],
-    file_refs["SpenDrop/OCR/TransactionParserTests.swift"]
+    file_refs["SpenDrop/OCR/TransactionParserTests.swift"],
+    file_refs["SpenDrop/OCR/DirectionDetector.swift"]
 ])
 
 app_group_id = gen_id("GROUP_App")
 add_group(app_group_id, "App", "App", [
-    file_refs["SpenDrop/App/SpenDropApp.swift"]
+    file_refs["SpenDrop/App/SpenDropApp.swift"],
+    file_refs["SpenDrop/App/ApplePayIntent.swift"]
 ])
 
 models_group_id = gen_id("GROUP_Models")
@@ -378,7 +479,29 @@ add_group(models_group_id, "Models", "Models", [
     file_refs["SpenDrop/Models/ExpenseSourceType.swift"],
     file_refs["SpenDrop/Models/PayBookProfile.swift"],
     file_refs["SpenDrop/Models/PayBookPaymentMethod.swift"],
-    file_refs["SpenDrop/Models/PayBookContact.swift"]
+    file_refs["SpenDrop/Models/PayBookContact.swift"],
+    file_refs["SpenDrop/Models/Account.swift"],
+    file_refs["SpenDrop/Models/ExpenseShare.swift"],
+    file_refs["SpenDrop/Models/MoneyMovement.swift"],
+    file_refs["SpenDrop/Models/ClassificationRule.swift"]
+])
+
+data_tests_group_id = gen_id("GROUP_data_tests_group_id")
+add_group(data_tests_group_id, "Tests", "Tests", [
+    file_refs["SpenDrop/Data/Tests/TestKit.swift"],
+    file_refs["SpenDrop/Data/Tests/SplitFeatureTests.swift"],
+    file_refs["SpenDrop/Data/Tests/PeopleBalanceTests.swift"],
+    file_refs["SpenDrop/Data/Tests/ActivityFeedTests.swift"],
+    file_refs["SpenDrop/Data/Tests/Phase7Tests.swift"],
+    file_refs["SpenDrop/Data/Tests/CloudTests.swift"],
+    file_refs["SpenDrop/Data/Tests/HardeningTests.swift"]
+])
+
+data_cloud_group_id = gen_id("GROUP_data_cloud_group_id")
+add_group(data_cloud_group_id, "Cloud", "Cloud", [
+    file_refs["SpenDrop/Data/Cloud/CloudCore.swift"],
+    file_refs["SpenDrop/Data/Cloud/AuthService.swift"],
+    file_refs["SpenDrop/Data/Cloud/CloudBackupService.swift"]
 ])
 
 data_group_id = gen_id("GROUP_Data")
@@ -388,7 +511,25 @@ add_group(data_group_id, "Data", "Data", [
     file_refs["SpenDrop/Data/TransactionFilterEngine.swift"],
     file_refs["SpenDrop/Data/TransactionReconciliationEngine.swift"],
     file_refs["SpenDrop/Data/SampleData.swift"],
-    file_refs["SpenDrop/Data/UserDataBackupService.swift"]
+    file_refs["SpenDrop/Data/UserDataBackupService.swift"],
+    file_refs["SpenDrop/Data/DataSafetyTests.swift"],
+    file_refs["SpenDrop/Data/SchemaVersions.swift"],
+    file_refs["SpenDrop/Data/AccountLinker.swift"],
+    file_refs["SpenDrop/Data/Money.swift"],
+    file_refs["SpenDrop/Data/SplitCalculator.swift"],
+    file_refs["SpenDrop/Data/FinancialCalculator.swift"],
+    file_refs["SpenDrop/Data/FinancialModelTests.swift"],
+    file_refs["SpenDrop/Data/MoneyMovementDraft.swift"],
+    file_refs["SpenDrop/Data/AccountFeatureTests.swift"],
+    file_refs["SpenDrop/Data/SplitDraft.swift"],
+    data_tests_group_id,
+    file_refs["SpenDrop/Data/PersonLedger.swift"],
+    file_refs["SpenDrop/Data/ActivityFeed.swift"],
+    file_refs["SpenDrop/Data/TransactionClassifier.swift"],
+    file_refs["SpenDrop/Data/MovementDuplicateDetector.swift"],
+    file_refs["SpenDrop/Data/ApplePayAutomation.swift"],
+    file_refs["SpenDrop/Data/PeriodGrouping.swift"],
+    data_cloud_group_id
 ])
 
 utils_group_id = gen_id("GROUP_Utils")
@@ -407,6 +548,7 @@ add_group(diag_samples_group_id, "DiagnosticSamples", "DiagnosticSamples", [
 res_group_id = gen_id("GROUP_Resources")
 add_group(res_group_id, "Resources", "Resources", [
     file_refs["SpenDrop/Resources/Assets.xcassets"],
+    file_refs["SpenDrop/Resources/CloudConfig"],
     file_refs["SpenDrop/Resources/Info.plist"],
     file_refs["SpenDrop/Resources/SpenDrop.entitlements"],
     diag_samples_group_id
@@ -433,9 +575,10 @@ add_group(spendrop_group_id, "SpenDrop", "SpenDrop", [
 ])
 
 products_group_id = gen_id("GROUP_Products")
-add_group(products_group_id, "Products", None, [app_product_id, share_product_id])
+add_group(products_group_id, "Products", None, [app_product_id, share_product_id, uit_product_id])
+add_group(uit_group_id, "SpenDropUITests", "SpenDropUITests", [file_refs[p] for p in uit_source_paths])
 
-add_group(main_group_id, None, None, [spendrop_group_id, products_group_id])
+add_group(main_group_id, None, None, [spendrop_group_id, uit_group_id, products_group_id])
 
 pbx.append("\n/* Begin PBXGroup section */")
 for gid, (name, path, children) in groups.items():
@@ -812,6 +955,114 @@ pbx.append("/* End XCConfigurationList section */")
 pbx.append("\t};")
 pbx.append(f"\trootObject = {proj_id} /* Project object */;")
 pbx.append("}")
+
+# ---- UI test target entries, inserted into their sections ----
+def insert_before(marker, lines):
+    i = pbx.index(marker)
+    pbx[i:i] = lines
+
+def insert_after(anchor, lines):
+    i = pbx.index(anchor) + 1
+    pbx[i:i] = lines
+
+insert_before("/* End PBXBuildFile section */",
+    [f"\t\t{bf} /* {os.path.basename(p)} in UITest Sources */ = {{isa = PBXBuildFile; fileRef = {file_refs[p]} /* {os.path.basename(p)} */; }};" for p, bf in uit_build_files.items()])
+insert_before("/* End PBXContainerItemProxy section */", [
+    f"\t\t{uit_proxy_id} /* PBXContainerItemProxy */ = {{",
+    "\t\t\tisa = PBXContainerItemProxy;",
+    f"\t\t\tcontainerPortal = {proj_id} /* Project object */;",
+    "\t\t\tproxyType = 1;",
+    f"\t\t\tremoteGlobalIDString = {target_id};",
+    "\t\t\tremoteInfo = SpenDrop;",
+    "\t\t};"])
+insert_before("/* End PBXFileReference section */", [
+    f"\t\t{uit_product_id} /* SpenDropUITests.xctest */ = {{isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpenDropUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; }};"])
+insert_before("/* End PBXFrameworksBuildPhase section */", [
+    f"\t\t{uit_frameworks_phase_id} /* Frameworks */ = {{",
+    "\t\t\tisa = PBXFrameworksBuildPhase;",
+    "\t\t\tbuildActionMask = 2147483647;",
+    "\t\t\tfiles = (",
+    "\t\t\t);",
+    "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+    "\t\t};"])
+insert_before("/* End PBXNativeTarget section */", [
+    f"\t\t{uit_target_id} /* SpenDropUITests */ = {{",
+    "\t\t\tisa = PBXNativeTarget;",
+    f"\t\t\tbuildConfigurationList = {uit_config_list_id} /* Build configuration list for PBXNativeTarget \"SpenDropUITests\" */;",
+    "\t\t\tbuildPhases = (",
+    f"\t\t\t\t{uit_sources_phase_id} /* Sources */,",
+    f"\t\t\t\t{uit_frameworks_phase_id} /* Frameworks */,",
+    f"\t\t\t\t{uit_resources_phase_id} /* Resources */,",
+    "\t\t\t);",
+    "\t\t\tbuildRules = (",
+    "\t\t\t);",
+    "\t\t\tdependencies = (",
+    f"\t\t\t\t{uit_dependency_id} /* PBXTargetDependency */,",
+    "\t\t\t);",
+    "\t\t\tname = SpenDropUITests;",
+    "\t\t\tproductName = SpenDropUITests;",
+    f"\t\t\tproductReference = {uit_product_id} /* SpenDropUITests.xctest */;",
+    "\t\t\tproductType = \"com.apple.product-type.bundle.ui-testing\";",
+    "\t\t};"])
+insert_before(f"\t\t\t\t\t{share_target_id} = {{", [
+    f"\t\t\t\t\t{uit_target_id} = {{",
+    "\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;",
+    "\t\t\t\t\t\tProvisioningStyle = Automatic;",
+    f"\t\t\t\t\t\tTestTargetID = {target_id};",
+    "\t\t\t\t\t};"])
+insert_after(f"\t\t\t\t{share_target_id} /* SpenDropShare */,", [f"\t\t\t\t{uit_target_id} /* SpenDropUITests */,"])
+insert_before("/* End PBXResourcesBuildPhase section */", [
+    f"\t\t{uit_resources_phase_id} /* Resources */ = {{",
+    "\t\t\tisa = PBXResourcesBuildPhase;",
+    "\t\t\tbuildActionMask = 2147483647;",
+    "\t\t\tfiles = (",
+    "\t\t\t);",
+    "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+    "\t\t};"])
+insert_before("/* End PBXSourcesBuildPhase section */",
+    [f"\t\t{uit_sources_phase_id} /* Sources */ = {{",
+     "\t\t\tisa = PBXSourcesBuildPhase;",
+     "\t\t\tbuildActionMask = 2147483647;",
+     "\t\t\tfiles = ("] +
+    [f"\t\t\t\t{bf} /* {os.path.basename(p)} in Sources */," for p, bf in uit_build_files.items()] +
+    ["\t\t\t);",
+     "\t\t\trunOnlyForDeploymentPostprocessing = 0;",
+     "\t\t};"])
+insert_before("/* End PBXTargetDependency section */", [
+    f"\t\t{uit_dependency_id} /* PBXTargetDependency */ = {{",
+    "\t\t\tisa = PBXTargetDependency;",
+    f"\t\t\ttarget = {target_id} /* SpenDrop */;",
+    f"\t\t\ttargetProxy = {uit_proxy_id} /* PBXContainerItemProxy */;",
+    "\t\t};"])
+def uit_config(cid, name):
+    return [f"\t\t{cid} /* {name} */ = {{",
+            "\t\t\tisa = XCBuildConfiguration;",
+            "\t\t\tbuildSettings = {",
+            "\t\t\t\tCODE_SIGN_STYLE = Automatic;",
+            "\t\t\t\tCURRENT_PROJECT_VERSION = 1;",
+            "\t\t\t\tDEVELOPMENT_TEAM = 772ZMVR7WF;",
+            "\t\t\t\tGENERATE_INFOPLIST_FILE = YES;",
+            "\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;",
+            "\t\t\t\tMARKETING_VERSION = 1.0;",
+            "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.spendrop.SpenDropUITests;",
+            "\t\t\t\tPRODUCT_NAME = \"$(TARGET_NAME)\";",
+            "\t\t\t\tSWIFT_VERSION = 5.0;",
+            "\t\t\t\tTARGETED_DEVICE_FAMILY = \"1\";",
+            "\t\t\t\tTEST_TARGET_NAME = SpenDrop;",
+            "\t\t\t};",
+            f"\t\t\tname = {name};",
+            "\t\t};"]
+insert_before("/* End XCBuildConfiguration section */", uit_config(uit_debug_id, "Debug") + uit_config(uit_release_id, "Release"))
+insert_before("/* End XCConfigurationList section */", [
+    f"\t\t{uit_config_list_id} /* Build configuration list for PBXNativeTarget \"SpenDropUITests\" */ = {{",
+    "\t\t\tisa = XCConfigurationList;",
+    "\t\t\tbuildConfigurations = (",
+    f"\t\t\t\t{uit_debug_id} /* Debug */,",
+    f"\t\t\t\t{uit_release_id} /* Release */,",
+    "\t\t\t);",
+    "\t\t\tdefaultConfigurationIsVisible = 0;",
+    "\t\t\tdefaultConfigurationName = Release;",
+    "\t\t};"])
 
 output_dir = "SpenDrop.xcodeproj"
 os.makedirs(output_dir, exist_ok=True)

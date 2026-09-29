@@ -3,6 +3,10 @@ import SwiftData
 
 @main
 struct SpenDropApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showingSafeModeAlert = false
+    @State private var safeModeFollowUpMessage: String?
+
     init() {
         print("[SPENDROP_BOOT] SpenDropApp.init started")
         fflush(stdout)
@@ -20,17 +24,9 @@ struct SpenDropApp: App {
             exit(1)
         }
 
-        if ProcessInfo.processInfo.arguments.contains("--run-tests") {
-            let results = TransactionParserTests.runAllTests()
-            for r in results {
-                let status = r.passed ? "PASS" : "FAIL"
-                print("[TEST] [\(status)] \(r.testName): Expected: \(r.expected) | Actual: \(r.actual)")
-            }
-            let passedCount = results.filter { $0.passed }.count
-            let totalCount = results.count
-            print("[TEST_RUN_SUMMARY] \(passedCount)/\(totalCount) PASSED")
-            fflush(stdout)
-            exit(passedCount == totalCount ? 0 : 1)
+        // In-app test suites (each runs on in-memory stores or temporary folders only), e.g. --run-all-tests
+        if let exitCode = AllTestSuites.runFromLaunchArguments(ProcessInfo.processInfo.arguments) {
+            exit(exitCode)
         }
     }
 
@@ -38,10 +34,22 @@ struct SpenDropApp: App {
         WindowGroup {
             MainTabView()
                 .task {
+                    showingSafeModeAlert = !ExpenseDataContainer.isPersistentStoreHealthy
+                    UserDataBackupService.startAutomaticBackups(for: ExpenseDataContainer.shared)
+                    // Optional cloud backup (only when configured and signed in; never blocks local use).
+                    CloudBackupService.shared.startAutomaticBackups()
+
                     // Safe, non-blocking initial data setup on scene presentation
                     ExpenseDataContainer.migrateLegacyContactsIfNeeded(into: ExpenseDataContainer.shared.mainContext)
                     ExpenseDataContainer.seedInitialDataIfNeeded()
                     ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
+
+                    // Link expenses saved since the last launch (manual, scan, Share Extension) to their Account.
+                    if ExpenseDataContainer.isPersistentStoreHealthy {
+                        let context = ExpenseDataContainer.shared.mainContext
+                        let linked = AccountLinker.linkUnlinkedExpenses(in: context)
+                        if linked.expensesLinked > 0 { try? context.save() }
+                    }
 
                     if ProcessInfo.processInfo.arguments.contains("--restore-user-data") {
                         UserDataBackupService.restoreAccountData(into: ExpenseDataContainer.shared.mainContext, force: true)
@@ -78,7 +86,50 @@ struct SpenDropApp: App {
                         fflush(stdout)
                     }
                 }
+                .alert("SpenDrop Couldn't Open Your Data", isPresented: $showingSafeModeAlert) {
+                    Button("Keep Data As Is", role: .cancel) {}
+                    Button("Move Aside & Use Backup") {
+                        do {
+                            let folder = try ExpenseDataContainer.moveUnopenableStoreAside()
+                            safeModeFollowUpMessage = "Your old database was moved (not deleted) to \(folder.lastPathComponent). Close SpenDrop completely and open it again to restore from your latest backup."
+                        } catch {
+                            safeModeFollowUpMessage = "Nothing was changed. \(error.localizedDescription)"
+                        }
+                    }
+                } message: {
+                    Text("Nothing has been deleted. Your database was left untouched on this device. SpenDrop is running in safe mode, so changes you make now will not be saved.")
+                }
+                .alert("Safe Mode", isPresented: Binding(
+                    get: { safeModeFollowUpMessage != nil },
+                    set: { if !$0 { safeModeFollowUpMessage = nil } }
+                )) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(safeModeFollowUpMessage ?? "")
+                }
         }
         .modelContainer(ExpenseDataContainer.shared)
+        .onChange(of: scenePhase) { _, newPhase in
+            let context = ExpenseDataContainer.shared.mainContext
+            switch newPhase {
+            case .background:
+                // Flush pending autosave changes, then back up immediately before the app is suspended.
+                if context.hasChanges { try? context.save() }
+                UserDataBackupService.saveAutoBackup(from: context)
+                // Give a pending cloud backup a chance to finish while the app is suspended.
+                if AuthService.shared.currentUser != nil {
+                    let task = UIApplication.shared.beginBackgroundTask(withName: "SpenDropCloudBackup")
+                    Task { @MainActor in
+                        await CloudBackupService.shared.backupNow()
+                        UIApplication.shared.endBackgroundTask(task)
+                    }
+                }
+            case .active:
+                // Picks up anything the Share Extension saved while the app was not running.
+                UserDataBackupService.scheduleAutoBackup(from: context)
+            default:
+                break
+            }
+        }
     }
 }
