@@ -110,3 +110,23 @@ public final class AuthService {
         return nil
     }
 
+    // MARK: Email / password
+
+    public func signUp(email: String, password: String) async throws -> SignUpResult {
+        let body = try JSONSerialization.data(withJSONObject: ["email": email.trimmingCharacters(in: .whitespaces), "password": password])
+        let data = try await post(path: "/auth/v1/signup", body: body)
+        if let session = try? parseSession(data) {
+            save(session)
+            return .signedIn
+        }
+        return .confirmationRequired
+    }
+
+    public func signIn(email: String, password: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["email": email.trimmingCharacters(in: .whitespaces), "password": password])
+        let data = try await post(path: "/auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "password")], body: body)
+        save(try parseSession(data))
+    }
+
+    // MARK: Google (OAuth + PKCE)
+
