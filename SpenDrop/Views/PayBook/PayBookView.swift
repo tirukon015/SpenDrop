@@ -52,45 +52,35 @@ public struct PayBookView: View {
                     )
                 } else {
                     List {
-                        ForEach(filteredProfiles) { profile in
-                            NavigationLink(destination: PayBookDetailView(profile: profile)) {
-                                HStack(spacing: 14) {
-                                    // Profile Avatar
-                                    avatarView(profile: profile, size: 48)
-
-                                    // Name and Methods
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(profile.name)
-                                            .font(.headline)
-                                            .foregroundStyle(.primary)
-
-                                        HStack(spacing: 6) {
-                                            Text(profile.paymentMethodCountText)
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-
-                                            if !profile.paymentMethods.isEmpty {
-                                                Text("•")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-
-                                                Text(profile.providersSummary)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
-                                }
+                        // SUMMARY (only when someone owes money or has history)
+                        let summary = PersonLedger.summary(of: allProfiles)
+                        if !summary.isEmpty && searchText.isEmpty {
+                            Section {
+                                summaryView(summary)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    profileToDelete = profile
-                                    showingDeleteAlert = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                        }
+
+                        let groups = PayBookGrouping.groups(filteredProfiles)
+                        if !groups.frequent.isEmpty {
+                            Section("Frequent") {
+                                ForEach(groups.frequent) { profile in profileRow(profile) }
+                            }
+                        }
+                        if !groups.other.isEmpty {
+                            Section(groups.frequent.isEmpty ? "People" : "Other People") {
+                                ForEach(groups.other) { profile in profileRow(profile) }
+                            }
+                        }
+                        if !groups.archived.isEmpty {
+                            Section {
+                                if showingArchived {
+                                    ForEach(groups.archived) { profile in profileRow(profile) }
                                 }
+                            } header: {
+                                Button(showingArchived ? "Hide Archived (\(groups.archived.count))" : "Show Archived (\(groups.archived.count))") {
+                                    showingArchived.toggle()
+                                }
+                                .font(.caption.weight(.semibold))
                             }
                         }
                     }
