@@ -70,3 +70,37 @@ public struct Phase7Tests {
                     expected: "RM50, otherIn", actual: "RM\(parsed.amount ?? 0), \(parsed.suggestedMovementKind?.rawValue ?? "nil")")
         }
 
+        // MARK: Movement duplicates and scan → movement drafts
+        do {
+            let ctx = TestKit.context()
+            let date = Date()
+            let existing = MoneyMovement(kind: .otherIn, amountMinor: 5000, date: date, transactionReference: "REF-9")
+            ctx.insert(existing)
+            try? ctx.save()
+            let byRef = MovementDuplicateDetector.findMatch(amountMinor: 1, date: date.addingTimeInterval(9_999_999), reference: "REF-9", kind: .income, in: ctx)
+            let byAmount = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(3600), reference: nil, kind: .income, in: ctx)
+            let otherDirection = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date, reference: nil, kind: .otherOut, in: ctx)
+            let later = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(2 * 86_400), reference: nil, kind: .otherIn, in: ctx)
+            t.check("Movement duplicates: by reference, or same amount+direction within 24h; warns only",
+                    byRef === existing && byAmount === existing && otherDirection == nil && later == nil,
+                    expected: "ref match, amount match, none, none", actual: "\(byRef != nil) \(byAmount != nil) \(otherDirection != nil) \(later != nil)")
+
+            let maybank = Account(name: "Maybank", type: .bank)
+            ctx.insert(maybank)
+            let incoming = MoneyMovementDraft.fromParsed(amount: 50, date: date, fundingAccount: "maybank", merchant: "BIJOY", reference: "MBB1",
+                                                         channel: .bankTransfer, walletSource: nil, kind: .otherIn, source: .screenshot, in: ctx)
+            let topUp = MoneyMovementDraft.fromParsed(amount: 200, date: date, fundingAccount: "Maybank", merchant: "Reload", reference: nil,
+                                                      channel: .unknown, walletSource: .touchNGo, kind: .ownTransfer, source: .screenshot, in: ctx)
+            let unknownAccount = MoneyMovementDraft.fromParsed(amount: 5, date: date, fundingAccount: "Unknown", merchant: "Unknown", reference: nil,
+                                                               channel: .unknown, walletSource: nil, kind: .otherIn, source: .screenshot, in: ctx)
+            let saved = incoming.insertMovement(into: ctx)
+            try? ctx.save()
+            t.check("Scan → Money In draft: account resolved (no duplicate), top-up gets TNG as destination, Unknown stays empty",
+                    incoming.account === maybank && incoming.note == "BIJOY" && topUp.counterAccount?.name == "Touch 'n Go" &&
+                    unknownAccount.account == nil && unknownAccount.note.isEmpty &&
+                    saved?.sourceType == .screenshot && saved?.transactionReference == "MBB1" && saved?.paymentChannel == .bankTransfer &&
+                    TestKit.fetch(Account.self, in: ctx).filter { $0.nameKey == "maybank" }.count == 1,
+                    expected: "Maybank reused; TNG created; Unknown nil; provenance kept",
+                    actual: "account=\(incoming.account?.name ?? "nil") to=\(topUp.counterAccount?.name ?? "nil") unknown=\(unknownAccount.account?.name ?? "nil") source=\(saved?.sourceType.rawValue ?? "nil")")
+        }
+
