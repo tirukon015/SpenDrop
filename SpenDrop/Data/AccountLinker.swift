@@ -15,3 +15,22 @@ public enum AccountLinker {
         "hsbc", "standard chartered", "bsn", "bank rakyat", "alliance", "agrobank", "bank muamalat", "citibank"
     ]
 
+    /// Normalised identity for an account name, or nil when the value does not name a real account.
+    public static func normalizedKey(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let collapsed = raw
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .lowercased()
+        return ignoredKeys.contains(collapsed) ? nil : collapsed
+    }
+
+    public static func inferredType(forName name: String) -> AccountType {
+        guard let key = normalizedKey(name) else { return .other }
+        if key == "cash" { return .cash }
+        if eWalletKeys.contains(where: { key == $0 || key.hasPrefix($0 + " ") }) { return .eWallet }
+        if bankKeys.contains(where: { key.contains($0) }) { return .bank }
+        return .other
+    }
+
