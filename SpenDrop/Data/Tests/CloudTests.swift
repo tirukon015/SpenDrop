@@ -330,3 +330,14 @@ public struct CloudBackupTests {
                                   contextProvider: { context }, canUseLocalStore: { true }, makeSafetyBackup: safety)
     }
 
+    static func sampleData(_ ctx: ModelContext) {
+        let maybank = Account(name: "Maybank", type: .bank); ctx.insert(maybank)
+        let bijoy = PayBookProfile(name: "Bijoy"); ctx.insert(bijoy)
+        let dinner = Expense(amount: 30, merchant: "Dinner", fundingAccount: "Maybank"); ctx.insert(dinner)
+        dinner.account = maybank
+        var split = SplitDraft(); split.add(bijoy); split.payer = bijoy; split.apply(to: dinner, in: ctx)
+        ctx.insert(MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: bijoy, account: maybank))
+        TransactionClassifier.learn(merchant: "Dinner", category: .food, in: ctx)
+        try? ctx.save()
+    }
+
