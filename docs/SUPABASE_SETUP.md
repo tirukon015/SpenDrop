@@ -43,3 +43,18 @@ Everything below uses free tiers only. No secret key is ever put in the app.
    the Google sign-in sheet returns to `spendrop://auth-callback`. Nothing else to add.
 4. Build and run.
 
+## 6. Testing checklist
+1. More → Account shows "Sign in to enable cloud backup".
+2. Create Account with an email + 8+ character password (confirm the email if required, then Sign In).
+3. After sign-in, accept "Back up this iPhone's data?" → status "Up to date"; Supabase Storage → `backups/<user id>/<device id>/…json` exists and `backups` table has a row.
+4. Add an expense → within ~20 s a new backup appears (older ones are kept; 10 per device).
+5. Airplane mode → add an expense → status "Waiting for internet"; turn it off → backup completes.
+6. Restore from Cloud Backup → check the counts shown → Restore → nothing on the phone is deleted.
+7. Sign Out → local data still there. Continue with Google → Google sheet → back in the app, signed in.
+8. Delete Cloud Account → backups and the account are removed in Supabase; local data remains.
+
+## Free-tier notes
+- Supabase free projects are paused after about a week without activity; open the dashboard to resume. Local use is unaffected.
+- Free tier storage (1 GB) is far above what SpenDrop JSON backups need (receipt images are not uploaded).
+- Backups are protected by HTTPS, authenticated access and Row Level Security. They are not additionally
+  end-to-end encrypted: doing that correctly would need a separate recovery key that could be lost, so it was not faked.
