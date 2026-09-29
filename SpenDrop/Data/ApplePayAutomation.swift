@@ -21,3 +21,10 @@ public enum ApplePayAutomation {
     /// Automations can fire twice for one tap; the same amount at the same merchant within this window is skipped.
     public static let repeatWindow: TimeInterval = 10 * 60
 
+    /// "Maybank Visa Debit" → .maybank. Unknown cards stay Unknown (never guessed).
+    public static func bank(fromCardName card: String?) -> PaymentSource? {
+        guard let lower = card?.lowercased(), !lower.isEmpty else { return nil }
+        let banks: [PaymentSource] = [.maybank, .cimb, .rhb, .publicBank, .bankIslam, .wise, .touchNGo, .grabPay, .boost]
+        return banks.first { lower.contains($0.rawValue.lowercased()) || lower.contains($0.shortName.lowercased()) }
+    }
+
