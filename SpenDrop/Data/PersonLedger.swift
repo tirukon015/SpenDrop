@@ -65,3 +65,23 @@ public enum PersonLedger {
         balances(for: person).isEmpty
     }
 
+    public static func summary(of people: [PayBookProfile]) -> Summary {
+        var summary = Summary()
+        for person in people {
+            let balances = balances(for: person)
+            if balances.isEmpty {
+                if hasHistory(person) { summary.settledCount += 1 }
+                continue
+            }
+            if balances.values.contains(where: { $0 > 0 }) { summary.owingMeCount += 1 }
+            if balances.values.contains(where: { $0 < 0 }) { summary.iOweCount += 1 }
+            for (currency, value) in balances {
+                if value > 0 { summary.owedToMe[currency, default: 0] += value }
+                if value < 0 { summary.iOwe[currency, default: 0] += -value }
+            }
+        }
+        return summary
+    }
+
+    // MARK: History
+
