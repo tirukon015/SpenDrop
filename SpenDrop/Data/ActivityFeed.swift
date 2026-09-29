@@ -18,3 +18,23 @@ public enum ActivityFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// One row of the timeline. Built on the fly from Expense and MoneyMovement; never stored.
+public enum ActivityItem: Identifiable {
+    case expense(Expense)
+    case movement(MoneyMovement)
+
+    public var id: UUID {
+        switch self {
+        case .expense(let e): return e.id
+        case .movement(let m): return m.id
+        }
+    }
+
+    public var date: Date {
+        switch self {
+        case .expense(let e): return e.date
+        case .movement(let m): return m.date
+        }
+    }
+}
+
