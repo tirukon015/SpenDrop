@@ -124,3 +124,27 @@ public struct MoneyMovementDraft {
         return draft
     }
 
+    /// Switches entry type, picking that type's default kind.
+    public mutating func setEntryType(_ newType: TransactionEntryType) {
+        guard newType != entryType else { return }
+        entryType = newType
+        kind = newType.kinds.first ?? .otherOut
+        if newType != .transfer { counterAccount = nil }
+    }
+
+    public var amountMinor: Int? { Money.minorUnits(parsing: amountText) }
+
+    public var issues: [Issue] {
+        var issues: [Issue] = []
+        if (amountMinor ?? 0) <= 0 { issues.append(.invalidAmount) }
+        if kind.requiresPerson && person == nil { issues.append(.missingPerson) }
+        if kind == .ownTransfer {
+            if account == nil { issues.append(.missingFromAccount) }
+            if counterAccount == nil { issues.append(.missingToAccount) }
+            if let from = account, let to = counterAccount, from.id == to.id { issues.append(.sameAccount) }
+        }
+        return issues
+    }
+
+    public var isValid: Bool { issues.isEmpty }
+
