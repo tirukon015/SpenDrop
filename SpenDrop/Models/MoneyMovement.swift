@@ -87,3 +87,60 @@ public final class MoneyMovement {
     public var createdAt: Date
     public var updatedAt: Date
 
+    public init(
+        id: UUID = UUID(),
+        kind: MoneyMovementKind,
+        amountMinor: Int,
+        currency: String = "RM",
+        date: Date = Date(),
+        person: PayBookProfile? = nil,
+        linkedExpense: Expense? = nil,
+        account: Account? = nil,
+        counterAccount: Account? = nil,
+        note: String? = nil,
+        transactionReference: String? = nil,
+        sourceType: ExpenseSourceType = .manual,
+        paymentChannel: PaymentChannel = .unknown,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.directionRaw = kind.direction.rawValue
+        self.kindRaw = kind.rawValue
+        self.amountMinor = amountMinor
+        self.currency = currency
+        self.date = date
+        self.person = person
+        self.personNameSnapshot = person?.name
+        self.linkedExpense = linkedExpense
+        self.linkedExpenseSnapshot = linkedExpense.map(MoneyMovement.snapshot(of:))
+        self.account = account
+        self.counterAccount = counterAccount
+        self.note = note
+        self.transactionReference = transactionReference
+        self.sourceTypeRaw = sourceType.rawValue
+        self.paymentChannelRaw = paymentChannel.rawValue
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public var kind: MoneyMovementKind {
+        get { MoneyMovementKind(rawValue: kindRaw) ?? (direction == .moneyIn ? .otherIn : .otherOut) }
+        set {
+            kindRaw = newValue.rawValue
+            directionRaw = newValue.direction.rawValue
+        }
+    }
+
+    public var direction: MoneyDirection {
+        MoneyDirection(rawValue: directionRaw) ?? .moneyOut
+    }
+
+    public var paymentChannel: PaymentChannel {
+        PaymentChannel(rawValue: paymentChannelRaw) ?? .unknown
+    }
+
+    public var sourceType: ExpenseSourceType {
+        ExpenseSourceType(rawValue: sourceTypeRaw) ?? .manual
+    }
+
