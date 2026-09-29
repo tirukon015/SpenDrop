@@ -33,3 +33,37 @@ public struct SupabaseConfig: Equatable {
 
 // MARK: - Errors
 
+public enum CloudError: LocalizedError, Equatable {
+    case notConfigured
+    case notSignedIn
+    case offline
+    case invalidCredentials
+    case emailNotConfirmed
+    case emailAlreadyRegistered
+    case weakPassword(String)
+    case sessionExpired
+    case cancelled
+    case unsupportedBackup(Int)
+    case invalidResponse
+    case server(status: Int, message: String)
+    case safetyBackupFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .notConfigured: return "Cloud backup isn't set up in this version of SpenDrop."
+        case .notSignedIn: return "Sign in to enable cloud backup."
+        case .offline: return "You're offline. Your data is safe on this iPhone; cloud backup will run when you're back online."
+        case .invalidCredentials: return "Incorrect email or password."
+        case .emailNotConfirmed: return "Please confirm your email address first, then sign in."
+        case .emailAlreadyRegistered: return "An account with this email already exists. Sign in instead."
+        case .weakPassword(let message): return message.isEmpty ? "Please choose a stronger password." : message
+        case .sessionExpired: return "Your session has expired. Please sign in again. Local data remains on this iPhone."
+        case .cancelled: return "Sign-in was cancelled."
+        case .unsupportedBackup(let version): return "This backup was made by a newer version of SpenDrop (format \(version)). Update the app to restore it."
+        case .invalidResponse: return "The server sent an unexpected response. Please try again."
+        case .server(let status, let message): return message.isEmpty ? "Server error (\(status)). Please try again." : message
+        case .safetyBackupFailed: return "Couldn't save a safety copy of your current data, so nothing was restored."
+        }
+    }
+}
+
