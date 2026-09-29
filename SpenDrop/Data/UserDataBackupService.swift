@@ -13,12 +13,28 @@ public final class UserDataBackupService {
     // MARK: - Codable DTOs for Persistent Backup
 
     public struct BackupPayload: Codable {
+        /// 1 = expenses + PayBook only. 2 = adds accounts, money movements, splits, payer and account links.
+        /// 3 = adds locally learned classification rules.
+        public static let currentVersion = 3
+        public static let supportedVersions = 1...currentVersion
+
         public let version: Int
         public let appName: String
         public let accountName: String
         public let exportDate: Date
         public let expenses: [ExpenseDTO]
         public let paybookProfiles: [PayBookProfileDTO]
+        // Version 2 (absent in version 1 files)
+        public var accounts: [AccountDTO]? = nil
+        public var moneyMovements: [MoneyMovementDTO]? = nil
+        // Version 3
+        public var classificationRules: [ClassificationRuleDTO]? = nil
+
+        public var recordCount: RecordCount {
+            RecordCount(expenses: expenses.count, profiles: paybookProfiles.count,
+                        accounts: accounts?.count ?? 0, movements: moneyMovements?.count ?? 0,
+                        rules: classificationRules?.count ?? 0)
+        }
 
         public init(
             version: Int = 1,
