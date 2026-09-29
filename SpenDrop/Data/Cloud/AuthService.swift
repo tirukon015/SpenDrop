@@ -146,3 +146,21 @@ public final class AuthService {
         }
     }
 
+    public func googleAuthorizeURL(pkce: PKCE) throws -> URL {
+        guard let config else { throw CloudError.notConfigured }
+        var components = URLComponents(url: config.url.appendingPathComponent("auth/v1/authorize"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "provider", value: "google"),
+            URLQueryItem(name: "redirect_to", value: SupabaseConfig.redirectURL),
+            URLQueryItem(name: "code_challenge", value: pkce.challenge),
+            URLQueryItem(name: "code_challenge_method", value: "s256")
+        ]
+        return components.url!
+    }
+
+    public func signInWithGoogle(using launcher: WebAuthLauncher) async throws {
+        let pkce = PKCE.make()
+        let callback = try await launcher.start(url: try googleAuthorizeURL(pkce: pkce), callbackScheme: SupabaseConfig.callbackScheme)
+        try await completeGoogleSignIn(callbackURL: callback, verifier: pkce.verifier)
+    }
+
