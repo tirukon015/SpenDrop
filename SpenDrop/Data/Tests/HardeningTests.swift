@@ -136,3 +136,16 @@ public struct HardeningTests {
                     actual: "hidden=\(hiddenFromPickers) kept=\(historyKept) visible=\(visibleAgain)")
         }
 
+        // MARK: Invalid input never produces financial records
+        do {
+            let ctx = TestKit.context()
+            let parsed = ["-5", "abc", "0", "1.005", "12.345"].map { Money.minorUnits(parsing: $0) }
+            var draft = MoneyMovementDraft(entryType: .moneyIn); draft.amountText = "-5"
+            let negativeRejected = draft.insertMovement(into: ctx) == nil
+            var split = SplitDraft(); split.add(PayBookProfile(name: "X"))
+            t.check("Invalid amounts: negative / text / zero rejected; typed decimals rounded to the sen exactly",
+                    parsed == [-500, nil, 0, 101, 1235] && negativeRejected && split.problem(totalMinor: 0) != nil &&
+                    TestKit.count(MoneyMovement.self, in: ctx) == 0,
+                    expected: "[-500, nil, 0, 101, 1235], rejected", actual: "\(parsed)")
+        }
+
