@@ -36,3 +36,11 @@ Package.resolved
 
 ## SpenDrop cloud config (public client values, still kept out of git)
 iOS/SpenDrop/Resources/CloudConfig/SupabaseConfig.plist
+
+## Web / Node (WebApp/ has its own .gitignore too)
+node_modules/
+.next/
+.vercel/
+.env
+.env.*
+!.env.example

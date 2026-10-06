@@ -2,8 +2,13 @@
 
 **Capture → Understand → Save.** A native, local-first iOS expense tracker for Malaysian daily spending. Share a payment screenshot to SpenDrop and it becomes a categorised expense, parsed entirely on your iPhone with Apple Vision. Shared bills, loans, money in/out and cash flow are optional layers on top — normal expense entry stays one screen.
 
-> Full engineering documentation, security review, test evidence and case study: [`docs/SPENDROP_DOCUMENTATION.md`](docs/SPENDROP_DOCUMENTATION.md)
-> Optional account & cloud backup setup: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md)
+> **One SpenDrop account. One financial data set. Every device.** This repository holds every SpenDrop client:
+> the native **iOS** app ([`iOS/`](iOS)), the responsive **Web App** ([`WebApp/`](WebApp)), shared contracts and
+> business rules ([`Common/`](Common)), the Supabase backend ([`Supabase/`](Supabase)) and documentation ([`Docs/`](Docs)).
+> See [`Docs/Repository-Structure.md`](Docs/Repository-Structure.md) and [`Docs/Architecture.md`](Docs/Architecture.md).
+>
+> Full engineering documentation, security review, test evidence and case study: [`Docs/SPENDROP_DOCUMENTATION.md`](Docs/SPENDROP_DOCUMENTATION.md)
+> Optional account & cloud backup setup: [`Docs/SUPABASE_SETUP.md`](Docs/SUPABASE_SETUP.md)
 
 ## Overview
 
@@ -54,15 +59,15 @@ All new money maths uses integer sen (never floating point). Splits always add u
 
 ## Screenshots
 
-Simulator captures from the automated UI tests (synthetic data only). Older captures: [`docs/screenshots/`](docs/screenshots).
+Simulator captures from the automated UI tests (synthetic data only). Older captures: [`Docs/screenshots/`](Docs/screenshots).
 
 | Home | Transactions | Split with others | PayBook |
 |---|---|---|---|
-| ![Home](docs/screenshots/v1.4/01-home-cash-flow.png) | ![Transactions](docs/screenshots/v1.4/02-transactions-transfers.png) | ![Split](docs/screenshots/v1.4/03-split-editor.png) | ![PayBook](docs/screenshots/v1.4/04-paybook-balances.png) |
+| ![Home](Docs/screenshots/v1.4/01-home-cash-flow.png) | ![Transactions](Docs/screenshots/v1.4/02-transactions-transfers.png) | ![Split](Docs/screenshots/v1.4/03-split-editor.png) | ![PayBook](Docs/screenshots/v1.4/04-paybook-balances.png) |
 
 | Person balance | Accounts | Breakdown: Cash Flow | Account (optional) |
 |---|---|---|---|
-| ![Person](docs/screenshots/v1.4/05-person-detail.png) | ![Accounts](docs/screenshots/v1.4/06-accounts.png) | ![Cash flow](docs/screenshots/v1.4/07-breakdown-cash-flow.png) | ![Account](docs/screenshots/v1.4/10-more-account.png) |
+| ![Person](Docs/screenshots/v1.4/05-person-detail.png) | ![Accounts](Docs/screenshots/v1.4/06-accounts.png) | ![Cash flow](Docs/screenshots/v1.4/07-breakdown-cash-flow.png) | ![Account](Docs/screenshots/v1.4/10-more-account.png) |
 
 ## Tech Stack
 
@@ -99,7 +104,18 @@ SpenDrop.app ────────────────────┐    
  Optional: CloudBackupService ──HTTPS──► Supabase (auth, private bucket, backups table, RLS)
 ```
 
-## Project Structure
+## Repository Structure
+
+```
+SpenDrop/                 one repository, one product
+├── iOS/                  native iOS app (Xcode project, app, Share Extension, UI tests)
+├── WebApp/               responsive Next.js web app (PWA) — see WebApp/README.md
+├── Common/               platform-neutral contracts: constants, data model, business rules + test vectors, design tokens
+├── Supabase/             database migrations (supabase/migrations) and backend notes
+└── Docs/                 architecture, iOS audit, data model, sync, feature parity, roadmap, setup guides
+```
+
+## iOS Project Structure (inside `iOS/`)
 
 ```
 SpenDrop/
@@ -119,20 +135,18 @@ SpenDrop/
 ├── ShareExtension/ ShareViewController, ShareExtensionView
 └── Resources/      Assets, Info.plist, entitlements, CloudConfig/ (config template), diagnostic samples
 SpenDropUITests/    XCUITest flows (run with the SpenDropUITests scheme)
-supabase/           SQL for the optional cloud backend
-scripts/            deterministic Xcode project generator
-docs/               documentation, setup guide, screenshots
+scripts/            Xcode project generator (out of date — do not re-run; see Docs/IOS-Audit.md)
 ```
 
 ## Installation
 
 1. Requirements: macOS with Xcode 27; iOS 17.0+ deployment target.
-2. Clone the repository and open `SpenDrop.xcodeproj`.
+2. Clone the repository and open `iOS/SpenDrop.xcodeproj`.
 3. In **Signing & Capabilities**, select your team for `SpenDrop` and `SpenDropShare`. The App Group `group.com.spendrop.shared` must be available to your team for device builds.
 
 ## Configuration
 
-Nothing is required. Cloud backup is optional: copy `SpenDrop/Resources/CloudConfig/SupabaseConfig.example.plist` to `SupabaseConfig.plist` (git-ignored) and follow [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md). Only the public anon key goes in the app, never a service-role key.
+Nothing is required. Cloud backup is optional: copy `iOS/SpenDrop/Resources/CloudConfig/SupabaseConfig.example.plist` to `SupabaseConfig.plist` (git-ignored) and follow [`Docs/SUPABASE_SETUP.md`](Docs/SUPABASE_SETUP.md). Only the public anon key goes in the app, never a service-role key.
 
 ## Running Locally
 
@@ -140,7 +154,7 @@ Nothing is required. Cloud backup is optional: copy `SpenDrop/Resources/CloudCon
 - Command line:
 
 ```bash
-xcodebuild -project SpenDrop.xcodeproj -scheme SpenDrop \
+xcodebuild -project iOS/SpenDrop.xcodeproj -scheme SpenDrop \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
