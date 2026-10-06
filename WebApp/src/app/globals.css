@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* SpenDrop design tokens (Common/Design/tokens.json): Apple system colours and grouped surfaces, light + dark.
+   Theme: follows the system unless the user picks Light/Dark in More (html[data-theme]). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --sd-blue: #007aff;
+  --sd-green: #34c759;
+  --sd-indigo: #5856d6;
+  --sd-orange: #ff9500;
+  --sd-pink: #ff2d55;
+  --sd-purple: #af52de;
+  --sd-red: #ff3b30;
+  --sd-teal: #30b0c7;
+  --sd-yellow: #ffcc00;
+  --sd-mint: #00c7be;
+  --sd-cyan: #32ade6;
+  --sd-gray: #8e8e93;
+  --sd-primary: #000000;
+  /* SpenDrop accent (iOS AccentColor asset) */
+  --sd-accent: #0d73d9;
+  /* WCAG AA variants: button fill (white text ≥ 4.5:1) and accent-coloured text */
+  --sd-accent-fill: #0d73d9;
+  --sd-accent-text: #0a5cad;
+
+  --sd-bg: #f2f2f7;
+  --sd-card: #ffffff;
+  --sd-card-2: #f2f2f7;
+  --sd-label: #000000;
+  --sd-label-2: rgba(60, 60, 67, 0.78);
+  --sd-label-3: rgba(60, 60, 67, 0.45);
+  --sd-separator: rgba(60, 60, 67, 0.18);
+  --sd-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 12px rgba(0, 0, 0, 0.04);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --sd-blue: #0a84ff;
+  --sd-green: #30d158;
+  --sd-indigo: #5e5ce6;
+  --sd-orange: #ff9f0a;
+  --sd-pink: #ff375f;
+  --sd-purple: #bf5af2;
+  --sd-red: #ff453a;
+  --sd-teal: #40c8e0;
+  --sd-yellow: #ffd60a;
+  --sd-mint: #63e6e2;
+  --sd-cyan: #64d2ff;
+  --sd-primary: #ffffff;
+  --sd-accent: #3399f2;
+  --sd-accent-fill: #1366c2;
+  --sd-accent-text: #6cb6ff;
+
+  --sd-bg: #000000;
+  --sd-card: #1c1c1e;
+  --sd-card-2: #2c2c2e;
+  --sd-label: #ffffff;
+  --sd-label-2: rgba(235, 235, 245, 0.72);
+  --sd-label-3: rgba(235, 235, 245, 0.42);
+  --sd-separator: rgba(84, 84, 88, 0.55);
+  --sd-shadow: none;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-blue: color-mix(in srgb, var(--sd-blue) 50%, var(--sd-label));
+  --color-green: color-mix(in srgb, var(--sd-green) 50%, var(--sd-label));
+  --color-indigo: color-mix(in srgb, var(--sd-indigo) 50%, var(--sd-label));
+  --color-orange: color-mix(in srgb, var(--sd-orange) 50%, var(--sd-label));
+  --color-pink: color-mix(in srgb, var(--sd-pink) 50%, var(--sd-label));
+  --color-purple: color-mix(in srgb, var(--sd-purple) 50%, var(--sd-label));
+  --color-red: color-mix(in srgb, var(--sd-red) 50%, var(--sd-label));
+  --color-teal: color-mix(in srgb, var(--sd-teal) 50%, var(--sd-label));
+  --color-yellow: color-mix(in srgb, var(--sd-yellow) 50%, var(--sd-label));
+  --color-mint: color-mix(in srgb, var(--sd-mint) 50%, var(--sd-label));
+  --color-cyan: color-mix(in srgb, var(--sd-cyan) 50%, var(--sd-label));
+  --color-gray: var(--sd-label-2);
+  --color-primary: var(--sd-primary);
+  --color-accent: var(--sd-accent);
+  --color-bg: var(--sd-bg);
+  --color-card: var(--sd-card);
+  --color-card-2: var(--sd-card-2);
+  --color-label: var(--sd-label);
+  --color-label-2: var(--sd-label-2);
+  --color-label-3: var(--sd-label-3);
+  --color-separator: var(--sd-separator);
+  --radius-card: 16px;
+  --radius-field: 14px;
+  --radius-control: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --shadow-card: var(--sd-shadow);
+}
+
+html {
+  background: var(--sd-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--sd-bg);
+  color: var(--sd-label);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 0;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible focus for keyboard users only */
+:focus-visible {
+  outline: 2px solid var(--sd-blue);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* iOS-like section header (caption2, bold, tracking 1.0, uppercase) */
+.section-header {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sd-label-2);
+}
+
+/* Safe areas for the installed PWA on notched phones */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes sd-sheet-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-sheet {
+  animation: sd-sheet-in 180ms ease-out;
+}
+
+@keyframes sd-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade {
+  animation: sd-fade-in 150ms ease-out;
+}
+
+@keyframes sd-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--sd-card-2) 0px, var(--sd-separator) 80px, var(--sd-card-2) 160px);
+  background-size: 400px 100%;
+  animation: sd-shimmer 1.2s linear infinite;
+  border-radius: 8px;
+}
