@@ -47,7 +47,7 @@ Everything below uses free tiers only. No secret key is ever put in the app.
 1. More → Account shows "Sign in to enable cloud backup".
 2. Create Account with an email + 8+ character password (confirm the email if required, then Sign In).
 3. After sign-in, accept "Back up this iPhone's data?" → status "Up to date"; Supabase Storage → `backups/<user id>/<device id>/…json` exists and `backups` table has a row.
-4. Add an expense → within ~20 s a new backup appears (older ones are kept; 10 per device).
+4. Turn on Cloud Backup (it asks first) → the first backup runs immediately; after that a daily backup runs around the chosen time (default 3:00 AM). Snapshots older than the chosen retention (30 or 90 days) are removed only after a newer backup is verified; transactions on the iPhone are never affected.
 5. Airplane mode → add an expense → status "Waiting for internet"; turn it off → backup completes.
 6. Restore from Cloud Backup → check the counts shown → Restore → nothing on the phone is deleted.
 7. Sign Out → local data still there. Continue with Google → Google sheet → back in the app, signed in.

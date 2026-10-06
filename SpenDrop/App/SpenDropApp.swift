@@ -11,6 +11,9 @@ struct SpenDropApp: App {
         print("[SPENDROP_BOOT] SpenDropApp.init started")
         fflush(stdout)
 
+        // The daily cloud backup's background task must be registered before launch finishes.
+        SystemBackupTaskScheduler.register()
+
         NSSetUncaughtExceptionHandler { exception in
             print("[SPENDROP_CRASH] Uncaught Exception: \(exception)")
             print("[SPENDROP_CRASH] Reason: \(exception.reason ?? "none")")
@@ -33,15 +36,17 @@ struct SpenDropApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                // Email confirmation and password-reset links (spendrop://auth-callback).
+                .modifier(AuthLinkHandling())
                 .task {
                     showingSafeModeAlert = !ExpenseDataContainer.isPersistentStoreHealthy
                     UserDataBackupService.startAutomaticBackups(for: ExpenseDataContainer.shared)
                     // Optional cloud backup (only when configured and signed in; never blocks local use).
                     CloudBackupService.shared.startAutomaticBackups()
+                    Task { await AuthService.shared.refreshSessionIfNeeded() }
 
                     // Safe, non-blocking initial data setup on scene presentation
                     ExpenseDataContainer.migrateLegacyContactsIfNeeded(into: ExpenseDataContainer.shared.mainContext)
-                    ExpenseDataContainer.seedInitialDataIfNeeded()
                     ExpenseDataContainer.handlePayBookLaunchArguments(context: ExpenseDataContainer.shared.mainContext)
 
                     // Link expenses saved since the last launch (manual, scan, Share Extension) to their Account.
@@ -116,17 +121,21 @@ struct SpenDropApp: App {
                 // Flush pending autosave changes, then back up immediately before the app is suspended.
                 if context.hasChanges { try? context.save() }
                 UserDataBackupService.saveAutoBackup(from: context)
-                // Give a pending cloud backup a chance to finish while the app is suspended.
-                if AuthService.shared.currentUser != nil {
+                // Never starts a cloud backup (backup is opt-in). If one the user or the daily schedule started
+                // is still running, give it time to finish instead of being cut off.
+                if CloudBackupService.shared.isBackupRunning {
                     let task = UIApplication.shared.beginBackgroundTask(withName: "SpenDropCloudBackup")
                     Task { @MainActor in
-                        await CloudBackupService.shared.backupNow()
+                        while CloudBackupService.shared.isBackupRunning { try? await Task.sleep(for: .milliseconds(500)) }
                         UIApplication.shared.endBackgroundTask(task)
                     }
                 }
             case .active:
                 // Picks up anything the Share Extension saved while the app was not running.
                 UserDataBackupService.scheduleAutoBackup(from: context)
+                // iOS doesn't guarantee when background work runs: catch up on today's daily cloud backup if it
+                // is on, its time has passed and it hasn't succeeded yet today (does nothing otherwise).
+                Task { await CloudBackupService.shared.runAutomaticBackupIfDue() }
             default:
                 break
             }

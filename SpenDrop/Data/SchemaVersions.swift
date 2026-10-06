@@ -147,7 +147,7 @@ public enum SpenDropSchemaV2: VersionedSchema {
     }
 }
 
-// MARK: - Schema V3 (current)
+// MARK: - Schema V3
 
 /// V2 + ClassificationRule (a new, standalone table for locally learned suggestions). No V2 table changes.
 public enum SpenDropSchemaV3: VersionedSchema {
@@ -158,16 +158,46 @@ public enum SpenDropSchemaV3: VersionedSchema {
     }
 }
 
+// MARK: - Schema V4
+
+/// V3 + SettlementAllocation (which payment settled which expense/loan) and SampleDataRecord (which records are
+/// demo data). Two new standalone tables that refer to existing records by id; no existing table changes.
+public enum SpenDropSchemaV4: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(4, 0, 0)
+
+    public static var models: [any PersistentModel.Type] {
+        SpenDropSchemaV3.models + [SettlementAllocation.self, SampleDataRecord.self]
+    }
+}
+
+// MARK: - Schema V5 (current)
+
+/// V4 + ChannelRule (learned payment channel per merchant and funding account). One new standalone table;
+/// no existing table changes.
+public enum SpenDropSchemaV5: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(5, 0, 0)
+
+    public static var models: [any PersistentModel.Type] {
+        SpenDropSchemaV4.models + [ChannelRule.self]
+    }
+}
+
 // MARK: - Migration Plan
 
 public enum SpenDropMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [SpenDropSchemaV1.self, SpenDropSchemaV2.self, SpenDropSchemaV3.self]
+        [SpenDropSchemaV1.self, SpenDropSchemaV2.self, SpenDropSchemaV3.self, SpenDropSchemaV4.self, SpenDropSchemaV5.self]
     }
 
     public static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5]
     }
+
+    /// Only adds the ChannelRule table; existing data is untouched.
+    static let migrateV4toV5 = MigrationStage.lightweight(fromVersion: SpenDropSchemaV4.self, toVersion: SpenDropSchemaV5.self)
+
+    /// Only adds the SettlementAllocation and SampleDataRecord tables; existing data is untouched.
+    static let migrateV3toV4 = MigrationStage.lightweight(fromVersion: SpenDropSchemaV3.self, toVersion: SpenDropSchemaV4.self)
 
     /// Only adds the ClassificationRule table; existing data is untouched.
     static let migrateV2toV3 = MigrationStage.lightweight(fromVersion: SpenDropSchemaV2.self, toVersion: SpenDropSchemaV3.self)

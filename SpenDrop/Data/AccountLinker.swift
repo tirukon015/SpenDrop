@@ -7,7 +7,10 @@ import SwiftData
 /// - Only expenses without an account are linked; the `fundingAccount` text is never modified.
 /// - Safe to run repeatedly (used by the V1 -> V2 migration and at app launch for newly saved expenses).
 public enum AccountLinker {
-    private static let ignoredKeys: Set<String> = ["", "unknown", "other", "none", "n/a", "na", "-", "null", "nil"]
+    private static let ignoredKeys: Set<String> = Set(["", "unknown", "other", "none", "n/a", "na", "-", "null", "nil"])
+        // Payment channels are never funding accounts (an Apple Pay tap is funded by a bank or card).
+        .union(PaymentChannel.allCases.filter { $0 != .cash && $0 != .eWallet }.map { $0.displayName.lowercased() })
+        .union(["physical card", "qr", "duitnow"])
 
     private static let eWalletKeys = ["touch 'n go", "touch n go", "tng", "grabpay", "boost", "shopeepay", "bigpay", "setel", "mae"]
     private static let bankKeys = [

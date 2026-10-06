@@ -14,6 +14,8 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
     case eWallet = "E_WALLET"
     case other = "OTHER"
     case unknown = "UNKNOWN"
+    // Added for Touch 'n Go's own QR (different from DuitNow QR). Existing stored values are unchanged.
+    case tngQR = "TNG_QR"
 
     public var id: String { rawValue }
 
@@ -25,6 +27,7 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .card: return "Card"
         case .cash: return "Cash"
         case .duitNowQR: return "DuitNow QR"
+        case .tngQR: return "Touch 'n Go QR"
         case .onlineBanking: return "Online Banking"
         case .eWallet: return "E-Wallet"
         case .other: return "Other"
@@ -40,6 +43,7 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .card: return "creditcard.fill"
         case .cash: return "banknote.fill"
         case .duitNowQR: return "qrcode.viewfinder"
+        case .tngQR: return "qrcode"
         case .onlineBanking: return "globe"
         case .eWallet: return "iphone"
         case .other: return "ellipsis.circle"
@@ -55,6 +59,7 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         case .card: return .purple
         case .cash: return .green
         case .duitNowQR: return .pink
+        case .tngQR: return .blue
         case .onlineBanking: return .cyan
         case .eWallet: return .blue
         case .other: return .orange
@@ -62,71 +67,56 @@ public enum PaymentChannel: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// Conservative detection from OCR text or metadata.
-    /// Never guesses: returns .unknown if clear evidence is absent.
-    /// Priority hierarchy:
-    ///   1. Apple Wallet provenance (detectedSource == .appleWallet) → .applePay
-    ///   2. Explicit channel text ("Apple Pay", "DuitNow QR", etc.)
-    ///   3. Explicit physical card text ("Card Purchase", "POS Card")
-    ///   4. Instrument alone (e.g. "Visa Debit" without source context) → .unknown
-    ///   5. Fallback → .unknown
+    /// Evidence-first detection from receipt text (kept for existing callers): the channel when the receipt says
+    /// so, otherwise Unknown. A bank or wallet name alone (Maybank, Touch 'n Go) is never channel evidence, and a
+    /// parser's default payment method is not evidence either.
     public static func detect(from text: String, paymentSource: PaymentSource? = nil, paymentMethod: String? = nil, detectedSource: DetectedTransactionSource = .unknown) -> PaymentChannel {
-        // PRIORITY 1: Apple Wallet provenance
-        if detectedSource == .appleWallet {
-            return .applePay
-        }
-
-        let lower = text.lowercased()
-
-        // PRIORITY 2: Explicit channel text
-        // 2a. Apple Pay evidence
-        if lower.contains("apple pay") || lower.contains("pay with apple") || lower.contains("apple cash") {
-            return .applePay
-        }
-
-        // 2b. QR payment evidence
-        if lower.contains("duitnow qr") || lower.contains("scan & pay") || lower.contains("scan and pay") ||
-           lower.contains("qr pay") || lower.contains("paynet qr") || lower.contains("scan qr") ||
-           lower.contains("via qr") || lower.contains("d-qr") || paymentMethod == "duitnow_qr" {
-            return .qrPayment
-        }
-
-        // 2c. Bank transfer evidence
-        if lower.contains("duitnow transfer") || lower.contains("fund transfer") || lower.contains("funds transfer") ||
-           lower.contains("interbank") || lower.contains("ibg") || lower.contains("fpx payment") ||
-           lower.contains("fpx") || lower.contains("giro") || lower.contains("transferred to") ||
-           lower.contains("transfer to account") || lower.contains("instant transfer") ||
-           paymentMethod == "bank_transfer" {
-            return .bankTransfer
-        }
-
-        // PRIORITY 3: Explicit physical card text (POS / card purchase context)
-        if lower.contains("card purchase") || lower.contains("pos card") || lower.contains("card present") ||
-           lower.contains("contactless") || lower.contains("chip & pin") || lower.contains("chip and pin") ||
-           paymentMethod == "card" {
-            return .card
-        }
-
-        // 5. Cash evidence
-        if lower.contains("cash") || lower.contains("tunai") || lower.contains("wang tunai") || paymentMethod == "cash" || paymentSource == .cash {
-            return .cash
-        }
-
-        // Conservative fallback: If paymentSource was explicitly Apple Pay or QR Payment in older data
-        if paymentSource == .applePay {
-            return .applePay
-        }
-        if paymentSource == .qrPayment {
-            return .qrPayment
-        }
-        if paymentSource == .bankTransfer {
-            return .bankTransfer
-        }
-        if paymentSource == .physicalCard {
-            return .card
-        }
-
-        // PRIORITY 4 & 5: Instrument alone (e.g. "Visa Debit") without source context → .unknown
-        return .unknown
+        suggest(evidenceText: text, paymentSource: paymentSource, detectedSource: detectedSource).channel
     }
+
+    /// Phrases that are explicit evidence for each channel (whole words; most specific first).
+    static let evidence: [(PaymentChannel, Double, [String])] = [
+        (.applePay, 0.98, ["apple pay", "pay with apple", "apple cash"]),
+        (.duitNowQR, 0.97, ["duitnow qr", "duitnow-qr", "duit now qr", "d-qr", "paynet qr"]),
+        (.tngQR, 0.95, ["touch 'n go qr", "touch n go qr", "tng qr", "tng ewallet qr", "touchngo qr"]),
+        (.card, 0.92, ["card purchase", "pos purchase", "pos card", "card present", "contactless", "chip & pin", "chip and pin",
+                      "card payment", "debit card purchase", "credit card purchase", "card transaction"]),
+        (.bankTransfer, 0.9, ["duitnow transfer", "fund transfer", "funds transfer", "interbank", "ibg", "instant transfer",
+                              "transfer to account", "transferred to", "giro", "fpx", "fpx payment", "bank transfer", "transfer successful",
+                              "online transfer", "jompay"]),
+        (.qrPayment, 0.8, ["scan & pay", "scan and pay", "qr pay", "qr payment", "scan qr", "via qr", "qr code payment", "pay by qr"]),
+        (.other, 0.75, ["online payment", "online purchase", "pay online", "online transaction"]),
+        (.cash, 0.85, ["cash", "cash payment", "paid in cash", "tunai", "wang tunai"])
+    ]
+
+    /// The channel with confidence and the reason. Unknown (confidence 1) when the receipt has no channel wording.
+    public static func suggest(evidenceText text: String, paymentSource: PaymentSource? = nil,
+                               detectedSource: DetectedTransactionSource = .unknown) -> ChannelSuggestion {
+        if detectedSource == .appleWallet {
+            return ChannelSuggestion(channel: .applePay, confidence: 0.98, reason: "Apple Wallet receipt")
+        }
+        let haystack = " " + MerchantDetector.normalizedWords(text) + " "
+        for (channel, confidence, phrases) in evidence {
+            if let phrase = phrases.first(where: { haystack.contains(" " + MerchantDetector.normalizedWords($0) + " ") }) {
+                return ChannelSuggestion(channel: channel, confidence: confidence, reason: "Receipt says '\(phrase)'")
+            }
+        }
+        // Older records: an explicit channel stored as the payment source.
+        switch paymentSource {
+        case .applePay?: return ChannelSuggestion(channel: .applePay, confidence: 0.9, reason: "Paid with Apple Pay")
+        case .physicalCard?: return ChannelSuggestion(channel: .card, confidence: 0.85, reason: "Paid by card")
+        default: break
+        }
+        return ChannelSuggestion(channel: .unknown, confidence: 1, reason: "The receipt doesn't say how it was paid")
+    }
+}
+
+
+/// A payment channel with how sure SpenDrop is and why.
+public struct ChannelSuggestion: Equatable {
+    public let channel: PaymentChannel
+    public let confidence: Double
+    public let reason: String
+    /// Unknown is a confident answer ("not enough evidence"); anything below 0.75 is not used.
+    public var needsReview: Bool { channel == .unknown }
 }

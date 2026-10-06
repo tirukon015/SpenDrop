@@ -26,6 +26,12 @@ create index if not exists backups_user_created_idx on public.backups (user_id, 
 
 alter table public.backups enable row level security;
 
+-- Explicit Data API access. Supabase stops exposing new public tables automatically (enforced 2026-10-30),
+-- and the project's default privileges would otherwise give anon and authenticated every privilege (incl. TRUNCATE).
+-- The app needs only select/insert/delete as a signed-in user; anon gets nothing.
+revoke all on table public.backups from anon, authenticated;
+grant select, insert, delete on table public.backups to authenticated;
+
 drop policy if exists "backups: owner can read" on public.backups;
 create policy "backups: owner can read" on public.backups
     for select to authenticated using (user_id = (select auth.uid()));
@@ -40,9 +46,9 @@ create policy "backups: owner can delete" on public.backups
 -- no UPDATE policy: backups are append-only.
 
 -- 2. Private storage bucket for the backup files (no public URLs)
-insert into storage.buckets (id, name, public)
-values ('backups', 'backups', false)
-on conflict (id) do update set public = false;
+insert into storage.buckets (id, name, public, allowed_mime_types)
+values ('backups', 'backups', false, array['application/json'])
+on conflict (id) do update set public = false, allowed_mime_types = array['application/json'];
 
 drop policy if exists "backup files: owner can read" on storage.objects;
 create policy "backup files: owner can read" on storage.objects

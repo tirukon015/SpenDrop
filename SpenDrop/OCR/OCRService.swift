@@ -1,5 +1,7 @@
 import UIKit
 import Vision
+import PDFKit
+import UniformTypeIdentifiers
 
 public struct RecognizedTextLine {
     public let text: String
@@ -171,5 +173,210 @@ private extension UIImage {
         case .rightMirrored: return .rightMirrored
         @unknown default: return .up
         }
+    }
+}
+
+// MARK: - Shared input routing (Share Extension): PDF and text alongside the existing image path
+
+/// What a share contained, decided before anything is decoded. Images are NOT handled here: `.image` means
+/// "use the existing image path unchanged". This type does no parsing and creates no records.
+public enum SharedInput {
+    /// A PDF copied to a private temporary file (the caller deletes it after extraction).
+    case pdf(URL)
+    /// Plain text shared directly (no OCR needed).
+    case text(String)
+    /// Anything else: the existing image importer handles it exactly as before.
+    case image
+}
+
+public enum SharedInputRouter {
+    /// Looks at every attachment for a PDF (direct type, or a file URL whose content is a PDF), then for plain
+    /// text. Image attachments are never touched, so the existing image flow is unchanged.
+    public static func route(_ providers: [NSItemProvider]) async -> SharedInput {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.pdf.identifier),
+               let url = await copyPDF(from: provider, typeIdentifier: UTType.pdf.identifier) {
+                return .pdf(url)
+            }
+        }
+        for provider in providers where !provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier),
+               let url = await copyPDF(from: provider, typeIdentifier: UTType.fileURL.identifier) {
+                return .pdf(url)
+            }
+        }
+        let onlyText = providers.allSatisfy { !$0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+        if onlyText {
+            for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                if let text = await loadText(from: provider), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return .text(text)
+                }
+            }
+        }
+        return .image
+    }
+
+    /// True when the bytes are a PDF (files are checked by content, not just by name).
+    public static func isPDF(_ data: Data) -> Bool {
+        data.prefix(1024).range(of: Data("%PDF".utf8)) != nil
+    }
+
+    /// Copies the shared PDF (file, data or file URL representation) to a new temporary file. Returns nil when
+    /// the item isn't a PDF, so an image behind a file URL still goes to the image path.
+    static func copyPDF(from provider: NSItemProvider, typeIdentifier: String) async -> URL? {
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("SpenDropShared-\(UUID().uuidString).pdf")
+        func write(_ data: Data) -> URL? {
+            guard isPDF(data), (try? data.write(to: destination, options: [.atomic, .completeFileProtection])) != nil else { return nil }
+            return destination
+        }
+        func copy(_ source: URL) -> URL? {
+            let scoped = source.startAccessingSecurityScopedResource()
+            defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+            guard let handle = try? FileHandle(forReadingFrom: source) else { return nil }
+            let head = (try? handle.read(upToCount: 1024)) ?? Data()
+            try? handle.close()
+            guard isPDF(head), (try? FileManager.default.copyItem(at: source, to: destination)) != nil else { return nil }
+            return destination
+        }
+        // 1. File representation (most bank apps): copied while the system's temporary file still exists.
+        if typeIdentifier == UTType.pdf.identifier {
+            let fromFile: URL? = await withCheckedContinuation { continuation in
+                _ = provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _ in
+                    continuation.resume(returning: url.flatMap(copy))
+                }
+            }
+            if let fromFile { return fromFile }
+            // 2. Data representation.
+            let fromData: URL? = await withCheckedContinuation { continuation in
+                _ = provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, _ in
+                    continuation.resume(returning: data.flatMap(write))
+                }
+            }
+            if let fromData { return fromData }
+        }
+        // 3. A file URL item (or a PDF typed item delivered as a URL).
+        return await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: typeIdentifier, options: nil) { item, _ in
+                if let url = item as? URL, url.isFileURL { continuation.resume(returning: copy(url)) }
+                else if let data = item as? Data { continuation.resume(returning: write(data)) }
+                else { continuation.resume(returning: nil) }
+            }
+        }
+    }
+
+    static func loadText(from provider: NSItemProvider) async -> String? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+                if let text = item as? String { continuation.resume(returning: text) }
+                else if let data = item as? Data { continuation.resume(returning: String(data: data, encoding: .utf8)) }
+                else { continuation.resume(returning: nil) }
+            }
+        }
+    }
+}
+
+/// Turns a shared PDF into text for the existing parser, on-device only:
+/// 1. PDFKit's own text (no rendering, no OCR) when the PDF contains real text;
+/// 2. otherwise renders the relevant pages one at a time and runs the existing Vision OCR on them.
+/// Rendered images are only in memory and released after each page. Nothing is saved.
+public enum PDFReceiptImporter {
+    public enum ImportError: LocalizedError, Equatable {
+        case unreadable
+        case empty
+        case noText
+
+        public var errorDescription: String? {
+            switch self {
+            case .unreadable: return "SpenDrop couldn't open this PDF."
+            case .empty: return "This PDF has no pages."
+            case .noText: return "No receipt details could be read from this PDF."
+            }
+        }
+    }
+
+    public enum Method: Equatable { case nativeText, ocr }
+
+    public struct Result {
+        /// Same shape as Vision OCR output, so the existing parser is used unchanged.
+        public let ocrResult: OCRResult
+        public let method: Method
+        public let pageCount: Int
+        /// Pages whose text was used (0-based).
+        public let pagesUsed: [Int]
+        /// A small first-page picture for the review screen only (never saved).
+        public let preview: UIImage?
+    }
+
+    /// Receipts are short; pages past this are not inspected.
+    static let maxPages = 5
+    static let maxOCRPages = 3
+
+    public static func extract(from url: URL, ocr: (UIImage) async throws -> OCRResult = { try await OCRService.shared.recognizeText(from: $0) }) async throws -> Result {
+        guard let document = PDFDocument(url: url) else { throw ImportError.unreadable }
+        return try await extract(from: document, ocr: ocr)
+    }
+
+    public static func extract(from document: PDFDocument, ocr: (UIImage) async throws -> OCRResult = { try await OCRService.shared.recognizeText(from: $0) }) async throws -> Result {
+        guard document.pageCount > 0 else { throw ImportError.empty }
+        let pages = (0..<min(document.pageCount, maxPages)).compactMap { index in document.page(at: index).map { (index, $0) } }
+        let preview = pages.first.map { $0.1.thumbnail(of: CGSize(width: 600, height: 900), for: .mediaBox) }
+
+        // 1. Native text: use the pages that look like a payment (an amount), else every page with text.
+        let texts = pages.map { ($0.0, lines(in: $0.1.string ?? "")) }
+        let withAmount = texts.filter { looksLikePayment($0.1) }
+        let chosen = withAmount.isEmpty ? texts.filter { isUsable($0.1) } : withAmount
+        let nativeLines = chosen.flatMap(\.1)
+        if isUsable(nativeLines) {
+            return Result(ocrResult: ocrResult(from: nativeLines, confidence: 1), method: .nativeText, pageCount: document.pageCount,
+                          pagesUsed: chosen.map(\.0), preview: preview)
+        }
+
+        // 2. Image-only PDF: render and OCR one page at a time; stop at the first page that reads like a payment.
+        var fallback: (Int, OCRResult)?
+        for (index, page) in pages.prefix(maxOCRPages) {
+            guard let image = autoreleasepool(invoking: { render(page, maxDimension: 1600) }) else { continue }
+            guard let result = try? await ocr(image), !result.lines.isEmpty else { continue }
+            if looksLikePayment(result.lines.map(\.text)) {
+                return Result(ocrResult: result, method: .ocr, pageCount: document.pageCount, pagesUsed: [index], preview: preview)
+            }
+            if fallback == nil { fallback = (index, result) }
+        }
+        if let fallback {
+            return Result(ocrResult: fallback.1, method: .ocr, pageCount: document.pageCount, pagesUsed: [fallback.0], preview: preview)
+        }
+        throw ImportError.noText
+    }
+
+    /// Plain text (shared text, or a PDF's own text) in the same shape as OCR output. Lines keep their order;
+    /// there are no boxes, and the parser falls back to line order for positions.
+    public static func ocrResult(from lines: [String], confidence: Float = 1) -> OCRResult {
+        OCRResult(fullText: lines.joined(separator: "\n"),
+                  lines: lines.map { RecognizedTextLine(text: $0, confidence: confidence) },
+                  averageConfidence: confidence)
+    }
+
+    public static func lines(in text: String) -> [String] {
+        text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Enough real text to parse: some letters and at least one digit.
+    static func isUsable(_ lines: [String]) -> Bool {
+        let text = lines.joined(separator: " ")
+        return text.filter(\.isLetter).count >= 8 && text.contains(where: \.isNumber)
+    }
+
+    /// Contains something that looks like a money amount (e.g. "RM 15.00", "15.00").
+    static func looksLikePayment(_ lines: [String]) -> Bool {
+        isUsable(lines) && lines.contains { $0.range(of: #"\d+[.,]\d{2}\b"#, options: .regularExpression) != nil }
+    }
+
+    /// Renders one page at screen-like resolution (white background, no transparency); released by the caller.
+    static func render(_ page: PDFPage, maxDimension: CGFloat) -> UIImage? {
+        let bounds = page.bounds(for: .mediaBox)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let scale = min(maxDimension / max(bounds.width, bounds.height), 4)
+        return page.thumbnail(of: CGSize(width: bounds.width * scale, height: bounds.height * scale), for: .mediaBox)
     }
 }

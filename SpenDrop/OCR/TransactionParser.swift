@@ -59,8 +59,10 @@ public final class TransactionParser {
         )
 
         // 4. Detect Merchant & Suggested Category
-        let (detectedMerchant, merchantCategory) = MerchantDetector.detect(lines: lines, fullText: fullText, recognizedLines: ocrResult.lines)
-        let finalCategory = CategoryDetector.detect(text: fullText, detectedMerchant: detectedMerchant, merchantCategory: merchantCategory)
+        let (detectedMerchant, _) = MerchantDetector.detect(lines: lines, fullText: fullText, recognizedLines: ocrResult.lines)
+        // Category from the merchant first, then (weakly) the receipt wording; never from the bank/wallet used.
+        let categorySuggestion = CategoryDetector.suggest(merchant: detectedMerchant, receiptText: fullText)
+        let finalCategory = categorySuggestion.category
 
         // 5. Detect Date & Time with Normalized String Representations
         let (detectedDate, dateString, timeString) = extractDateTimeAndStrings(lines: lines, fullText: fullText)
@@ -97,7 +99,10 @@ public final class TransactionParser {
             statusDisplayText = "Possible Expense"
         }
 
-        let detectedChannel = PaymentChannel.detect(from: fullText, paymentSource: detectedPaymentSource, paymentMethod: paymentMethod, detectedSource: transactionSource)
+        // Channel only from what the receipt says, using text Vision read with reasonable confidence.
+        let evidenceText = ocrResult.lines.filter { $0.confidence >= 0.5 }.map(\.text).joined(separator: "\n")
+        let channelSuggestion = PaymentChannel.suggest(evidenceText: evidenceText, paymentSource: detectedPaymentSource, detectedSource: transactionSource)
+        let detectedChannel = channelSuggestion.channel
         let detectedFunding: String = underlyingBank?.rawValue ?? (detectedPaymentSource != .applePay && detectedPaymentSource != .qrPayment && detectedPaymentSource != .bankTransfer && detectedPaymentSource != .physicalCard && detectedPaymentSource != .unknown && detectedPaymentSource != nil ? detectedPaymentSource!.rawValue : "Unknown")
 
         var parsed = ParsedTransaction(
@@ -130,6 +135,11 @@ public final class TransactionParser {
             isFailedTransaction: isFailed,
             isBalanceOrLimitOnly: isBalanceOrLimit
         )
+
+        parsed.categoryConfidence = categorySuggestion.confidence
+        parsed.categoryReason = categorySuggestion.reason
+        parsed.channelConfidence = channelSuggestion.confidence
+        parsed.channelReason = channelSuggestion.reason
 
         // 9. Direction suggestion (additive; does not change any field above)
         let direction = DirectionDetector.detect(text: fullText)
@@ -646,19 +656,26 @@ public final class TransactionParser {
     // MARK: - Transaction Reference Extraction
 
     public func extractReferenceNumber(lines: [String]) -> String? {
-        let patterns = [
-            #"(?:ref(?:\.|erence)?\s*(?:no|id)?|trans(?:action)?\s*(?:id|no)|receipt\s*(?:no|#)?|no\.\s*rujukan)\s*[:\-]?\s*([A-Za-z0-9\-]{6,30})"#
-        ]
+        let label = #"(?:ref(?:\.|erence)?\s*(?:no|id)?|trans(?:action)?\s*(?:id|no)|receipt\s*(?:no|#)?|no\.\s*rujukan)"#
+        // A reference always contains a digit; this also stops a label fragment ("erence") being read as the value.
+        let value = #"((?=[A-Za-z0-9\-]*\d)[A-Za-z0-9\-]{6,30})"#
+        guard let sameLine = try? NSRegularExpression(pattern: label + #"\s*[:\-]?\s*"# + value, options: [.caseInsensitive]),
+              let labelOnly = try? NSRegularExpression(pattern: "^\\s*" + label + #"\s*[:\-]?\s*$"#, options: [.caseInsensitive]),
+              let valueOnly = try? NSRegularExpression(pattern: "^\\s*" + value + "\\s*$", options: []) else { return nil }
 
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
-                for line in lines {
-                    let range = NSRange(line.startIndex..<line.endIndex, in: line)
-                    if let match = regex.firstMatch(in: line, options: [], range: range),
-                       match.numberOfRanges > 1,
-                       let captureRange = Range(match.range(at: 1), in: line) {
-                        return String(line[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
+        for (index, line) in lines.enumerated() {
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            if let match = sameLine.firstMatch(in: line, options: [], range: range),
+               let captureRange = Range(match.range(at: 1), in: line) {
+                return String(line[captureRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            // Label on its own line (common in bank receipts and PDF text): the value is on the next line.
+            if labelOnly.firstMatch(in: line, options: [], range: range) != nil, index + 1 < lines.count {
+                let next = lines[index + 1]
+                let nextRange = NSRange(next.startIndex..<next.endIndex, in: next)
+                if let match = valueOnly.firstMatch(in: next, options: [], range: nextRange),
+                   let captureRange = Range(match.range(at: 1), in: next) {
+                    return String(next[captureRange])
                 }
             }
         }

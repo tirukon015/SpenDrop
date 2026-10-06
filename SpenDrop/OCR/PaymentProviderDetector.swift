@@ -140,6 +140,8 @@ public struct PaymentProviderDetector {
             let lower = line.lowercased()
             let isRecipientHeader = lower.contains("receiving bank") ||
                                     lower.contains("recipient bank") ||
+                                    lower.contains("recipient's bank") ||
+                                    lower.contains("beneficiary's bank") ||
                                     lower.contains("beneficiary bank") ||
                                     lower.contains("to bank") ||
                                     lower.contains("recipient bank/e-wallet") ||
@@ -220,7 +222,7 @@ public struct PaymentProviderDetector {
                            lowerFull.contains("cimb:") ||
                            lowerFull.contains("cimb octo") ||
                            lowerFull.contains("cimb clicks") ||
-                           lowerFull.contains("cimb bank") ||
+                           (lowerFull.contains("cimb bank") && !recipientBankIds.contains("cimb")) ||
                            lowerFull.contains("octo reference no") ||
                            lowerFull.contains("with octo") ||
                            lowerFull.contains("savings acct-i plus") ||

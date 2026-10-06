@@ -36,6 +36,12 @@ public struct ExpenseReviewView: View {
     @State private var pendingMovement: PrefilledMovement?
     @State private var movementDuplicateMessage: String?
     @State private var categoryTouched = false
+    @State private var channelTouched = false
+    // Why the category / channel was suggested; shown as a caption when SpenDrop isn't sure.
+    @State private var categoryHint: CategorySuggestion?
+    @State private var channelHint: ChannelSuggestion?
+    /// "Split Money" set up before the first save (nil = not split). Saved with the expense in one go.
+    @State private var splitDraft: SplitDraft?
 
     public init(parsed: ParsedTransaction, onSaved: ((Expense) -> Void)? = nil) {
         self.initialParsed = parsed
@@ -54,12 +60,26 @@ public struct ExpenseReviewView: View {
         _saveAs = State(initialValue: parsed.suggestedMovementKind.map(TransactionEntryType.init(kind:)) ?? .expense)
     }
 
+    /// A small explanation under a field: why SpenDrop suggested it, or that it needs checking.
+    private func reviewCaption(_ text: String, warning: Bool = true) -> some View {
+        Label(text, systemImage: warning ? "exclamationmark.circle" : "info.circle")
+            .font(.caption)
+            .foregroundStyle(warning ? Color.orange : Color.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .padding(.leading, 36)
+    }
+
     private var parsedAmount: Double {
         CurrencyFormatter.parse(string: amountText) ?? 0.0
     }
 
+    /// A split must add up to the amount exactly before the expense can be saved.
     private var isValid: Bool {
-        parsedAmount > 0
+        guard parsedAmount > 0 else { return false }
+        guard saveAs == .expense, let splitDraft else { return true }
+        return splitDraft.isValid(totalMinor: Money.minorUnits(from: parsedAmount))
     }
 
     private var isHighConfidence: Bool {
@@ -253,6 +273,7 @@ public struct ExpenseReviewView: View {
                                         HapticFeedback.selection()
                                         selectedCategory = cat
                                         categoryTouched = true
+                                        categoryHint = nil
                                     } label: {
                                         Label(cat.rawValue, systemImage: cat.icon)
                                     }
@@ -270,6 +291,10 @@ public struct ExpenseReviewView: View {
                             }
                         }
                         .padding()
+
+                        if let hint = categoryHint, hint.needsReview {
+                            reviewCaption("Suggested · please check. \(hint.reason)")
+                        }
 
                         Divider().padding(.leading, 48)
 
@@ -327,6 +352,8 @@ public struct ExpenseReviewView: View {
                                     Button {
                                         HapticFeedback.selection()
                                         selectedPaymentChannel = ch
+                                        channelTouched = true
+                                        channelHint = nil
                                     } label: {
                                         Label(ch.displayName, systemImage: ch.iconName)
                                     }
@@ -344,6 +371,14 @@ public struct ExpenseReviewView: View {
                             }
                         }
                         .padding()
+
+                        if let hint = channelHint {
+                            if hint.channel == .unknown {
+                                reviewCaption("Unknown — needs review. \(hint.reason)")
+                            } else if !hint.reason.isEmpty {
+                                reviewCaption(hint.reason, warning: false)
+                            }
+                        }
 
                         Divider().padding(.leading, 48)
 
@@ -454,6 +489,32 @@ public struct ExpenseReviewView: View {
                         }
                     }
 
+                    // SPLIT MONEY: share the amount with people in PayBook before saving (expenses only)
+                    if saveAs == .expense {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
+                                withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
+                            })) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Split Money").font(.subheadline.weight(.semibold))
+                                        Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .accessibilityIdentifier("review.splitToggle")
+                            if splitDraft != nil {
+                                Divider()
+                                InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
+                                                   totalMinor: Money.minorUnits(from: parsedAmount))
+                            }
+                        }
+                        .padding()
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+
                     // ACTION BUTTONS
                     VStack(spacing: 12) {
                         if !merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -519,16 +580,19 @@ public struct ExpenseReviewView: View {
                     )
                 )
             }
-            .alert("Existing Transaction Detected", isPresented: $showingDuplicateConfirmation) {
-                Button("Reconcile with Existing (Recommended)") {
-                    reconcileExpense()
-                }
-                Button("Add as Separate Transaction") {
+            .alert(duplicateResult.isStrong ? "Already Recorded?" : "Possible Duplicate", isPresented: $showingDuplicateConfirmation) {
+                // "Add Anyway" always creates a new expense. Merging is offered only for the same payment reference.
+                Button("Add Anyway") {
                     saveExpense()
+                }
+                if duplicateResult.isStrong {
+                    Button("Merge with Existing") {
+                        reconcileExpense()
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(duplicateResult.reason ?? "This transaction matches an existing record. Reconciling will link them into one single expense without double-counting.")
+                Text(duplicateResult.reason ?? "This may already be recorded. If it's a separate payment, add it anyway.")
             }
             .sheet(item: $pendingMovement) { item in
                 MoneyMovementCreateSheet(draft: item.draft) {
@@ -545,14 +609,30 @@ public struct ExpenseReviewView: View {
             .onAppear {
                 // Learned rule > parser rule > generic; never overrides a category the user picked.
                 if !categoryTouched {
-                    selectedCategory = TransactionClassifier.suggestCategory(
-                        merchant: merchant, deterministic: initialParsed.category, in: modelContext).category
+                    let evidence = CategorySuggestion(category: initialParsed.category ?? .other,
+                                                      confidence: initialParsed.category == nil ? 0 : initialParsed.categoryConfidence,
+                                                      reason: initialParsed.categoryReason ?? "No category evidence in this receipt")
+                    let suggestion = TransactionClassifier.suggestion(merchant: merchant, parsed: evidence, in: modelContext).0
+                    selectedCategory = suggestion.category
+                    categoryHint = suggestion
+                }
+                if !channelTouched {
+                    if let learned = ChannelLearning.suggestion(merchant: merchant, funding: fundingAccount,
+                                                                detected: selectedPaymentChannel, in: modelContext) {
+                        selectedPaymentChannel = learned.channel
+                        channelHint = learned
+                    } else {
+                        channelHint = ChannelSuggestion(channel: selectedPaymentChannel, confidence: initialParsed.channelConfidence,
+                                                        reason: initialParsed.channelReason ?? "")
+                    }
                 }
                 duplicateResult = DuplicateDetector.shared.checkDuplicate(
                     amount: parsedAmount,
                     merchant: merchant,
                     date: date,
                     reference: transactionReference,
+                    paymentChannel: selectedPaymentChannel,
+                    fundingAccount: fundingAccount,
                     in: modelContext
                 )
             }
@@ -671,6 +751,8 @@ public struct ExpenseReviewView: View {
         )
 
         let reconciled = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
+        // Applied only when it matches the merged expense's amount; otherwise nothing changes.
+        if let splitDraft, splitDraft.apply(to: reconciled, in: modelContext) { try? modelContext.save() }
 
         if let all = try? modelContext.fetch(FetchDescriptor<Expense>()) {
             TransactionFilterEngine.shared.update(expenses: all)
@@ -715,7 +797,10 @@ public struct ExpenseReviewView: View {
 
         modelContext.insert(expense)
         AccountLinker.relink(expense, in: modelContext)
+        // Split Money: shares (and who paid) are saved with the expense; PayBook balances follow from them.
+        splitDraft?.apply(to: expense, in: modelContext)
         TransactionClassifier.learn(merchant: finalMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
+        ChannelLearning.learn(merchant: finalMerchant, funding: fundingAccount, channel: selectedPaymentChannel, in: modelContext)
         try? modelContext.save()
         modelContext.processPendingChanges()
 

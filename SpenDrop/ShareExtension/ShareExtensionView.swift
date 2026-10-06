@@ -55,6 +55,11 @@ public final class ShareExtensionViewModel: ObservableObject {
     @Published public var date: Date = Date()
     @Published public var notes: String = ""
     @Published public var transactionReference: String?
+    /// Why the category / channel was suggested; shown when SpenDrop isn't sure. Cleared once the user picks.
+    @Published public var categoryHint: CategorySuggestion?
+    @Published public var channelHint: ChannelSuggestion?
+    /// "Split Money" set up before the first save (nil = not split). Saved with the expense in one go.
+    @Published public var splitDraft: SplitDraft?
 
     // Duplicate Check State
     @Published public var duplicateResult: DuplicateCheckResult = .none
@@ -118,7 +123,25 @@ public final class ShareExtensionViewModel: ObservableObject {
             }
 
             guard !Task.isCancelled else { return }
+            self.finishParsing(ocrResult: ocrResult, image: image, parserImage: image)
+        }
+    }
 
+    /// Shared PDF / text path: the extracted text goes through exactly the same parser, duplicate check and
+    /// review as a screenshot. `preview` is only shown on screen; nothing from a PDF is stored as a receipt image.
+    public func startParsing(ocrResult: OCRResult, preview: UIImage) {
+        cancelTask()
+        phase = .processing(image: preview)
+        ocrTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            self.finishParsing(ocrResult: ocrResult, image: preview, parserImage: nil)
+        }
+    }
+
+    /// Everything after text recognition (unchanged from the original image flow): parse → category →
+    /// duplicate check → review.
+    private func finishParsing(ocrResult: OCRResult, image: UIImage, parserImage: UIImage?) {
+        do {
             let observationCount = ocrResult.lines.count
             let textLength = ocrResult.fullText.count
             shareLog("[SpenDropShare][OCR] observation count = \(observationCount)")
@@ -132,7 +155,7 @@ public final class ShareExtensionViewModel: ObservableObject {
             }
 
             shareLog("[SpenDropShare][OCR] parser started")
-            let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: image)
+            let parsed = TransactionParser.shared.parse(ocrResult: ocrResult, image: parserImage)
             shareLog("[SpenDropShare][OCR] parser completed")
 
             guard !Task.isCancelled else { return }
@@ -140,8 +163,7 @@ public final class ShareExtensionViewModel: ObservableObject {
             // Populate detected fields
             self.applyParsedTransaction(parsed)
             // Learned rule > parser rule > generic suggestion (local only).
-            self.selectedCategory = TransactionClassifier.suggestCategory(
-                merchant: parsed.merchant, deterministic: parsed.category, in: ExpenseDataContainer.shared.mainContext).category
+            self.applySuggestions(parsed, in: ExpenseDataContainer.shared.mainContext)
 
             // Duplicate detection executed safely
             do {
@@ -150,6 +172,8 @@ public final class ShareExtensionViewModel: ObservableObject {
                     merchant: parsed.merchant,
                     date: parsed.date,
                     reference: parsed.transactionReference,
+                    paymentChannel: parsed.paymentChannel,
+                    fundingAccount: parsed.displayFundingAccount,
                     in: ExpenseDataContainer.shared.mainContext
                 )
             } catch {
@@ -171,6 +195,7 @@ public final class ShareExtensionViewModel: ObservableObject {
         }
 
         self.merchant = parsed.merchant ?? ""
+        self.splitDraft = nil
         self.selectedCategory = parsed.category ?? .other
         self.suggestedMovementKind = parsed.suggestedMovementKind
         self.directionReason = parsed.directionReason
@@ -190,6 +215,24 @@ public final class ShareExtensionViewModel: ObservableObject {
         }
     }
 
+    /// Learned rule > receipt evidence > Other for the category; a learned channel only when the receipt states none.
+    public func applySuggestions(_ parsed: ParsedTransaction, in context: ModelContext) {
+        let evidence = CategorySuggestion(category: parsed.category ?? .other,
+                                          confidence: parsed.category == nil ? 0 : parsed.categoryConfidence,
+                                          reason: parsed.categoryReason ?? "No category evidence in this receipt")
+        let suggestion = TransactionClassifier.suggestion(merchant: parsed.merchant, parsed: evidence, in: context).0
+        self.selectedCategory = suggestion.category
+        self.categoryHint = suggestion
+        if let learned = ChannelLearning.suggestion(merchant: parsed.merchant, funding: fundingAccount,
+                                                    detected: selectedPaymentChannel, in: context) {
+            self.selectedPaymentChannel = learned.channel
+            self.channelHint = learned
+        } else {
+            self.channelHint = ChannelSuggestion(channel: parsed.paymentChannel, confidence: parsed.channelConfidence,
+                                                 reason: parsed.channelReason ?? "")
+        }
+    }
+
     /// Prepares manual entry review screen when OCR finds no text or user chooses manual input
     public func enterManualDetails(image: UIImage) {
         cancelTask()
@@ -202,6 +245,7 @@ public final class ShareExtensionViewModel: ObservableObject {
         )
         self.amountText = ""
         self.merchant = ""
+        self.splitDraft = nil
         self.selectedCategory = .other
         self.fundingAccount = "Maybank"
         self.selectedPaymentChannel = .unknown
@@ -238,8 +282,22 @@ public struct ShareExtensionView: View {
         CurrencyFormatter.parse(string: viewModel.amountText) ?? 0.0
     }
 
+    /// A split must add up to the amount exactly before the expense can be saved.
     private var isValid: Bool {
-        parsedAmount > 0
+        guard parsedAmount > 0 else { return false }
+        guard viewModel.saveAs == .expense, let split = viewModel.splitDraft else { return true }
+        return split.isValid(totalMinor: Money.minorUnits(from: parsedAmount))
+    }
+
+    /// A small explanation under a field: why SpenDrop suggested it, or that it needs checking.
+    private func shareCaption(_ text: String, warning: Bool = true) -> some View {
+        Label(text, systemImage: warning ? "exclamationmark.circle" : "info.circle")
+            .font(.caption)
+            .foregroundStyle(warning ? Color.orange : Color.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 52)
+            .padding(.trailing, 16)
+            .padding(.bottom, 8)
     }
 
     public var body: some View {
@@ -562,6 +620,7 @@ public struct ShareExtensionView: View {
                             ForEach(ExpenseCategory.allCases) { cat in
                                 Button {
                                     viewModel.selectedCategory = cat
+                                    viewModel.categoryHint = nil
                                 } label: {
                                     Label(cat.rawValue, systemImage: cat.icon)
                                 }
@@ -614,6 +673,9 @@ public struct ShareExtensionView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    if let hint = viewModel.categoryHint, hint.needsReview {
+                        shareCaption("Suggested · please check. \(hint.reason)")
+                    }
 
                     Divider().padding(.leading, 52)
 
@@ -630,6 +692,7 @@ public struct ShareExtensionView: View {
                             ForEach(PaymentChannel.allCases) { ch in
                                 Button {
                                     viewModel.selectedPaymentChannel = ch
+                                    viewModel.channelHint = nil
                                 } label: {
                                     Label(ch.displayName, systemImage: ch.iconName)
                                 }
@@ -648,6 +711,13 @@ public struct ShareExtensionView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    if let hint = viewModel.channelHint {
+                        if hint.channel == .unknown {
+                            shareCaption("Unknown — needs review. \(hint.reason)")
+                        } else if !hint.reason.isEmpty {
+                            shareCaption(hint.reason, warning: false)
+                        }
+                    }
 
                     // Funding Instrument (if available)
                     if let instrument = viewModel.fundingInstrument, !instrument.isEmpty {
@@ -689,6 +759,32 @@ public struct ShareExtensionView: View {
                 }
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                // Split Money: share the amount with people in PayBook before saving (expenses only)
+                if viewModel.saveAs == .expense {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: Binding(get: { viewModel.splitDraft != nil }, set: { on in
+                            withAnimation(.easeInOut(duration: 0.2)) { viewModel.splitDraft = on ? SplitDraft() : nil }
+                        })) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Split Money").font(.subheadline.weight(.semibold))
+                                    Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("share.splitToggle")
+                        if viewModel.splitDraft != nil {
+                            Divider()
+                            InlineSplitSection(draft: Binding(get: { viewModel.splitDraft ?? SplitDraft() }, set: { viewModel.splitDraft = $0 }),
+                                               totalMinor: Money.minorUnits(from: parsedAmount))
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
 
                 // Notes
                 VStack(alignment: .leading, spacing: 6) {
@@ -738,13 +834,19 @@ public struct ShareExtensionView: View {
         } message: {
             Text(viewModel.movementDuplicateMessage ?? "")
         }
-        .alert("Possible Duplicate Expense", isPresented: $viewModel.showingDuplicateConfirmation) {
+        .alert(viewModel.duplicateResult.isStrong ? "Already Recorded?" : "Possible Duplicate", isPresented: $viewModel.showingDuplicateConfirmation) {
+            // "Add Anyway" always saves a NEW expense; it never merges into the matched one.
             Button("Add Anyway") {
-                saveToSwiftData()
+                saveToSwiftData(mergeInto: nil)
+            }
+            if viewModel.duplicateResult.isStrong, let existing = viewModel.duplicateResult.matchedExpense {
+                Button("Merge with Existing") {
+                    saveToSwiftData(mergeInto: existing)
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(viewModel.duplicateResult.reason ?? "This transaction appears to have been recorded already. Do you want to add it anyway?")
+            Text(viewModel.duplicateResult.reason ?? "This may already be recorded. If it's a separate payment, add it anyway.")
         }
     }
 
@@ -818,7 +920,7 @@ public struct ShareExtensionView: View {
         if viewModel.duplicateResult.isDuplicate {
             viewModel.showingDuplicateConfirmation = true
         } else {
-            saveToSwiftData()
+            saveToSwiftData(mergeInto: nil)
         }
     }
 
@@ -849,7 +951,9 @@ public struct ShareExtensionView: View {
         onComplete()
     }
 
-    private func saveToSwiftData() {
+    /// Saves the shared payment as a new expense, or — only when the user chose "Merge with Existing" for a
+    /// same-reference match — adds its details to that existing expense.
+    private func saveToSwiftData(mergeInto mergeTarget: Expense?) {
         guard isValid else { return }
 
         let savedImagePath = viewModel.inputImage.flatMap { ImageStorageService.shared.saveImage($0) }
@@ -861,7 +965,7 @@ public struct ShareExtensionView: View {
             resolvedSource = PaymentSource.from(string: viewModel.fundingAccount)
         }
 
-        if let existing = viewModel.duplicateResult.matchedExpense {
+        if let existing = mergeTarget {
             let candidate = ReconcileCandidate(
                 amount: parsedAmount,
                 merchant: finalMerchant,
@@ -876,6 +980,8 @@ public struct ShareExtensionView: View {
                 fundingInstrument: viewModel.fundingInstrument
             )
             _ = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
+            // Applied only when it matches the merged expense's amount; otherwise nothing changes.
+            viewModel.splitDraft?.apply(to: existing, in: modelContext)
         } else {
             let expense = Expense(
                 amount: parsedAmount,
@@ -898,7 +1004,10 @@ public struct ShareExtensionView: View {
             )
             modelContext.insert(expense)
             AccountLinker.relink(expense, in: modelContext)
+            // Split Money: shares (and who paid) are saved with the expense; PayBook balances follow from them.
+            viewModel.splitDraft?.apply(to: expense, in: modelContext)
             TransactionClassifier.learn(merchant: finalMerchant, category: viewModel.selectedCategory, accountId: expense.account?.id, in: modelContext)
+            ChannelLearning.learn(merchant: finalMerchant, funding: viewModel.fundingAccount, channel: viewModel.selectedPaymentChannel, in: modelContext)
         }
 
         do {

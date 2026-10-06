@@ -62,7 +62,7 @@ public final class ExpenseDataContainer {
     }
 
     public static var currentSchema: Schema {
-        Schema(versionedSchema: SpenDropSchemaV3.self)
+        Schema(versionedSchema: SpenDropSchemaV5.self)
     }
 
     private static let schemaFingerprintKey = "SpenDrop.lastOpenedSchemaFingerprint"
@@ -196,7 +196,7 @@ public final class ExpenseDataContainer {
     /// Returns false when the store would need a migration (or its metadata cannot be read).
     static func storeMatchesCurrentModel(storeURL: URL) -> Bool {
         guard let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: storeURL),
-              let model = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV3.models) else {
+              let model = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV5.models) else {
             return false
         }
         return model.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
@@ -269,31 +269,6 @@ public final class ExpenseDataContainer {
             fatalError("Could not create preview container: \(error)")
         }
     }()
-
-    public static func seedInitialDataIfNeeded() {
-        let context = ExpenseDataContainer.shared.mainContext
-
-        // In safe mode the real database is untouched on disk; do not fill the temporary store with backup data.
-        guard isPersistentStoreHealthy, !isUITesting else {
-            print("[ExpenseDataContainer] Safe mode: skipping data rehydration.")
-            return
-        }
-
-        // 1. Ensure Paybook profiles exist
-        var profileDescriptor = FetchDescriptor<PayBookProfile>()
-        profileDescriptor.fetchLimit = 1
-        let profileCount = (try? context.fetchCount(profileDescriptor)) ?? 0
-
-        // 2. Ensure Expenses exist
-        var descriptor = FetchDescriptor<Expense>()
-        descriptor.fetchLimit = 1
-        let expenseCount = (try? context.fetchCount(descriptor)) ?? 0
-
-        if expenseCount == 0 || profileCount == 0 {
-            print("[ExpenseDataContainer] Database needs rehydration (expenses: \(expenseCount), profiles: \(profileCount)). Restoring user account & screenshot data...")
-            UserDataBackupService.restoreFromAutoBackupIfNeeded(into: context)
-        }
-    }
 
     /// Migrates any legacy PayBookContact records to PayBookProfile + PayBookPaymentMethod
     public static func migrateLegacyContactsIfNeeded(into context: ModelContext) {

@@ -32,12 +32,19 @@ public enum SplitCalculator {
     public static let maxParts = 99
 
     /// - Parameter iPaid: when true, leftover sen from rounding go to Me first so friends never owe an extra sen.
-    public static func calculate(totalMinor: Int, method: SplitMethod, participants: [Participant], iPaid: Bool = true) -> Result<[Int], SplitError> {
+    /// - Parameter requireMe: false for "paid for someone": the people I paid for share the whole total (one person
+    ///   is enough) and I am not part of it.
+    public static func calculate(totalMinor: Int, method: SplitMethod, participants: [Participant], iPaid: Bool = true,
+                                 requireMe: Bool = true) -> Result<[Int], SplitError> {
         guard totalMinor > 0 else { return .failure(.nonPositiveTotal) }
-        guard participants.count >= 2 else { return .failure(.tooFewParticipants) }
+        guard participants.count >= (requireMe ? 2 : 1) else { return .failure(.tooFewParticipants) }
         let meCount = participants.filter(\.isMe).count
-        guard meCount > 0 else { return .failure(.missingMe) }
-        guard meCount == 1 else { return .failure(.moreThanOneMe) }
+        if requireMe {
+            guard meCount > 0 else { return .failure(.missingMe) }
+            guard meCount == 1 else { return .failure(.moreThanOneMe) }
+        } else if meCount > 0 {
+            return .failure(.moreThanOneMe)
+        }
 
         switch method {
         case .equal:

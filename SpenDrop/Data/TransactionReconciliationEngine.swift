@@ -46,6 +46,9 @@ public struct MatchResult {
     public let matchedExpense: Expense?
     public let confidence: Double
     public let reason: String?
+    /// True only for a match on the payment's own reference: then it is almost certainly the same payment and
+    /// merging can be offered. Everything else is only a "possible duplicate" warning.
+    public var isStrong: Bool = false
 
     public static let none = MatchResult(isMatch: false, matchedExpense: nil, confidence: 0.0, reason: nil)
 }
@@ -55,93 +58,81 @@ public struct TransactionReconciliationEngine {
 
     public init() {}
 
-    /// Finds a potential matching existing expense that represents the same real-world payment
+    /// Window in which two imports with the same amount and merchant are reported as a possible duplicate.
+    public static let weakMatchWindow: TimeInterval = 15 * 60
+
+    /// Finds an existing expense that may be the same real-world payment as an imported one.
+    /// - Strong: same payment reference (and amount) within 48 hours — e.g. the same receipt shared twice.
+    /// - Weak (warning only): same amount AND same merchant within 15 minutes, AND no conflicting payment channel or
+    ///   funding account (Apple Pay vs QR Payment, or Maybank vs CIMB, are different payments; Unknown matches anything).
+    /// Amount alone, amount + day, or amount + person never count: two RM100 payments are both kept.
+    /// Only used for imports (screenshots, Share Extension); manually entered transactions are never checked.
     public func findMatch(
         amount: Double?,
         merchant: String?,
         date: Date?,
         reference: String?,
+        paymentChannel: PaymentChannel? = nil,
+        fundingAccount: String? = nil,
         in context: ModelContext
     ) -> MatchResult {
         guard let amount = amount, amount > 0 else {
             return .none
         }
-
-        let calendar = Calendar.current
+        let amountMinor = Money.minorUnits(from: amount)
         let targetDate = date ?? Date()
-
-        // 48-hour window to catch settlement delay between Apple Pay authorization and bank debit posting
-        let startWindow = calendar.date(byAdding: .hour, value: -48, to: targetDate) ?? targetDate
-        let endWindow = calendar.date(byAdding: .hour, value: 48, to: targetDate) ?? targetDate
-
-        var descriptor = FetchDescriptor<Expense>(
+        let startWindow = targetDate.addingTimeInterval(-48 * 3600)
+        let endWindow = targetDate.addingTimeInterval(48 * 3600)
+        let descriptor = FetchDescriptor<Expense>(
             predicate: #Predicate<Expense> { expense in
-                expense.amount == amount && expense.date >= startWindow && expense.date <= endWindow
+                expense.date >= startWindow && expense.date <= endWindow
             }
         )
-        descriptor.fetchLimit = 20
+        let candidates = ((try? context.fetch(descriptor)) ?? []).filter { Money.minorUnits(from: $0.amount) == amountMinor }
 
-        do {
-            let candidates = try context.fetch(descriptor)
-
-            for candidate in candidates {
-                // Rule 1: Exact reference match
-                if let ref = reference, !ref.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   let candRef = candidate.transactionReference, !candRef.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   ref.caseInsensitiveCompare(candRef) == .orderedSame {
-                    return MatchResult(
-                        isMatch: true,
-                        matchedExpense: candidate,
-                        confidence: 1.0,
-                        reason: "Identical transaction reference (\(ref)) already recorded."
-                    )
-                }
-
-                // Rule 2: Same merchant & same day
-                let candMerchant = candidate.merchant.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                let targetM = (merchant ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                let sameMerchant = !targetM.isEmpty && targetM != "unknown" &&
-                    (candMerchant == targetM || candMerchant.contains(targetM) || targetM.contains(candMerchant))
-
-                let sameDay = calendar.isDate(candidate.date, inSameDayAs: targetDate)
-
-                if sameMerchant && sameDay {
-                    return MatchResult(
-                        isMatch: true,
-                        matchedExpense: candidate,
-                        confidence: 0.95,
-                        reason: "Matching payment of \(candidate.formattedAmount) for \(candidate.merchant) recorded on \(candidate.date.formatted(date: .abbreviated, time: .shortened))."
-                    )
-                }
-
-                // Rule 3: Apple Pay card authorization & Bank Debit reconciliation
-                // One record has Apple Pay, the other has bank (e.g. Maybank), same amount within 24 hours
-                let isApplePayPair = (candidate.paymentChannel == .applePay || candidate.paymentSourceRaw == "Apple Pay")
-                let hasBankInfo = candidate.effectiveFundingAccount != "Unknown"
-                if (isApplePayPair || hasBankInfo) && sameDay {
-                    return MatchResult(
-                        isMatch: true,
-                        matchedExpense: candidate,
-                        confidence: 0.90,
-                        reason: "Corresponds to existing \(candidate.displayFundingAndChannel) transaction of \(candidate.formattedAmount) on \(candidate.date.formatted(date: .abbreviated, time: .shortened))."
-                    )
-                }
-
-                // Rule 4: Same amount within 2 hours
-                if abs(candidate.date.timeIntervalSince(targetDate)) < 7200 {
-                    return MatchResult(
-                        isMatch: true,
-                        matchedExpense: candidate,
-                        confidence: 0.85,
-                        reason: "Matching expense of \(candidate.formattedAmount) recorded close to this time (\(candidate.date.formatted(date: .omitted, time: .shortened)))."
-                    )
-                }
-            }
-        } catch {
-            print("[SpenDrop][Reconcile] Match query failed: \(error)")
+        if let ref = Self.normalizedReference(reference),
+           let candidate = candidates.first(where: { Self.normalizedReference($0.transactionReference) == ref }) {
+            var result = MatchResult(isMatch: true, matchedExpense: candidate, confidence: 1.0,
+                                     reason: "A payment with the same reference (\(reference ?? ref)) is already recorded: \(candidate.merchant), \(candidate.formattedAmount), \(candidate.date.formatted(date: .abbreviated, time: .shortened)).")
+            result.isStrong = true
+            return result
         }
 
+        let merchantKey = Self.normalizedMerchant(merchant)
+        if let merchantKey,
+           let candidate = candidates.first(where: {
+               Self.normalizedMerchant($0.merchant) == merchantKey && abs($0.date.timeIntervalSince(targetDate)) <= Self.weakMatchWindow &&
+               Self.compatible(channel: paymentChannel, $0.paymentChannel) &&
+               Self.compatible(funding: fundingAccount, $0.effectiveFundingAccount)
+           }) {
+            return MatchResult(isMatch: true, matchedExpense: candidate, confidence: 0.6,
+                               reason: "Possible duplicate: \(candidate.formattedAmount) at \(candidate.merchant) on \(candidate.date.formatted(date: .abbreviated, time: .shortened)) is already recorded. If this is a separate payment, add it anyway.")
+        }
         return .none
+    }
+
+    static func compatible(channel new: PaymentChannel?, _ old: PaymentChannel) -> Bool {
+        guard let new, new != .unknown, old != .unknown else { return true }
+        return new == old
+    }
+
+    static func compatible(funding new: String?, _ old: String) -> Bool {
+        let a = new?.trimmingCharacters(in: .whitespaces).lowercased() ?? "", b = old.trimmingCharacters(in: .whitespaces).lowercased()
+        let unknown: Set<String> = ["", "unknown", "other"]
+        guard !unknown.contains(a), !unknown.contains(b) else { return true }
+        return a == b
+    }
+
+    /// References shorter than 4 characters are too weak to identify a payment.
+    static func normalizedReference(_ reference: String?) -> String? {
+        guard let value = reference?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), value.count >= 4 else { return nil }
+        return value
+    }
+
+    static func normalizedMerchant(_ merchant: String?) -> String? {
+        guard let value = merchant?.lowercased().split(whereSeparator: { $0.isWhitespace }).joined(separator: " "),
+              !value.isEmpty, value != "unknown" else { return nil }
+        return value
     }
 
     /// Reconciles an existing expense with new incoming data, avoiding double-counting and merging metadata

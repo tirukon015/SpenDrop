@@ -14,6 +14,12 @@ public struct PayBookView: View {
     @State private var showingDeleteAlert: Bool = false
     @State private var showingArchived: Bool = false
     @State private var blockedDeleteProfile: PayBookProfile?
+    /// They Owe Me by default; All shows everyone (including settled people) grouped as before.
+    @State private var balanceFilter: PayBookBalanceFilter = .theyOweMe
+    // Balances are calculated from these; observing them keeps the lists current when anything changes.
+    @Query private var expenses: [Expense]
+    @Query private var movements: [MoneyMovement]
+    @Query private var shares: [ExpenseShare]
 
     public init() {}
 
@@ -52,6 +58,17 @@ public struct PayBookView: View {
                     )
                 } else {
                     List {
+                        let _ = (expenses.count, movements.count, shares.count)
+                        if searchText.isEmpty {
+                            Section {
+                                Picker("Show", selection: $balanceFilter) {
+                                    ForEach(PayBookBalanceFilter.allCases) { Text($0.title).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
+                                .accessibilityIdentifier("paybook.filter")
+                            }
+                        }
+
                         // SUMMARY (only when someone owes money or has history)
                         let summary = PersonLedger.summary(of: allProfiles)
                         if !summary.isEmpty && searchText.isEmpty {
@@ -60,6 +77,9 @@ public struct PayBookView: View {
                             }
                         }
 
+                        if searchText.isEmpty && balanceFilter != .all {
+                            outstandingSection(balanceFilter)
+                        } else {
                         let groups = PayBookGrouping.groups(filteredProfiles)
                         if !groups.frequent.isEmpty {
                             Section("Frequent") {
@@ -82,6 +102,7 @@ public struct PayBookView: View {
                                 }
                                 .font(.caption.weight(.semibold))
                             }
+                        }
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -146,6 +167,35 @@ public struct PayBookView: View {
         }
     }
 
+    // MARK: - They Owe Me / I Owe Them
+
+    /// People who currently owe me (or whom I owe), largest amount first, from the canonical net balance.
+    @ViewBuilder
+    private func outstandingSection(_ filter: PayBookBalanceFilter) -> some View {
+        let rows = PersonLedger.outstanding(allProfiles, filter: filter)
+        let totals = Dictionary(grouping: rows, by: \.currency).mapValues { $0.reduce(0) { $0 + $1.amountMinor } }
+        let totalText = totals.sorted { $0.key < $1.key }.map { PersonLedger.format($0.value, $0.key) }
+        Section {
+            if rows.isEmpty {
+                Text(filter == .theyOweMe ? "Nobody owes you money right now." : "You don't owe anyone right now.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("paybook.emptyOutstanding")
+            } else {
+                ForEach(rows) { row in profileRow(row.person) }
+            }
+        } header: {
+            HStack {
+                Text(filter.title)
+                Spacer()
+                if !totalText.isEmpty {
+                    Text(totalText.joined(separator: " + "))
+                        .accessibilityLabel("Total \(totalText.joined(separator: " and "))")
+                }
+            }
+        }
+    }
+
     // MARK: - Rows & summary (Phase 5)
 
     private func profileRow(_ profile: PayBookProfile) -> some View {
@@ -154,9 +204,14 @@ public struct PayBookView: View {
                 avatarView(profile: profile, size: 48)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.name)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Text(profile.name)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        if profile.isArchived {
+                            Text("Archived").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
 
                     HStack(spacing: 6) {
                         Text(profile.paymentMethodCountText)

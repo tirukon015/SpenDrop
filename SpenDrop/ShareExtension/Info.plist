@@ -33,7 +33,9 @@
         ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url" ||
         ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.png" ||
         ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.jpeg" ||
-        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.heic"
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.heic" ||
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf" ||
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text"
     ).@count &gt;= 1
 ).@count &gt;= 1</string>
 		</dict>

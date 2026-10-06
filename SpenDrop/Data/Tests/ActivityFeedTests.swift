@@ -9,7 +9,8 @@ public struct ActivityFeedTests {
         let t = TestKit(suite: "Phase 6") { results.append($0) }
 
         let ctx = TestKit.context()
-        let now = Date()
+        // Midday today, so every fixture (now minus up to 2 hours) is "Today" whatever time the tests run.
+        let now = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
         let maybank = Account(name: "Maybank", type: .bank), tng = Account(name: "Touch 'n Go", type: .eWallet)
         let bijoy = PayBookProfile(name: "Bijoy")
         ctx.insert(maybank); ctx.insert(tng); ctx.insert(bijoy)

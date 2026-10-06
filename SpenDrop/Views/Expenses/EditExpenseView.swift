@@ -173,17 +173,40 @@ public struct EditExpenseView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
-                    // SPLIT (Equal/Parts follow the new amount; Amounts must be corrected before saving)
-                    Button {
-                        showingSplitEditor = true
-                    } label: {
-                        SplitSummaryRow(draft: splitDraft, totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
-                            .padding()
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    // SPLIT (Equal/Parts follow the new amount; Amounts must be corrected before saving).
+                    // Edited in place; turning it off makes this a normal expense again when saved.
+                    if let draft = splitDraft, draft.purpose == .paidFor {
+                        Button {
+                            showingSplitEditor = true
+                        } label: {
+                            SplitSummaryRow(draft: draft, totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
+                                .padding()
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("editExpense.split")
+                    } else {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
+                                withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
+                            })) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                                    Text("Split Transaction").font(.subheadline.weight(.semibold))
+                                }
+                            }
+                            .accessibilityIdentifier("editExpense.splitToggle")
+                            if splitDraft != nil {
+                                Divider()
+                                InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
+                                                   totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
+                            }
+                        }
+                        .padding()
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("editExpense.split")
                 }
                 .padding()
             }
@@ -239,6 +262,7 @@ public struct EditExpenseView: View {
         AccountLinker.relink(expense, in: modelContext)
         // The user's edit is a confirmation/correction for this merchant.
         TransactionClassifier.learn(merchant: expense.merchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
+        ChannelLearning.learn(merchant: expense.merchant, funding: expense.fundingAccount, channel: selectedPaymentChannel, in: modelContext)
         // Split: re-apply against the (possibly new) amount, or remove it if the user removed the split.
         if let splitDraft {
             splitDraft.apply(to: expense, in: modelContext)

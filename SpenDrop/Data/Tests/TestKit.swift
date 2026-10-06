@@ -46,12 +46,22 @@ public enum AllTestSuites {
         ("Phase 2", "--run-financial-tests", { FinancialModelTests.runAllTests() }),
         ("Phase 3", "--run-account-tests", { AccountFeatureTests.runAllTests() }),
         ("Phase 4", "--run-split-tests", { SplitFeatureTests.runAllTests() }),
+        ("Debts & settlements", "--run-debt-tests", { DebtSettlementTests.runAllTests() }),
+        ("Split transaction", "--run-split-transaction-tests", { SplitTransactionTests.runAllTests() }),
+        ("Auto Calculate & fixed", "--run-auto-calculate-tests", { AutoCalculateTests.runAllTests() }),
+        ("Sample data", "--run-sample-data-tests", { SampleDataTests.runAllTests() }),
+        ("PayBook filter", "--run-paybook-filter-tests", { PayBookFilterTests.runAllTests() }),
         ("Phase 5", "--run-people-tests", { PeopleBalanceTests.runAllTests() }),
         ("Phase 6", "--run-timeline-tests", { ActivityFeedTests.runAllTests() }),
         ("Phase 7", "--run-phase7-tests", { Phase7Tests.runAllTests() }),
         ("Phase 8", "--run-hardening-tests", { HardeningTests.runAllTests() }),
         ("Authentication", "--run-auth-tests", { blocking { await AuthTests.runAllTests() } }),
         ("Cloud Backup", "--run-cloud-tests", { blocking { await CloudBackupTests.runAllTests() } }),
+        ("Screenshot storage", "--run-screenshot-tests", { blocking { await ScreenshotStorageTests.runAllTests() } }),
+        ("PDF import", "--run-pdf-import-tests", { blocking { await PDFImportTests.runAllTests() } }),
+        ("Classifier", "--run-classifier-tests", { ClassifierTests.runAllTests() }),
+        ("Restore ranges", "--run-restore-tests", { blocking { await RestoreRangeTests.runAllTests() } }),
+        ("Daily backup", "--run-daily-backup-tests", { blocking { await DailyBackupTests.runAllTests() } }),
         // Must stay last: proves none of the suites above touched the user's real database.
         ("Test isolation", "--run-all-tests", { isolationCheck() })
     ]

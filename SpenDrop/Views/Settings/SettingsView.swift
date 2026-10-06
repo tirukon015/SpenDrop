@@ -12,12 +12,26 @@ public struct SettingsView: View {
 
     @State private var showingClearConfirmation = false
     @State private var showingSampleDataLoadedAlert = false
+    @State private var showingLoadSampleConfirmation = false
+    @State private var showingRemoveSampleConfirmation = false
+    @State private var showingSampleRemovedAlert = false
+    @State private var sampleRemovalMessage = ""
+
+    /// Re-evaluated when sample records change.
+    @Query private var sampleRecords: [SampleDataRecord]
+    private var sampleDataLoaded: Bool {
+        !sampleRecords.isEmpty || allExpenses.contains(where: \.isSampleData)
+    }
     @State private var showingSelfTestSheet = false
 
     // Backup & Restore state
-    @State private var showingRestoreConfirmation = false
+    @State private var localRestoreBackup: LocalRestoreBackup?
     @State private var showingRestoreSuccessAlert = false
     @State private var restoreSummaryMessage = ""
+    @State private var screenshotStats: (count: Int, totalBytes: Int64) = (0, 0)
+    @State private var showingOptimizeScreenshotsConfirmation = false
+    @State private var showingOptimizeScreenshotsResult = false
+    @State private var optimizeScreenshotsMessage = ""
     @State private var showingFileImporter = false
     @State private var importErrorMessage: String?
     @State private var showingImportError = false
@@ -88,26 +102,27 @@ public struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Restore Verified Screenshots & PayBook
+                // Restore from the newest local auto-backup (explicit action only; never automatic)
                 Button(action: {
-                    showingRestoreConfirmation = true
+                    prepareLocalRestore()
                 }) {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.counterclockwise.circle.fill")
                             .foregroundStyle(.blue)
                             .font(.title3)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Restore Screenshot Data & PayBook")
+                            Text("Restore from Local Backup")
                                 .foregroundStyle(.primary)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                            Text("Restores all receipts and bank accounts from submitted screenshots")
+                            Text("Merges your newest automatic backup on this iPhone. Nothing is deleted.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 2)
                 }
+                .accessibilityIdentifier("settings.restoreLocal")
 
                 // Export Backup JSON
                 Button(action: {
@@ -181,20 +196,73 @@ public struct SettingsView: View {
                 }
             }
 
-            // TESTING & DIAGNOSTICS
-            Section(header: Text("Testing & Diagnostics")) {
+            // SCREENSHOT STORAGE
+            Section(header: Text("Screenshot Storage"),
+                    footer: Text("New screenshots are saved small (about 80–150 KB) and stay readable. Optimizing older ones keeps each original until its smaller copy is saved and checked.")) {
+                HStack {
+                    Text("Screenshots")
+                    Spacer()
+                    Text("\(screenshotStats.count)").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Total size")
+                    Spacer()
+                    Text(ByteCountFormatter.string(fromByteCount: screenshotStats.totalBytes, countStyle: .file)).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Average")
+                    Spacer()
+                    Text(screenshotStats.count == 0 ? "—" : ByteCountFormatter.string(fromByteCount: screenshotStats.totalBytes / Int64(screenshotStats.count), countStyle: .file))
+                        .foregroundStyle(.secondary)
+                }
                 Button(action: {
-                    SampleData.seed(into: modelContext)
-                    HapticFeedback.notification(.success)
-                    showingSampleDataLoadedAlert = true
+                    showingOptimizeScreenshotsConfirmation = true
                 }) {
                     HStack {
-                        Image(systemName: "tray.and.arrow.down.fill")
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
                             .foregroundStyle(.blue)
-                        Text("Load Sample Transactions")
+                        Text("Optimize Existing Screenshots")
                             .foregroundStyle(.primary)
                     }
                 }
+                .disabled(screenshotStats.count == 0)
+            }
+
+            // SAMPLE DATA (optional demo; a new install starts empty)
+            Section(header: Text("Sample Data"), footer: Text("Sample records are kept separate from your own and can be removed at any time without affecting your real data.")) {
+                Button(action: {
+                    showingLoadSampleConfirmation = true
+                }) {
+                    HStack {
+                        Image(systemName: sampleDataLoaded ? "checkmark.circle.fill" : "tray.and.arrow.down.fill")
+                            .foregroundStyle(sampleDataLoaded ? .green : .blue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sampleDataLoaded ? "Sample Data Loaded" : "Load Sample Data").foregroundStyle(.primary)
+                            Text("Explore SpenDrop with example transactions").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .disabled(sampleDataLoaded)
+                .accessibilityIdentifier("settings.loadSample")
+
+                if sampleDataLoaded {
+                    Button(role: .destructive, action: {
+                        showingRemoveSampleConfirmation = true
+                    }) {
+                        HStack {
+                            Image(systemName: "tray.and.arrow.up.fill").foregroundStyle(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Remove Sample Data").foregroundStyle(.red)
+                                Text("Remove example transactions and demo data").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("settings.removeSample")
+                }
+            }
+
+            // TESTING & DIAGNOSTICS
+            Section(header: Text("Testing & Diagnostics")) {
 
                 Button(action: {
                     showingSelfTestSheet = true
@@ -291,18 +359,72 @@ public struct SettingsView: View {
         ) { result in
             handleImportResult(result)
         }
-        .alert("Sample Data Loaded", isPresented: $showingSampleDataLoadedAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Sample Malaysian expenses have been added to your dashboard and history.")
+        .task {
+            refreshScreenshotStats()
         }
-        .alert("Restore User Data?", isPresented: $showingRestoreConfirmation) {
-            Button("Restore Everything", role: .none) {
-                performRestore()
+        .alert("Optimize Existing Screenshots?", isPresented: $showingOptimizeScreenshotsConfirmation) {
+            Button("Optimize") {
+                let report = ScreenshotStorageMigrator.optimizeExisting(in: modelContext)
+                refreshScreenshotStats()
+                HapticFeedback.notification(.success)
+                let saved = ByteCountFormatter.string(fromByteCount: max(0, report.bytesBefore - report.bytesAfter), countStyle: .file)
+                optimizeScreenshotsMessage = "Optimized \(report.optimized) screenshots (saved \(saved)). \(report.alreadySmall) were already small."
+                    + (report.keptOriginal > 0 ? " \(report.keptOriginal) could not be optimized and were kept as they are." : "")
+                    + (report.missing > 0 ? " \(report.missing) screenshot files were already missing." : "")
+                showingOptimizeScreenshotsResult = true
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will restore all verified receipts, screenshot transactions, and PayBook accounts to your SpenDrop account.")
+            Text("Large screenshots are replaced by smaller, readable copies. Each original is deleted only after its copy is saved and verified; if anything fails, the original is kept. Transactions are not changed.")
+        }
+        .alert("Screenshots Optimized", isPresented: $showingOptimizeScreenshotsResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(optimizeScreenshotsMessage)
+        }
+        .alert("Load Sample Data?", isPresented: $showingLoadSampleConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Load Sample Data") {
+                if SampleData.load(into: modelContext) {
+                    HapticFeedback.notification(.success)
+                    showingSampleDataLoadedAlert = true
+                }
+            }
+        } message: {
+            Text("This will add example expenses, people, splits, settlements, and other demonstration data so you can explore how SpenDrop works.")
+        }
+        .alert("Sample Data Loaded", isPresented: $showingSampleDataLoadedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Example people are marked \"(Sample)\". Use \"Remove Sample Data\" in Settings to take everything out again.")
+        }
+        .alert("Remove Sample Data?", isPresented: $showingRemoveSampleConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove Sample Data", role: .destructive) {
+                let result = SampleData.remove(from: modelContext)
+                HapticFeedback.notification(.success)
+                sampleRemovalMessage = "Removed \(result.expensesRemoved) expenses, \(result.peopleRemoved) people, \(result.movementsRemoved) money records and \(result.settlementsRemoved) settlements."
+                    + (result.peopleKept > 0 ? " \(result.peopleKept) sample people were kept because your own records use them." : "")
+                    + " Your real data was not affected."
+                showingSampleRemovedAlert = true
+            }
+        } message: {
+            Text("This will remove the example data previously added by SpenDrop. Your real transactions and data will not be affected.")
+        }
+        .alert("Sample Data Removed", isPresented: $showingSampleRemovedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(sampleRemovalMessage)
+        }
+        .sheet(item: $localRestoreBackup) { backup in
+            NavigationStack {
+                RestoreRangeView(source: localRestoreSource(backup.payload))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { localRestoreBackup = nil }
+                        }
+                    }
+            }
         }
         .alert("Data Restored Successfully", isPresented: $showingRestoreSuccessAlert) {
             Button("OK", role: .cancel) {}
@@ -326,11 +448,34 @@ public struct SettingsView: View {
 
     // MARK: - Actions
 
-    private func performRestore() {
-        let result = UserDataBackupService.restoreAccountData(into: modelContext, force: true)
-        HapticFeedback.notification(.success)
-        restoreSummaryMessage = "Restored \(result.expensesCount) transactions and \(result.profilesCount) PayBook profiles from your submitted screenshots."
-        showingRestoreSuccessAlert = true
+    private func refreshScreenshotStats() {
+        screenshotStats = ImageStorageService.shared.storageStats(relativePaths: allExpenses.compactMap(\.imageRelativePath))
+    }
+
+    private func prepareLocalRestore() {
+        guard let backup = UserDataBackupService.latestLocalBackup() else {
+            importErrorMessage = "No local backup was found on this iPhone. Use \"Import Backup File (JSON)\" to restore from a saved file."
+            showingImportError = true
+            return
+        }
+        localRestoreBackup = LocalRestoreBackup(payload: backup)
+    }
+
+    /// Same range → preview → confirm → merge flow as the cloud restore, reading the newest local backup.
+    private func localRestoreSource(_ payload: UserDataBackupService.BackupPayload) -> RestoreRangeView.Source {
+        RestoreRangeView.Source(
+            title: "Local Backup",
+            createdAt: payload.exportDate,
+            detail: "Newest automatic backup on this iPhone",
+            load: { payload },
+            localIDs: { UserDataBackupService.LocalRecordIDs.fetch(from: modelContext) },
+            restore: { plan in
+                guard CloudBackupService.writeLocalSafetyBackup(from: modelContext) else {
+                    throw NSError(domain: "SpenDropBackup", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                        "Couldn't save a safety copy of your current data, so nothing was restored."])
+                }
+                return try UserDataBackupService.applyRestorePlan(plan, into: modelContext)
+            })
     }
 
     private func exportBackup() {
@@ -381,4 +526,9 @@ struct ShareActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private struct LocalRestoreBackup: Identifiable {
+    let id = UUID()
+    let payload: UserDataBackupService.BackupPayload
 }

@@ -41,6 +41,12 @@ public struct ParsedTransaction: Identifiable {
     /// Suggested non-expense type from clear wording (money received, refund, top-up). nil = expense / unsure.
     /// Only a suggestion: the review screen asks the user to confirm.
     public var suggestedMovementKind: MoneyMovementKind? = nil
+    /// How sure the parser is about `category` (0…1) and why. Below 0.7 the review screen asks to check it.
+    public var categoryConfidence: Double = 1
+    public var categoryReason: String? = nil
+    /// How sure the parser is about `paymentChannel` and why. Unknown means "the receipt doesn't say".
+    public var channelConfidence: Double = 1
+    public var channelReason: String? = nil
     public var directionReason: String? = nil
 
     // Contextual flags

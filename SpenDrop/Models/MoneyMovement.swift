@@ -185,3 +185,110 @@ public final class MoneyMovement {
         return issues
     }
 }
+
+// MARK: - Settlements (schema V4)
+
+/// How much of one payment settled one specific debt. A debt is either an expense between me and a person
+/// (identified by `expenseID` + `personID`) or a loan (`loanID`). The payment itself is a normal
+/// Repayment Received / Repayment Made `MoneyMovement` (`paymentID`), so cash flow and net balances keep using
+/// the money records exactly as before; allocations only say which transactions a payment paid off.
+///
+/// Records are linked by id (not SwiftData relationships), so existing tables are unchanged. An allocation whose
+/// payment, expense or loan no longer exists is ignored by every calculation.
+@Model
+public final class SettlementAllocation {
+    public enum Kind: String, Codable {
+        /// Part of a new payment recorded together with this allocation (undo removes the payment too).
+        case payment
+        /// Assigns part of an existing, earlier payment (undo removes only this allocation).
+        case assign
+        /// "Settle All": a debt in one direction cancelled against a debt in the other. No money moved.
+        case offset
+    }
+
+    @Attribute(.unique) public var id: UUID
+    /// All allocations created by one action (one payment, one settle-all) share a group; undo works per group.
+    public var groupID: UUID
+    public var kindRaw: String
+    public var paymentID: UUID?
+    public var expenseID: UUID?
+    public var loanID: UUID?
+    public var personID: UUID
+    /// +1: the person owed me (they paid me); -1: I owed the person (I paid them).
+    public var direction: Int
+    public var amountMinor: Int
+    public var currency: String
+    public var date: Date
+    public var createdAt: Date
+
+    public init(id: UUID = UUID(), groupID: UUID, kind: Kind, paymentID: UUID?, expenseID: UUID?, loanID: UUID?,
+                personID: UUID, direction: Int, amountMinor: Int, currency: String, date: Date, createdAt: Date = Date()) {
+        self.id = id
+        self.groupID = groupID
+        self.kindRaw = kind.rawValue
+        self.paymentID = paymentID
+        self.expenseID = expenseID
+        self.loanID = loanID
+        self.personID = personID
+        self.direction = direction
+        self.amountMinor = amountMinor
+        self.currency = currency
+        self.date = date
+        self.createdAt = createdAt
+    }
+
+    public var kind: Kind { Kind(rawValue: kindRaw) ?? .payment }
+}
+
+// MARK: - Sample data register (schema V4)
+
+/// Marks one record as demo data created by "Load Sample Data", by id and type. Removing sample data deletes
+/// only records listed here (plus expenses flagged `isSampleData`); nothing is ever guessed from names or amounts.
+@Model
+public final class SampleDataRecord {
+    public enum Entity: String, Codable {
+        case expense, person, paymentMethod, account, movement, allocation, rule
+    }
+
+    @Attribute(.unique) public var recordID: UUID
+    public var entityRaw: String
+    public var createdAt: Date
+
+    public init(recordID: UUID, entity: Entity, createdAt: Date = Date()) {
+        self.recordID = recordID
+        self.entityRaw = entity.rawValue
+        self.createdAt = createdAt
+    }
+
+    public var entity: Entity? { Entity(rawValue: entityRaw) }
+}
+
+// MARK: - Learned payment channel (schema V5)
+
+/// "For this merchant, paid from this funding account, I used this channel" — learned from what the user saves.
+/// Keyed by merchant AND funding account, so "Touch 'n Go" never becomes a global channel rule. Only used when a
+/// receipt doesn't state its channel; explicit receipt wording always wins. Existing expenses are never changed.
+@Model
+public final class ChannelRule {
+    @Attribute(.unique) public var id: UUID
+    public var merchantKey: String
+    public var fundingKey: String
+    public var channelRaw: String
+    /// Consecutive confirmations of the same channel; a different choice restarts at 1.
+    public var hitCount: Int
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID = UUID(), merchantKey: String, fundingKey: String, channelRaw: String, hitCount: Int = 1,
+                createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
+        self.merchantKey = merchantKey
+        self.fundingKey = fundingKey
+        self.channelRaw = channelRaw
+        self.hitCount = hitCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public var channel: PaymentChannel? { PaymentChannel(rawValue: channelRaw) }
+}

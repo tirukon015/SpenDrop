@@ -5,6 +5,8 @@ public struct DuplicateCheckResult {
     public let isDuplicate: Bool
     public let matchedExpense: Expense?
     public let reason: String?
+    /// Same payment reference: merging may be offered. Otherwise only "Add Anyway / Cancel".
+    public var isStrong: Bool = false
 
     public static let none = DuplicateCheckResult(isDuplicate: false, matchedExpense: nil, reason: nil)
 }
@@ -20,6 +22,8 @@ public struct DuplicateDetector {
         merchant: String?,
         date: Date?,
         reference: String?,
+        paymentChannel: PaymentChannel? = nil,
+        fundingAccount: String? = nil,
         in context: ModelContext
     ) -> DuplicateCheckResult {
         let match = TransactionReconciliationEngine.shared.findMatch(
@@ -27,6 +31,8 @@ public struct DuplicateDetector {
             merchant: merchant,
             date: date,
             reference: reference,
+            paymentChannel: paymentChannel,
+            fundingAccount: fundingAccount,
             in: context
         )
 
@@ -34,7 +40,8 @@ public struct DuplicateDetector {
             return DuplicateCheckResult(
                 isDuplicate: true,
                 matchedExpense: match.matchedExpense,
-                reason: match.reason
+                reason: match.reason,
+                isStrong: match.isStrong
             )
         }
         return .none

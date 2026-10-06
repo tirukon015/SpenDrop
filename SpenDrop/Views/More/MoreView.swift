@@ -62,6 +62,7 @@ public struct MoreView: View {
                                 .foregroundStyle(.gray)
                         }
                     }
+                    .accessibilityIdentifier("more.settings")
                 }
             }
             .navigationTitle("More")

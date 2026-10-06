@@ -125,6 +125,22 @@ public class ShareViewController: UIViewController {
         viewModel.phase = .receiving
 
         Task { @MainActor in
+            // PDF (e.g. a bank's "Share Receipt") and plain text are recognised first; every other share,
+            // including all images, continues down the existing image path below, unchanged.
+            switch await SharedInputRouter.route(attachments) {
+            case .pdf(let url):
+                shareLog("[SpenDropShare][PDF] PDF detected; extracting text")
+                await self.importPDF(at: url)
+                return
+            case .text(let text):
+                shareLog("[SpenDropShare][TEXT] plain text detected (\(text.count) characters)")
+                let lines = PDFReceiptImporter.lines(in: text)
+                self.viewModel.startParsing(ocrResult: PDFReceiptImporter.ocrResult(from: lines),
+                                            preview: UIImage(systemName: "doc.plaintext") ?? UIImage())
+                return
+            case .image:
+                break
+            }
             do {
                 let (image, uti) = try await self.extractImageWithFallback(from: attachments)
                 shareLog("[SpenDropShare][IMAGE] image load completed (size: \(image.size), uti: \(uti))")
@@ -139,8 +155,26 @@ public class ShareViewController: UIViewController {
                 self.viewModel.startAutomaticOCR(image: finalImage)
             } catch {
                 shareLog("[SpenDropShare][IMAGE][ERROR] image load FAILED: \(error.localizedDescription)")
-                self.viewModel.phase = .error("Failed to load shared image: \(error.localizedDescription)")
+                self.viewModel.phase = .error("SpenDrop couldn't read this shared receipt format. Share the receipt as a screenshot, image or PDF.")
             }
+        }
+    }
+
+    /// Shared PDF → native text (or on-device OCR for image-only PDFs) → the existing parser and review.
+    /// The temporary copy is deleted as soon as the text is extracted; the PDF is never stored.
+    private func importPDF(at url: URL) async {
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            shareLog("[SpenDropShare][PDF] temporary PDF removed")
+        }
+        do {
+            let result = try await PDFReceiptImporter.extract(from: url)
+            shareLog("[SpenDropShare][PDF] pages=\(result.pageCount) used=\(result.pagesUsed) method=\(result.method == .nativeText ? "native text" : "OCR") lines=\(result.ocrResult.lines.count)")
+            viewModel.utiIdentifier = UTType.pdf.identifier
+            viewModel.startParsing(ocrResult: result.ocrResult, preview: result.preview ?? UIImage(systemName: "doc.richtext") ?? UIImage())
+        } catch {
+            shareLog("[SpenDropShare][PDF][ERROR] \(error.localizedDescription)")
+            viewModel.phase = .error("SpenDrop couldn't read this shared receipt. \((error as? LocalizedError)?.errorDescription ?? "")")
         }
     }
 

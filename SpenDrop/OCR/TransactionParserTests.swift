@@ -1279,12 +1279,12 @@ public struct TransactionParserTests {
         """
         let mbbQrParsed = parser.parse(ocrResult: makeOCRResult(text: mbbQrText))
         let t53Passed = mbbQrParsed.amount == 35.0 &&
-                        mbbQrParsed.paymentChannel == .qrPayment &&
+                        mbbQrParsed.paymentChannel == .duitNowQR &&   // receipt says "DuitNow QR": the specific channel
                         mbbQrParsed.displayFundingAccount.contains("Maybank")
         results.append(TestCaseResult(
             testName: "Scenario 2: Maybank + QR Payment",
             passed: t53Passed,
-            expected: "Amount: RM35.00, Channel: QR_PAYMENT, Funding: Maybank",
+            expected: "Amount: RM35.00, Channel: DUITNOW_QR, Funding: Maybank",
             actual: "Amount: RM\(mbbQrParsed.amount ?? 0), Channel: \(mbbQrParsed.paymentChannel.rawValue), Funding: \(mbbQrParsed.displayFundingAccount)",
             details: "Tests Maybank Scan & Pay DuitNow QR detection"
         ))
@@ -2180,12 +2180,12 @@ public struct TransactionParserTests {
             paymentChannel: parsed89.paymentChannel,
             fundingAccount: parsed89.displayFundingAccount
         )
-        let t89Passed = exp89.paymentChannel == .qrPayment &&
-                        exp89.displayFundingAndChannel.contains("QR Payment")
+        let t89Passed = exp89.paymentChannel == .duitNowQR &&   // receipt says "DuitNow QR"
+                        exp89.displayFundingAndChannel.contains("DuitNow QR")
         results.append(TestCaseResult(
             testName: "Flow Test 3: QR Payment Preserves QR Payment Channel to Expense",
             passed: t89Passed,
-            expected: "PaymentChannel = .qrPayment, displayFundingAndChannel contains 'QR Payment'",
+            expected: "PaymentChannel = .duitNowQR, displayFundingAndChannel contains 'DuitNow QR'",
             actual: "Channel = \(exp89.paymentChannel.displayName), display = \(exp89.displayFundingAndChannel)",
             details: "Verifies QR payments retain .qrPayment payment channel into the Expense model"
         ))

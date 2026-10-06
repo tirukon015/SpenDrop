@@ -15,7 +15,8 @@ public final class UserDataBackupService {
     public struct BackupPayload: Codable {
         /// 1 = expenses + PayBook only. 2 = adds accounts, money movements, splits, payer and account links.
         /// 3 = adds locally learned classification rules.
-        public static let currentVersion = 3
+        /// 4 = adds settlements (which payment paid which expense/loan) and the sample-data register.
+        public static let currentVersion = 4
         public static let supportedVersions = 1...currentVersion
 
         public let version: Int
@@ -29,6 +30,11 @@ public final class UserDataBackupService {
         public var moneyMovements: [MoneyMovementDTO]? = nil
         // Version 3
         public var classificationRules: [ClassificationRuleDTO]? = nil
+        // Version 4
+        public var settlementAllocations: [SettlementAllocationDTO]? = nil
+        public var sampleRecords: [SampleRecordDTO]? = nil
+        // Learned payment channels per merchant + funding account (optional; absent in older version-4 files)
+        public var channelRules: [ChannelRuleDTO]? = nil
 
         public var recordCount: RecordCount {
             RecordCount(expenses: expenses.count, profiles: paybookProfiles.count,
@@ -339,6 +345,52 @@ public final class UserDataBackupService {
         }
     }
 
+    public struct SettlementAllocationDTO: Codable, Equatable {
+        public let id: UUID
+        public let groupID: UUID
+        public let kindRaw: String
+        public let paymentID: UUID?
+        public let expenseID: UUID?
+        public let loanID: UUID?
+        public let personID: UUID
+        public let direction: Int
+        public let amountMinor: Int
+        public let currency: String
+        public let date: Date
+        public let createdAt: Date
+
+        public init(from a: SettlementAllocation) {
+            id = a.id; groupID = a.groupID; kindRaw = a.kindRaw; paymentID = a.paymentID; expenseID = a.expenseID
+            loanID = a.loanID; personID = a.personID; direction = a.direction; amountMinor = a.amountMinor
+            currency = a.currency; date = a.date; createdAt = a.createdAt
+        }
+    }
+
+    public struct SampleRecordDTO: Codable, Equatable {
+        public let recordID: UUID
+        public let entityRaw: String
+        public let createdAt: Date
+
+        public init(from r: SampleDataRecord) {
+            recordID = r.recordID; entityRaw = r.entityRaw; createdAt = r.createdAt
+        }
+    }
+
+    public struct ChannelRuleDTO: Codable {
+        public let id: UUID
+        public let merchantKey: String
+        public let fundingKey: String
+        public let channelRaw: String
+        public let hitCount: Int
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(from rule: ChannelRule) {
+            id = rule.id; merchantKey = rule.merchantKey; fundingKey = rule.fundingKey; channelRaw = rule.channelRaw
+            hitCount = rule.hitCount; createdAt = rule.createdAt; updatedAt = rule.updatedAt
+        }
+    }
+
     public struct ClassificationRuleDTO: Codable {
         public let id: UUID
         public let merchantKey: String
@@ -426,7 +478,8 @@ public final class UserDataBackupService {
             return now
         }
 
-        // Verified User Transactions extracted from submitted screenshots and real Malaysian receipts
+        // Built-in demo dataset (from screenshots used during development). Tagged as sample data so it never
+        // counts as the user's own records and "Remove Sample Transactions" can take it out again.
         let userRecords: [ExpenseDTO] = [
             // 1. TNG Transfer to RANA SOHEL (Verified User Screenshot: RM22.00 vs RM450 Ad)
             ExpenseDTO(
@@ -441,7 +494,7 @@ public final class UserDataBackupService {
                 transactionReference: "TNG-20260915-RANA",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Touch 'n Go eWallet\nTransferred\nReceiver: RANA SOHEL\nRM22.00\n15/09/2026 13:49:06",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 2. CIMB FPX Payment to IPAY88 (Verified User Screenshot Alert: RM932.46)
@@ -457,7 +510,7 @@ public final class UserDataBackupService {
                 transactionReference: "CIMB-FPX-20260806",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Transaction Alert\nCIMB: FPX Payment RM932.46 to IPAY88 (M) SDN BHD accepted on 06-Aug-2026, 23:13:56.",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 3. TNG Transfer to BARAKAT MD ABUL (Verified User Screenshot: -RM12.00)
@@ -473,7 +526,7 @@ public final class UserDataBackupService {
                 transactionReference: "2026080211121700010100171897968925005",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Details\n-RM12.00\nTransaction Type\nTransfer to Wallet\nTransfer To\nBARAKAT MD ABUL\n02/08/2026 13:07:14",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 4. CIMB DuitNow to TOUHIDUL ISLAM RUKON (Maybank) (Verified Screenshot: RM1.00)
@@ -489,7 +542,7 @@ public final class UserDataBackupService {
                 transactionReference: "283550902",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Transaction Summary\nMYR 1.00\nTOUHIDUL ISLAM RUKON\nMaybank 168603292644\nSAVINGS ACCT-i PLUS 7658174175",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 5. CIMB OCTO QR Payment to RUKON TOUHIDUL ISLAM (Verified Screenshot: RM0.01)
@@ -505,7 +558,7 @@ public final class UserDataBackupService {
                 transactionReference: "OCTO-283547681",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Transaction Summary\nMYR 0.01\nRUKON TOUHIDUL ISLAM\nSAVINGS ACCT-i PLUS 7658174175",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 6. Maybank Interbank to TOUHIDUL ISLAM RUKON (RHB) (Verified Screenshot: RM0.01)
@@ -521,7 +574,7 @@ public final class UserDataBackupService {
                 transactionReference: "035649071M",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Maybank\nDuitNow Transfer\nBeneficiary: TOUHIDUL ISLAM RUKON\nRHB BANK 2160 1100 0364 06\nRM 0.01",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 7. Maybank Scan & Pay Receipt to RUKONTOUHIDULISLAM (Verified Screenshot: RM0.01)
@@ -537,7 +590,7 @@ public final class UserDataBackupService {
                 transactionReference: "QR70737488",
                 sourceTypeRaw: ExpenseSourceType.receipt.rawValue,
                 ocrText: "Maybank Scan & Pay\nBeneficiary: RUKONTOUHIDULISLAM\nRM 0.01\nQR70737488",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 8. RHB Interbank to TOUHIDUL ISLAM RUKON (CIMB) (Verified Screenshot: RM1.00)
@@ -553,7 +606,7 @@ public final class UserDataBackupService {
                 transactionReference: "17897124619260845",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Status Successful\nMYR 1.00\nFrom RHB Smart Account 21601100036406\nTo TOUHIDUL ISLAM RUKON CIMB 7658174175",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 9. RHB DuitNow QR Transfer to RUKONTOUHIDULISLAM (Verified Screenshot: RM0.01)
@@ -569,7 +622,7 @@ public final class UserDataBackupService {
                 transactionReference: "20260918RHBBMYKL0400QR59060146",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "MYR 0.01\nDuitNow QR\nFrom RHB Smart Account 21601100036406\nTo RUKONTOUHIDULISLAM",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 10. TNG Interbank to TOUHIDUL ISLAM RUKON (Maybank) (Verified Screenshot: RM1.00)
@@ -585,7 +638,7 @@ public final class UserDataBackupService {
                 transactionReference: "20260918TNGDMYNB010ORM42680415",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "RM 1.00 Transferred\nReceiver: TOUHIDUL ISLAM RUKON\nRecipient Bank: Maybank 168603292644",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 11. TNG QR to RIYAD MD TANVIR ISLAM (Verified Screenshot: RM0.01)
@@ -601,7 +654,7 @@ public final class UserDataBackupService {
                 transactionReference: "TNG-QR-20260918-01",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "RM 0.01 Transferred\nReceiver: RIYAD MD TANVIR ISLAM\nFund Transfer",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 12. Starbucks Coffee (Apple Pay + CIMB Debit *8821)
@@ -617,7 +670,7 @@ public final class UserDataBackupService {
                 transactionReference: "APL-SBC-771829",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Starbucks Coffee\nTotal: RM 25.90\nPayment Method: Apple Pay\nCard: CIMB Bank Debit *8821",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 13. Uniqlo Mid Valley (Apple Pay + Maybank Visa Signature)
@@ -633,7 +686,7 @@ public final class UserDataBackupService {
                 transactionReference: "APL-MBB-992819",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Uniqlo Mid Valley\nTotal: RM 149.90\nPaid using Apple Pay\nFunding: Maybank Visa Signature",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 14. Shell Petrol (CIMB) - Today
@@ -649,7 +702,7 @@ public final class UserDataBackupService {
                 transactionReference: "CIMB-SHL-481902",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "CIMB OCTO\nDuitNow Transfer Successful\nRM50.00\nPaid to: Shell",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 15. MYDIN Groceries (Maybank) - Today
@@ -665,7 +718,7 @@ public final class UserDataBackupService {
                 transactionReference: "MBB-MYD-983102",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Maybank2u\nTransfer Successful\nAmount: RM42.90\nRecipient: MYDIN",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 16. McDonald's (Touch 'n Go) - This Week
@@ -681,7 +734,7 @@ public final class UserDataBackupService {
                 transactionReference: "TNG-MCD-992837",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "Touch 'n Go eWallet\nPayment Successful\nRM18.50\nPaid to: McDonald's",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 17. Grab Ride (RHB) - This Week
@@ -697,7 +750,7 @@ public final class UserDataBackupService {
                 transactionReference: "RHB-GRB-551029",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: "RHB Now\nPayment Successful\nAmount: RM14.80\nPaid to: Grab",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 18. Kopitiam Ah Kow (Cash) - Today
@@ -713,7 +766,7 @@ public final class UserDataBackupService {
                 transactionReference: "RCP-48291",
                 sourceTypeRaw: ExpenseSourceType.receipt.rawValue,
                 ocrText: "Kopitiam Ah Kow\nRM 12.50\nReceipt #48291",
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 19. 7-Eleven Snacks - Today
@@ -729,7 +782,7 @@ public final class UserDataBackupService {
                 transactionReference: "RCP-711-20260927",
                 sourceTypeRaw: ExpenseSourceType.manual.rawValue,
                 ocrText: nil,
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 20. GrabFood Nasi Lemak - This Week
@@ -745,7 +798,7 @@ public final class UserDataBackupService {
                 transactionReference: "TNG-GF-330192",
                 sourceTypeRaw: ExpenseSourceType.shareExtension.rawValue,
                 ocrText: nil,
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 21. Shopee Gadget Order - This Month
@@ -761,7 +814,7 @@ public final class UserDataBackupService {
                 transactionReference: "MBB-SHP-662910",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: nil,
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 22. Netflix Subscription - This Month
@@ -777,7 +830,7 @@ public final class UserDataBackupService {
                 transactionReference: "CIMB-NTF-129034",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: nil,
-                isSampleData: false
+                isSampleData: true
             ),
 
             // 23. TNB Electricity Bill - This Month
@@ -793,7 +846,7 @@ public final class UserDataBackupService {
                 transactionReference: "FPX-TNB-881920",
                 sourceTypeRaw: ExpenseSourceType.screenshot.rawValue,
                 ocrText: nil,
-                isSampleData: false
+                isSampleData: true
             )
         ]
 
@@ -1078,6 +1131,9 @@ public final class UserDataBackupService {
         let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         let movements = (try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []
         let rules = (try? context.fetch(FetchDescriptor<ClassificationRule>())) ?? []
+        let allocations = (try? context.fetch(FetchDescriptor<SettlementAllocation>())) ?? []
+        let sampleRecords = (try? context.fetch(FetchDescriptor<SampleDataRecord>())) ?? []
+        let channelRules = (try? context.fetch(FetchDescriptor<ChannelRule>())) ?? []
 
         var payload = BackupPayload(
             version: BackupPayload.currentVersion,
@@ -1090,6 +1146,9 @@ public final class UserDataBackupService {
         payload.accounts = accounts.map { AccountDTO(from: $0) }
         payload.moneyMovements = movements.map { MoneyMovementDTO(from: $0) }
         payload.classificationRules = rules.map { ClassificationRuleDTO(from: $0) }
+        payload.settlementAllocations = allocations.map { SettlementAllocationDTO(from: $0) }
+        payload.sampleRecords = sampleRecords.map { SampleRecordDTO(from: $0) }
+        payload.channelRules = channelRules.map { ChannelRuleDTO(from: $0) }
         return payload
     }
 
@@ -1164,29 +1223,22 @@ public final class UserDataBackupService {
         return payload
     }
 
-    /// Attempts to restore data from the local auto-backup file if database is empty
-    @discardableResult
-    public static func restoreFromAutoBackupIfNeeded(into context: ModelContext) -> Bool {
-        var desc = FetchDescriptor<Expense>()
-        desc.fetchLimit = 1
-        let count = (try? context.fetchCount(desc)) ?? 0
-        guard count == 0 else { return false }
-
-        // Look for auto-backup file, then the most recent readable history copy
+    /// The newest readable local backup (auto-backup file, then the most recent history copy), if any.
+    /// Never called at launch: restoring is always an explicit user action.
+    public static func latestLocalBackup() -> BackupPayload? {
+        // UI tests never read the device's real backup files.
+        if ExpenseDataContainer.isUITesting {
+            return ProcessInfo.processInfo.arguments.contains("--ui-testing-backup-fixture") ? uiTestBackupFixture() : nil
+        }
         let candidateURLs = [localAutoBackupURL, appGroupAutoBackupURL].compactMap { $0 } + historyBackupURLsNewestFirst()
         for url in candidateURLs {
             if let payload = decodePayload(at: url) {
-                print("[SpenDrop][BackupService] Restoring from auto-backup file: \(url.path)")
-                applyBackupPayload(payload, into: context)
-                try? context.save()
-                return true
+                return payload
             }
         }
-
-        // If no backup file was found, seed the verified screenshot account data directly!
-        restoreAccountData(into: context, force: false)
-        return true
+        return nil
     }
+
 
     private static func historyBackupURLsNewestFirst() -> [URL] {
         let fm = FileManager.default
@@ -1244,6 +1296,7 @@ public final class UserDataBackupService {
         public var movementsUpdated = 0
         public var movementsKeptNewer = 0
         public var rulesRestored = 0
+        public var settlementsRestored = 0
         /// Relationship ids in the backup that point to records missing from both the backup and this device.
         /// The link is left empty; name snapshots keep the history readable.
         public var missingReferences = 0
@@ -1559,6 +1612,43 @@ public final class UserDataBackupService {
             summary.rulesRestored += 1
         }
 
+        // 6. Learned payment channels: by id, then by merchant + funding account (one rule per pair). Newer wins.
+        let existingChannelRules = (try? context.fetch(FetchDescriptor<ChannelRule>())) ?? []
+        var channelRulesById = Dictionary(existingChannelRules.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var channelRulesByKey = Dictionary(existingChannelRules.map { ($0.merchantKey + "|" + $0.fundingKey, $0) }, uniquingKeysWith: { first, _ in first })
+        for cDTO in payload.channelRules ?? [] {
+            let key = cDTO.merchantKey + "|" + cDTO.fundingKey
+            if let rule = channelRulesById[cDTO.id] ?? channelRulesByKey[key] {
+                guard cDTO.updatedAt >= rule.updatedAt else { continue }
+                rule.channelRaw = cDTO.channelRaw
+                rule.hitCount = cDTO.hitCount
+                rule.updatedAt = cDTO.updatedAt
+            } else {
+                let created = ChannelRule(id: cDTO.id, merchantKey: cDTO.merchantKey, fundingKey: cDTO.fundingKey, channelRaw: cDTO.channelRaw,
+                                          hitCount: cDTO.hitCount, createdAt: cDTO.createdAt, updatedAt: cDTO.updatedAt)
+                context.insert(created)
+                channelRulesById[cDTO.id] = created
+                channelRulesByKey[key] = created
+            }
+        }
+
+        // 7. Settlements and the sample-data register (version 4). Matched by id; nothing on the device is removed.
+        let existingAllocations = (try? context.fetch(FetchDescriptor<SettlementAllocation>())) ?? []
+        let allocationIDs = Set(existingAllocations.map(\.id))
+        for a in payload.settlementAllocations ?? [] where !allocationIDs.contains(a.id) {
+            context.insert(SettlementAllocation(id: a.id, groupID: a.groupID, kind: SettlementAllocation.Kind(rawValue: a.kindRaw) ?? .payment,
+                                                paymentID: a.paymentID, expenseID: a.expenseID, loanID: a.loanID, personID: a.personID,
+                                                direction: a.direction, amountMinor: a.amountMinor, currency: a.currency, date: a.date,
+                                                createdAt: a.createdAt))
+            summary.settlementsRestored += 1
+        }
+        let existingSample = Set(((try? context.fetch(FetchDescriptor<SampleDataRecord>())) ?? []).map(\.recordID))
+        for r in payload.sampleRecords ?? [] where !existingSample.contains(r.recordID) {
+            if let entity = SampleDataRecord.Entity(rawValue: r.entityRaw) {
+                context.insert(SampleDataRecord(recordID: r.recordID, entity: entity, createdAt: r.createdAt))
+            }
+        }
+
         return summary
     }
 
@@ -1629,5 +1719,253 @@ public final class UserDataBackupService {
         if let externalId = dto.externalTransactionId { expense.externalTransactionId = externalId }
         if let matchingConfidence = dto.matchingConfidence { expense.matchingConfidence = matchingConfidence }
         if let updated = dto.updatedAt { expense.updatedAt = updated }
+    }
+}
+
+extension UserDataBackupService {
+    /// A local backup for UI tests, made "now": 7 expenses spread so that each restore range finds a different
+    /// number (7 days: 3, 30 days: 4, 2 months: 5, 3 months: 6, everything: 7). Dated relative to today so the
+    /// restored expenses also appear in the app's own "Last 7 Days" view.
+    static func uiTestBackupFixture() -> BackupPayload? {
+        guard let container = try? ModelContainer(for: ExpenseDataContainer.currentSchema,
+                                                  configurations: [ModelConfiguration(schema: ExpenseDataContainer.currentSchema, isStoredInMemoryOnly: true)]) else { return nil }
+        let context = ModelContext(container)
+        let reference = Date()
+        let maybank = Account(name: "Maybank", type: .bank)
+        context.insert(maybank)
+        for (merchant, daysAgo) in [("Fixture Today", 0), ("Fixture Two Days", 2), ("Fixture Six Days", 6), ("Fixture Twenty Days", 20),
+                                    ("Fixture Fifty Days", 50), ("Fixture Eighty Days", 80), ("Fixture Old", 200)] {
+            let expense = Expense(amount: 10, merchant: merchant, paymentSource: .maybank,
+                                  date: reference.addingTimeInterval(TimeInterval(-daysAgo * 86_400)), fundingAccount: "Maybank")
+            if daysAgo == 0 { expense.account = maybank }
+            context.insert(expense)
+        }
+        try? context.save()
+        let built = makePayload(from: context)
+        var payload = BackupPayload(version: built.version, appName: built.appName, accountName: built.accountName,
+                                    exportDate: reference, expenses: built.expenses, paybookProfiles: built.paybookProfiles)
+        payload.accounts = built.accounts
+        payload.moneyMovements = built.moneyMovements
+        payload.classificationRules = built.classificationRules
+        return payload
+    }
+}
+
+// MARK: - Restore with a date range (full snapshot in, filtered merge out)
+
+/// Which part of a full backup to restore. Ranges are whole calendar days ending on the backup's own day,
+/// so the same backup always gives the same range no matter when the restore runs.
+public enum RestoreRange: Hashable {
+    case everything
+    case lastDays(Int)
+    case lastMonths(Int)
+    /// Inclusive start and end days (time of day is ignored).
+    case custom(start: Date, end: Date)
+
+    public static let last7Days = RestoreRange.lastDays(7)
+    public static let last30Days = RestoreRange.lastDays(30)
+    public static let last2Months = RestoreRange.lastMonths(2)
+    public static let last3Months = RestoreRange.lastMonths(3)
+
+    public var title: String {
+        switch self {
+        case .everything: return "Everything"
+        case .lastDays(let n): return "Last \(n) days"
+        case .lastMonths(let n): return "Last \(n) months"
+        case .custom: return "Custom range"
+        }
+    }
+
+    /// Half-open interval [start, end) covering whole days in `calendar`'s time zone; nil means no date filter.
+    /// - Last N days: the backup day and the N − 1 days before it (7 days from 5 Oct = 29 Sep – 5 Oct).
+    /// - Last N months: from the day after the same date N calendar months earlier (2 months from 5 Oct = 6 Aug – 5 Oct;
+    ///   from 31 Mar = 1 Feb – 31 Mar, because Calendar clamps 31 Jan correctly and leap days are respected).
+    public func interval(reference: Date, calendar: Calendar) -> DateInterval? {
+        let referenceDay = calendar.startOfDay(for: reference)
+        guard let afterReferenceDay = calendar.date(byAdding: .day, value: 1, to: referenceDay) else { return nil }
+        switch self {
+        case .everything:
+            return nil
+        case .lastDays(let n):
+            guard let start = calendar.date(byAdding: .day, value: -(max(n, 1) - 1), to: referenceDay) else { return nil }
+            return DateInterval(start: start, end: afterReferenceDay)
+        case .lastMonths(let n):
+            guard let sameDate = calendar.date(byAdding: .month, value: -max(n, 1), to: referenceDay),
+                  let start = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: sameDate)) else { return nil }
+            return DateInterval(start: start, end: afterReferenceDay)
+        case .custom(let startDate, let endDate):
+            let start = calendar.startOfDay(for: startDate)
+            guard let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: endDate)), start < end else { return nil }
+            return DateInterval(start: start, end: end)
+        }
+    }
+
+    /// Custom ranges: start must not be after end. Other ranges are always valid.
+    public func validationProblem(calendar: Calendar) -> String? {
+        guard case .custom(let start, let end) = self else { return nil }
+        if calendar.startOfDay(for: start) > calendar.startOfDay(for: end) { return "The start date must be on or before the end date." }
+        return nil
+    }
+}
+
+public extension DateInterval {
+    /// Membership for half-open day intervals built by `RestoreRange` (the end instant belongs to the next day).
+    func containsRestoreDate(_ date: Date) -> Bool { date >= start && date < end }
+
+    /// "29 Sep 2026 – 5 Oct 2026" (the last included day, not the exclusive end).
+    func restoreDescription(calendar: Calendar) -> String {
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: end) ?? end
+        var style = Date.FormatStyle(date: .abbreviated, time: .omitted)
+        style.timeZone = calendar.timeZone
+        return "\(start.formatted(style)) – \(lastDay.formatted(style))"
+    }
+}
+
+extension UserDataBackupService {
+    /// Ids already on this device, fetched once per type (no per-record queries).
+    public struct LocalRecordIDs {
+        public var expenses = Set<UUID>()
+        public var accounts = Set<UUID>()
+        public var accountNames = Set<String>()
+        public var movements = Set<UUID>()
+        public var profiles = Set<UUID>()
+
+        public init() {}
+
+        public static func fetch(from context: ModelContext) -> LocalRecordIDs {
+            var ids = LocalRecordIDs()
+            ids.expenses = Set(((try? context.fetch(FetchDescriptor<Expense>())) ?? []).map(\.id))
+            let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+            ids.accounts = Set(accounts.map(\.id))
+            ids.accountNames = Set(accounts.compactMap(\.nameKey))
+            ids.movements = Set(((try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []).map(\.id))
+            ids.profiles = Set(((try? context.fetch(FetchDescriptor<PayBookProfile>())) ?? []).map(\.id))
+            return ids
+        }
+    }
+
+    public struct RecordCounts: Equatable {
+        public var expenses = 0
+        public var accounts = 0
+        public var movements = 0
+        public var profiles = 0
+        public var rules = 0
+        public var total: Int { expenses + accounts + movements + profiles + rules }
+    }
+
+    /// What a restore will write, computed before anything is written.
+    public struct RestorePlan {
+        public let range: RestoreRange
+        public let interval: DateInterval?
+        /// The filtered backup handed to the existing id-based merge.
+        public let payload: BackupPayload
+        /// Records in `payload`.
+        public let counts: RecordCounts
+        /// Of those, records whose id (or, for accounts, name) is already on this device: merged, never duplicated.
+        public let alreadyOnDevice: RecordCounts
+        /// Money records in the range that point to an expense outside it (the link stays empty unless that expense
+        /// is already on this device; the name snapshot keeps the record readable).
+        public let linksOutsideRange: Int
+        public var isEmpty: Bool { counts.total == 0 }
+    }
+
+    public struct RestoreResult {
+        public let plan: RestorePlan
+        public let summary: ImportSummary
+        /// New records written to this device.
+        public var added: RecordCounts {
+            RecordCounts(expenses: summary.expensesAdded, accounts: summary.accountsAdded, movements: summary.movementsAdded,
+                         profiles: summary.profilesAdded, rules: summary.rulesRestored)
+        }
+    }
+
+    /// Builds the plan. Expenses and money records are filtered by their own date; everything they depend on
+    /// (funding accounts by id or name, payers and split people, money-record people and accounts, learned
+    /// categories for the restored merchants) comes along whatever its own creation date.
+    public static func makeRestorePlan(from backup: BackupPayload, range: RestoreRange, calendar: Calendar = .current,
+                                       localIDs: LocalRecordIDs = LocalRecordIDs()) -> RestorePlan {
+        let interval = range.interval(reference: backup.exportDate, calendar: calendar)
+        let payload: BackupPayload
+        var linksOutside = 0
+
+        if range == .everything {
+            payload = backup
+        } else if let interval {
+            let expenses = backup.expenses.filter { interval.containsRestoreDate($0.date) }
+            let movements = (backup.moneyMovements ?? []).filter { interval.containsRestoreDate($0.date) }
+            let expenseIDs = Set(expenses.map(\.id))
+            linksOutside = movements.filter { $0.linkedExpenseId.map { !expenseIDs.contains($0) } ?? false }.count
+
+            var accountIDs = Set(expenses.compactMap(\.accountId))
+            accountIDs.formUnion(movements.compactMap(\.accountId))
+            accountIDs.formUnion(movements.compactMap(\.counterAccountId))
+            let fundingNames = Set(expenses.compactMap { AccountLinker.normalizedKey($0.fundingAccount) })
+
+            // Rules are stored under the recognised merchant's name or the merchant text itself.
+            let merchantKeys = Set(expenses.flatMap { [TransactionClassifier.ruleKey($0.merchant), TransactionClassifier.merchantKey($0.merchant)].compactMap { $0 } })
+            let rules = (backup.classificationRules ?? []).filter { merchantKeys.contains($0.merchantKey) }
+            accountIDs.formUnion(rules.compactMap(\.accountId))
+
+            let accounts = (backup.accounts ?? []).filter {
+                accountIDs.contains($0.id) || (AccountLinker.normalizedKey($0.name).map(fundingNames.contains) ?? false)
+            }
+
+            var personIDs = Set(expenses.compactMap(\.payerId))
+            personIDs.formUnion(expenses.flatMap { ($0.shares ?? []).compactMap(\.personId) })
+            personIDs.formUnion(movements.compactMap(\.personId))
+            let profiles = backup.paybookProfiles.filter { personIDs.contains($0.id) }
+
+            var filtered = BackupPayload(version: backup.version, appName: backup.appName, accountName: backup.accountName,
+                                         exportDate: backup.exportDate, expenses: expenses, paybookProfiles: profiles)
+            filtered.accounts = backup.accounts == nil ? nil : accounts
+            filtered.moneyMovements = backup.moneyMovements == nil ? nil : movements
+            filtered.classificationRules = backup.classificationRules == nil ? nil : rules
+            filtered.channelRules = backup.channelRules?.filter { merchantKeys.contains($0.merchantKey) }
+            let movementIDs = Set(movements.map(\.id))
+            filtered.settlementAllocations = backup.settlementAllocations?.filter { a in
+                a.paymentID.map(movementIDs.contains) ?? ((a.expenseID.map(expenseIDs.contains) ?? false) || (a.loanID.map(movementIDs.contains) ?? false))
+            }
+            var keptIDs = expenseIDs.union(movementIDs).union(accounts.map(\.id)).union(profiles.map(\.id)).union(rules.map(\.id))
+            keptIDs.formUnion(filtered.settlementAllocations?.map(\.id) ?? [])
+            filtered.sampleRecords = backup.sampleRecords?.filter { keptIDs.contains($0.recordID) }
+            payload = filtered
+        } else {
+            // Invalid custom range: restore nothing.
+            payload = BackupPayload(version: backup.version, appName: backup.appName, accountName: backup.accountName,
+                                    exportDate: backup.exportDate, expenses: [], paybookProfiles: [])
+        }
+
+        let counts = RecordCounts(expenses: payload.expenses.count, accounts: payload.accounts?.count ?? 0,
+                                  movements: payload.moneyMovements?.count ?? 0, profiles: payload.paybookProfiles.count,
+                                  rules: payload.classificationRules?.count ?? 0)
+        let existing = RecordCounts(
+            expenses: payload.expenses.filter { localIDs.expenses.contains($0.id) }.count,
+            accounts: (payload.accounts ?? []).filter {
+                localIDs.accounts.contains($0.id) || (AccountLinker.normalizedKey($0.name).map(localIDs.accountNames.contains) ?? false)
+            }.count,
+            movements: (payload.moneyMovements ?? []).filter { localIDs.movements.contains($0.id) }.count,
+            profiles: payload.paybookProfiles.filter { localIDs.profiles.contains($0.id) }.count,
+            rules: 0)
+        return RestorePlan(range: range, interval: interval, payload: payload, counts: counts,
+                           alreadyOnDevice: existing, linksOutsideRange: linksOutside)
+    }
+
+    /// Merges the plan with the existing id-based merge, then saves once. Nothing is ever deleted: records outside
+    /// the range and records only on this device are untouched. If saving fails, every pending change is rolled
+    /// back so the store is left exactly as it was.
+    @MainActor
+    public static func applyRestorePlan(_ plan: RestorePlan, into context: ModelContext) throws -> RestoreResult {
+        guard BackupPayload.supportedVersions.contains(plan.payload.version) else {
+            throw NSError(domain: "SpenDropBackup", code: 3, userInfo: [NSLocalizedDescriptionKey:
+                "This backup was made by a newer version of SpenDrop (format \(plan.payload.version)). Update the app to restore it. Nothing was restored."])
+        }
+        let summary = applyBackupPayload(plan.payload, into: context)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+        return RestoreResult(plan: plan, summary: summary)
     }
 }

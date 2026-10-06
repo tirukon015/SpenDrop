@@ -47,6 +47,10 @@ public enum CloudError: LocalizedError, Equatable {
     case invalidResponse
     case server(status: Int, message: String)
     case safetyBackupFailed
+    /// Too many sign-in, sign-up or email requests in a short time.
+    case rateLimited
+    /// An email link that expired, was already used, or belongs to an older request.
+    case linkExpired
 
     public var errorDescription: String? {
         switch self {
@@ -63,6 +67,8 @@ public enum CloudError: LocalizedError, Equatable {
         case .invalidResponse: return "The server sent an unexpected response. Please try again."
         case .server(let status, let message): return message.isEmpty ? "Server error (\(status)). Please try again." : message
         case .safetyBackupFailed: return "Couldn't save a safety copy of your current data, so nothing was restored."
+        case .rateLimited: return "Too many attempts. Please wait a few minutes and try again."
+        case .linkExpired: return "This link has expired or was already used. Please request a new one."
         }
     }
 }
@@ -145,6 +151,9 @@ enum CloudJSON {
         if lower.contains("email_not_confirmed") || lower.contains("email not confirmed") { return .emailNotConfirmed }
         if lower.contains("user_already_exists") || lower.contains("already registered") || lower.contains("email_exists") { return .emailAlreadyRegistered }
         if lower.contains("weak_password") || lower.contains("password should") { return .weakPassword(message) }
+        if status == 429 || lower.contains("rate_limit") || lower.contains("rate limit") { return .rateLimited }
+        if lower.contains("otp_expired") || lower.contains("flow_state_expired") || lower.contains("flow_state_not_found") ||
+            lower.contains("bad_code_verifier") || lower.contains("invalid flow state") { return .linkExpired }
         if lower.contains("refresh_token") || lower.contains("jwt expired") || status == 401 { return .sessionExpired }
         return .server(status: status, message: message)
     }

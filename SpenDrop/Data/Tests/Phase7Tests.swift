@@ -19,9 +19,11 @@ public struct Phase7Tests {
                     oldValues == ["APPLE_PAY", "QR_PAYMENT", "BANK_TRANSFER", "CARD", "CASH", "OTHER", "UNKNOWN"] &&
                     newValues == ["DUITNOW_QR", "ONLINE_BANKING", "E_WALLET"] && expense.paymentChannel == .unknown,
                     expected: "unchanged + 3 new + Unknown", actual: "\(newValues) fallback=\(expense.paymentChannel)")
-            t.check("Channel detection never guesses (no text → Unknown; DuitNow QR text keeps its historical QR mapping)",
-                    PaymentChannel.detect(from: "Thank you") == .unknown && PaymentChannel.detect(from: "DuitNow QR payment") == .qrPayment,
-                    expected: "unknown, qrPayment", actual: "\(PaymentChannel.detect(from: "Thank you")), \(PaymentChannel.detect(from: "DuitNow QR payment"))")
+            t.check("Channel detection never guesses (no text → Unknown; 'DuitNow QR' → DuitNow QR; other QR wording → generic QR Payment)",
+                    PaymentChannel.detect(from: "Thank you") == .unknown && PaymentChannel.detect(from: "DuitNow QR payment") == .duitNowQR &&
+                    PaymentChannel.detect(from: "Scan & Pay") == .qrPayment,
+                    expected: "unknown, duitNowQR, qrPayment",
+                    actual: "\(PaymentChannel.detect(from: "Thank you")), \(PaymentChannel.detect(from: "DuitNow QR payment")), \(PaymentChannel.detect(from: "Scan & Pay"))")
         }
 
         // MARK: ClassificationRule
@@ -78,12 +80,13 @@ public struct Phase7Tests {
             ctx.insert(existing)
             try? ctx.save()
             let byRef = MovementDuplicateDetector.findMatch(amountMinor: 1, date: date.addingTimeInterval(9_999_999), reference: "REF-9", kind: .income, in: ctx)
-            let byAmount = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(3600), reference: nil, kind: .income, in: ctx)
+            let byAmount = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(300), reference: nil, kind: .income, in: ctx)
+            let hourLater = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(3600), reference: nil, kind: .income, in: ctx)
             let otherDirection = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date, reference: nil, kind: .otherOut, in: ctx)
             let later = MovementDuplicateDetector.findMatch(amountMinor: 5000, date: date.addingTimeInterval(2 * 86_400), reference: nil, kind: .otherIn, in: ctx)
-            t.check("Movement duplicates: by reference, or same amount+direction within 24h; warns only",
-                    byRef === existing && byAmount === existing && otherDirection == nil && later == nil,
-                    expected: "ref match, amount match, none, none", actual: "\(byRef != nil) \(byAmount != nil) \(otherDirection != nil) \(later != nil)")
+            t.check("Movement duplicates: by reference, or same amount+direction within minutes (not an hour or a day apart); warns only",
+                    byRef === existing && byAmount === existing && hourLater == nil && otherDirection == nil && later == nil,
+                    expected: "ref match, 5-min match, none, none, none", actual: "\(byRef != nil) \(byAmount != nil) \(hourLater != nil) \(otherDirection != nil) \(later != nil)")
 
             let maybank = Account(name: "Maybank", type: .bank)
             ctx.insert(maybank)
@@ -185,8 +188,8 @@ public struct Phase7Tests {
             let summary = decoded.map { UserDataBackupService.applyBackupPayload($0, into: target) }
             try? target.save()
             let rules = TestKit.fetch(ClassificationRule.self, in: target)
-            t.check("Backup V3: rules exported and restored; same merchant merged (no duplicate), newer backup wins",
-                    decoded?.version == 3 && decoded?.classificationRules?.count == 1 && summary?.rulesRestored == 1 &&
+            t.check("Backup V3+: rules exported and restored; same merchant merged (no duplicate), newer backup wins",
+                    decoded?.version == UserDataBackupService.BackupPayload.currentVersion && (decoded?.version ?? 0) >= 3 && decoded?.classificationRules?.count == 1 && summary?.rulesRestored == 1 &&
                     rules.count == 1 && rules.first?.category == .transport,
                     expected: "v3, 1 rule, transport", actual: "v\(decoded?.version ?? 0) rules=\(rules.count) cat=\(rules.first?.categoryRaw ?? "nil")")
 
@@ -235,6 +238,195 @@ public struct Phase7Tests {
                     passed, expected: "everything kept + rule saved", actual: actual)
         }
 
+        return results
+    }
+}
+
+/// Transaction intelligence: evidence-first category and payment channel, confidence and reasons, learned
+/// corrections (category per merchant; channel per merchant AND funding account), safe merchant normalization,
+/// and backup of the learned channel rules. Isolated in-memory stores only. `--run-classifier-tests`
+@MainActor
+public enum ClassifierTests {
+    public static func runAllTests() -> [TestCaseResult] {
+        var results: [TestCaseResult] = []
+        let t = TestKit(suite: "Classifier") { results.append($0) }
+        let parser = TransactionParser.shared
+        func parse(_ lines: [String], confidence: Float = 1) -> ParsedTransaction {
+            parser.parse(ocrResult: PDFReceiptImporter.ocrResult(from: lines, confidence: confidence))
+        }
+        func evidence(_ p: ParsedTransaction) -> CategorySuggestion {
+            CategorySuggestion(category: p.category ?? .other, confidence: p.category == nil ? 0 : p.categoryConfidence, reason: p.categoryReason ?? "")
+        }
+
+        // 1. Evaluation set (25 synthetic receipts). Before this change: category 21/25 (4 confidently wrong),
+        //    channel 14/25 (9 wrong non-Unknown), funding 24/25, merchant 23/25.
+        let empty = TestKit.context()
+        let score = ClassifierEvaluation.score { lines in
+            let p = parse(lines)
+            let (category, _) = TransactionClassifier.suggestion(merchant: p.merchant, parsed: evidence(p), in: empty)
+            return .init(merchant: p.merchant, category: category.category, categoryConfident: !category.needsReview,
+                         channel: p.paymentChannel, funding: p.displayFundingAccount)
+        }
+        t.check("Evaluation set: every category, channel, funding account and merchant correct; no confidently wrong category; no wrong channel guessed",
+                score.category == score.total && score.channel == score.total && score.funding == score.total && score.merchant == score.total &&
+                score.confidentWrongCategory == 0 && score.wrongChannelNotUnknown == 0,
+                expected: "25/25 on all, 0 confident-wrong, 0 wrong channels", actual: "\(score) \(score.misses)")
+
+        // 2. Merchant normalization: variants match, look-alike names don't
+        let normalized = ClassifierEvaluation.normalization.filter { MerchantDetector.knownMerchant(for: $0.raw)?.name != $0.expected }
+        t.check("Merchant normalization: MCD/McD/MCDONALDS → McDonald's, 7ELEVEN → 7-Eleven, LOTUSS → Lotus's; MCDERMOTT, SHELLY, DIGITAL, ATMOS, AMAZARA, TMART are not matched",
+                normalized.isEmpty, expected: "18/18", actual: "wrong: \(normalized.map(\.raw))")
+
+        // 3. Category: evidence only
+        let tngUnknown = parse(ClassifierEvaluation.tng("Payment", "AH SENG ENTERPRISE"))
+        let grab = CategoryDetector.suggest(merchant: "GRAB", receiptText: "GRAB\nPayment")
+        let grabFood = CategoryDetector.suggest(merchant: "GRAB", receiptText: "GRAB\nFood delivery order")
+        let smart = CategoryDetector.suggest(merchant: "SMART BUSINESS PROVIDER", receiptText: "SMART BUSINESS PROVIDER")
+        let mcd = CategoryDetector.suggest(merchant: "MCD BANGSAR", receiptText: "MCD BANGSAR")
+        let warung = CategoryDetector.suggest(merchant: "WARUNG MAK LONG", receiptText: "WARUNG MAK LONG")
+        let receiptOnly = CategoryDetector.suggest(merchant: "AH SENG", receiptText: "AH SENG\nNasi lemak ayam")
+        t.check("Category: Touch 'n Go is never category evidence (unknown merchant → Other, needs review); known merchant → confident; name words → likely; receipt words only → suggestion",
+                (tngUnknown.category ?? .other) == .other && evidence(tngUnknown).needsReview &&
+                mcd.category == .food && !mcd.needsReview && warung.category == .food && !warung.needsReview &&
+                receiptOnly.category == .food && receiptOnly.needsReview,
+                expected: "Other?/Food/Food/Food?", actual: "\(tngUnknown.category?.rawValue ?? "nil") \(mcd) \(warung) \(receiptOnly)")
+        t.check("Category: plain 'Grab' is ambiguous (needs review) unless the receipt says what it was; 'SMART BUSINESS' is not Groceries ('mart') or Transport ('bus')",
+                grab.needsReview && grabFood.category == .food && grabFood.needsReview && smart.category == .other && smart.needsReview,
+                expected: "Grab?/Food?/Other", actual: "\(grab) \(grabFood) \(smart)")
+
+        // 4. Payment channel: evidence only; the funding account never decides it
+        let tngPay = parse(ClassifierEvaluation.tng("Payment", "MCDONALD'S BANGSAR"))
+        let tngQR = parse(ClassifierEvaluation.tng("Touch 'n Go QR", "WARUNG MAK LONG"))
+        let tngDuit = parse(ClassifierEvaluation.tng("DuitNow QR", "NASI KANDAR PELITA"))
+        let tngOnline = parse(ClassifierEvaluation.tng("Online Payment", "SHOPEE MALAYSIA"))
+        let bankNone = parse(["Maybank", "Successful", "RM 42.50", "Recipient", "KEDAI MAKAN SELERA", "Reference ID", "MB12345678"])
+        t.check("Channel: Touch 'n Go without channel wording → Unknown (never Online or DuitNow QR); 'Touch 'n Go QR' → TNG QR; 'DuitNow QR' → DuitNow QR; 'Online Payment' → Online",
+                tngPay.paymentChannel == .unknown && tngPay.displayFundingAccount == "Touch 'n Go" &&
+                tngQR.paymentChannel == .tngQR && tngDuit.paymentChannel == .duitNowQR && tngOnline.paymentChannel == .other,
+                expected: "unknown, TNG_QR, DUITNOW_QR, OTHER", actual: "\(tngPay.paymentChannel) \(tngQR.paymentChannel) \(tngDuit.paymentChannel) \(tngOnline.paymentChannel)")
+        t.check("Channel: a bank receipt without channel wording → Unknown with a reason (the bank is the funding account, not evidence of a transfer)",
+                bankNone.paymentChannel == .unknown && bankNone.displayFundingAccount == "Maybank" && (bankNone.channelReason?.isEmpty == false),
+                expected: "unknown + reason, Maybank", actual: "\(bankNone.paymentChannel) \(bankNone.channelReason ?? "nil") \(bankNone.displayFundingAccount)")
+
+        // 5. Conflicts: the strongest evidence wins; funding and channel stay separate
+        let applePay = parse(["Apple Pay", "STARBUCKS PAVILION", "RM 18.50", "Maybank Visa Debit", "Status: Approved"])
+        let card = parse(["Maybank", "Card Purchase", "Maybank Visa Debit", "RM 32.90", "Merchant", "UNIQLO MID VALLEY", "Approval Code 123456"])
+        let qrOverTransfer = PaymentChannel.suggest(evidenceText: "DuitNow QR\nfund transfer")
+        t.check("Conflicts: Apple Pay with a Maybank card → Apple Pay / Maybank; card purchase on a bank receipt → Card (not Bank Transfer); DuitNow QR beats transfer wording",
+                applePay.paymentChannel == .applePay && applePay.displayFundingAccount == "Maybank" &&
+                card.paymentChannel == .card && card.displayFundingAccount == "Maybank" && qrOverTransfer.channel == .duitNowQR,
+                expected: "APPLE_PAY/Maybank, CARD/Maybank, DUITNOW_QR",
+                actual: "\(applePay.paymentChannel)/\(applePay.displayFundingAccount) \(card.paymentChannel)/\(card.displayFundingAccount) \(qrOverTransfer.channel)")
+
+        // 6. Low-confidence OCR lines are not channel evidence
+        let blurry = parser.parse(ocrResult: OCRResult(fullText: "Maybank\nSuccessful\nRM 9.00\nDuitNow QR\nRecipient\nAH SENG",
+                                                       lines: [RecognizedTextLine(text: "Maybank", confidence: 0.95), RecognizedTextLine(text: "Successful", confidence: 0.95),
+                                                               RecognizedTextLine(text: "RM 9.00", confidence: 0.95), RecognizedTextLine(text: "DuitNow QR", confidence: 0.3),
+                                                               RecognizedTextLine(text: "Recipient", confidence: 0.95), RecognizedTextLine(text: "AH SENG", confidence: 0.95)],
+                                                       averageConfidence: 0.85))
+        let clear = parse(["Maybank", "Successful", "RM 9.00", "DuitNow QR", "Recipient", "AH SENG"], confidence: 0.95)
+        t.check("A channel word read with low OCR confidence is ignored (Unknown); read clearly it counts",
+                blurry.paymentChannel == .unknown && clear.paymentChannel == .duitNowQR,
+                expected: "unknown, DUITNOW_QR", actual: "\(blurry.paymentChannel) \(clear.paymentChannel)")
+
+        // 7. Learned categories: corrections teach; old transactions are never rewritten
+        let ctx = TestKit.context()
+        let old = Expense(amount: 12, merchant: "AH SENG ENTERPRISE", category: .other, date: Date(), fundingAccount: "Touch 'n Go")
+        let oldMcd = Expense(amount: 9, merchant: "MCD BANGSAR", category: .food, date: Date(), fundingAccount: "Maybank")
+        ctx.insert(old); ctx.insert(oldMcd); try? ctx.save()
+        TransactionClassifier.learn(merchant: "AH SENG ENTERPRISE", category: .food, in: ctx)
+        let once = TransactionClassifier.suggestion(merchant: "AH SENG ENTERPRISE", parsed: evidence(tngUnknown), in: ctx)
+        TransactionClassifier.learn(merchant: "McDonald's", category: .shopping, in: ctx)
+        let mcdOnce = TransactionClassifier.suggestion(merchant: "MCD BANGSAR", parsed: mcd, in: ctx)
+        TransactionClassifier.learn(merchant: "MCDONALDS", category: .shopping, in: ctx)
+        let mcdTwice = TransactionClassifier.suggestion(merchant: "MCD BANGSAR", parsed: mcd, in: ctx)
+        try? ctx.save()
+        t.check("Learned category: one correction applies to a merchant with no evidence of its own; it overrides a known merchant only after two confirmations (shared across MCD / McDonald's / MCDONALDS)",
+                once.0.category == .food && once.1 == .learned && mcdOnce.0.category == .food && mcdOnce.1 != .learned &&
+                mcdTwice.0.category == .shopping && mcdTwice.1 == .learned && !mcdTwice.0.needsReview,
+                expected: "Food(learned), Food(evidence), Shopping(learned)", actual: "\(once) \(mcdOnce) \(mcdTwice)")
+        t.check("Learning never rewrites saved transactions: the earlier expenses keep their categories",
+                old.category == .other && oldMcd.category == .food && TestKit.count(Expense.self, in: ctx) == 2,
+                expected: "Other, Food, 2 expenses", actual: "\(old.category) \(oldMcd.category) \(TestKit.count(Expense.self, in: ctx))")
+
+        // 8. Learned channels: per merchant AND funding account, only when the receipt is silent
+        ChannelLearning.learn(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", channel: .duitNowQR, in: ctx)
+        let channelOnce = ChannelLearning.suggestion(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", detected: .unknown, in: ctx)
+        ChannelLearning.learn(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", channel: .duitNowQR, in: ctx)
+        let channelTwice = ChannelLearning.suggestion(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", detected: .unknown, in: ctx)
+        let otherFunding = ChannelLearning.suggestion(merchant: "AH SENG ENTERPRISE", funding: "Maybank", detected: .unknown, in: ctx)
+        let otherMerchant = ChannelLearning.suggestion(merchant: "JAYA GROCER", funding: "Touch 'n Go", detected: .unknown, in: ctx)
+        let receiptSaysCard = ChannelLearning.suggestion(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", detected: .card, in: ctx)
+        t.check("Learned channel: suggested only after two same choices, only for that merchant + funding account (no global 'Touch 'n Go = DuitNow QR'), never over receipt evidence",
+                channelOnce == nil && channelTwice?.channel == .duitNowQR && otherFunding == nil && otherMerchant == nil && receiptSaysCard == nil,
+                expected: "nil, DUITNOW_QR, nil, nil, nil",
+                actual: "\(String(describing: channelOnce?.channel)) \(String(describing: channelTwice?.channel)) \(String(describing: otherFunding)) \(String(describing: otherMerchant)) \(String(describing: receiptSaysCard))")
+        let unknownLearned = ChannelLearning.learn(merchant: "KEDAI X", funding: "Maybank", channel: .unknown, in: ctx)
+        ChannelLearning.learn(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", channel: .tngQR, in: ctx)
+        let corrected = ChannelLearning.rule(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", in: ctx)
+        let afterCorrection = ChannelLearning.suggestion(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", detected: .unknown, in: ctx)
+        t.check("Unknown is never learned; a different choice replaces the rule and restarts its count (no suggestion until confirmed again)",
+                unknownLearned == nil && corrected?.channel == .tngQR && corrected?.hitCount == 1 && afterCorrection == nil &&
+                TestKit.count(ChannelRule.self, in: ctx) == 1,
+                expected: "nil, TNG_QR x1, nil, 1 rule", actual: "\(String(describing: unknownLearned)) \(String(describing: corrected?.channelRaw)) \(String(describing: corrected?.hitCount)) \(TestKit.count(ChannelRule.self, in: ctx))")
+
+        // 9. Backups carry learned channels; restore merges them without duplicates
+        try? ctx.save()
+        let payload = UserDataBackupService.makePayload(from: ctx)
+        let decoded = (try? JSONEncoder().encode(payload)).flatMap { try? JSONDecoder().decode(UserDataBackupService.BackupPayload.self, from: $0) }
+        let fresh = TestKit.context()
+        if let decoded { _ = UserDataBackupService.applyBackupPayload(decoded, into: fresh); _ = UserDataBackupService.applyBackupPayload(decoded, into: fresh) }
+        try? fresh.save()
+        let restored = ChannelLearning.rule(merchant: "AH SENG ENTERPRISE", funding: "Touch 'n Go", in: fresh)
+        t.check("Backup includes learned channel rules; restoring twice gives one rule with the same channel and count",
+                decoded?.channelRules?.count == 1 && restored?.channel == .tngQR && restored?.hitCount == 1 && TestKit.count(ChannelRule.self, in: fresh) == 1,
+                expected: "1 rule, TNG_QR x1", actual: "\(String(describing: decoded?.channelRules?.count)) \(String(describing: restored?.channelRaw)) \(TestKit.count(ChannelRule.self, in: fresh))")
+        var olderFile = payload; olderFile.channelRules = nil
+        let olderDecoded = (try? JSONEncoder().encode(olderFile)).flatMap { try? JSONDecoder().decode(UserDataBackupService.BackupPayload.self, from: $0) }
+        t.check("A backup made before channel learning (no channelRules field) still decodes and restores",
+                olderDecoded != nil && olderDecoded?.channelRules == nil && olderDecoded?.expenses.count == 2,
+                expected: "decodes, 2 expenses", actual: "\(String(describing: olderDecoded?.expenses.count))")
+
+        // 10. Migration V4 → V5 on an on-disk store: only the new ChannelRule table is added; nothing is rewritten
+        do {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SpenDropV5Migration-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let storeURL = dir.appendingPathComponent("default.store")
+            var before: [String: Int] = [:]
+            var snapshot: [UUID: String] = [:]
+            do {
+                let v4 = Schema(versionedSchema: SpenDropSchemaV4.self)
+                if let container = try? ModelContainer(for: v4, configurations: [ModelConfiguration(schema: v4, url: storeURL)]) {
+                    let c = ModelContext(container)
+                    let bijoy = PayBookProfile(name: "Bijoy"); c.insert(bijoy)
+                    // Saved with the old classifier's guesses: these must survive exactly as they are.
+                    let qr = Expense(amount: 15, merchant: "TEALIVE KLCC", category: .food, paymentChannel: .qrPayment, fundingAccount: "Maybank"); c.insert(qr)
+                    let transfer = Expense(amount: 42.5, merchant: "KEDAI MAKAN", category: .other, paymentChannel: .bankTransfer, fundingAccount: "Maybank"); c.insert(transfer)
+                    var d = SplitDraft(); d.add(bijoy); d.apply(to: qr, in: c)
+                    c.insert(MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: bijoy))
+                    TransactionClassifier.learn(merchant: "KEDAI MAKAN", category: .food, in: c)
+                    try? c.save()
+                    before = ["Bijoy": PersonLedger.balances(for: bijoy)["RM"] ?? 0]
+                    snapshot = Dictionary(uniqueKeysWithValues: TestKit.fetch(Expense.self, in: c).map { ($0.id, "\($0.categoryRaw)|\($0.paymentChannelRaw)|\($0.amount)|\($0.fundingAccount)") })
+                }
+            }
+            var actual = "open failed"
+            var passed = false
+            if let container = try? ExpenseDataContainer.openPersistentContainer(configuration: ModelConfiguration(schema: ExpenseDataContainer.currentSchema, url: storeURL)) {
+                let c = ModelContext(container)
+                let people = Dictionary(TestKit.fetch(PayBookProfile.self, in: c).map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a })
+                let after = people.mapValues { PersonLedger.balances(for: $0)["RM"] ?? 0 }
+                let now = Dictionary(uniqueKeysWithValues: TestKit.fetch(Expense.self, in: c).map { ($0.id, "\($0.categoryRaw)|\($0.paymentChannelRaw)|\($0.amount)|\($0.fundingAccount)") })
+                ChannelLearning.learn(merchant: "KEDAI MAKAN", funding: "Maybank", channel: .duitNowQR, in: c)
+                try? c.save()
+                passed = !snapshot.isEmpty && now == snapshot && after == before && TestKit.count(MoneyMovement.self, in: c) == 1 &&
+                    TestKit.count(ClassificationRule.self, in: c) == 1 && TestKit.count(ChannelRule.self, in: c) == 1
+                actual = "expenses same=\(now == snapshot) before=\(before) after=\(after) rules=\(TestKit.count(ClassificationRule.self, in: c)) channelRules=\(TestKit.count(ChannelRule.self, in: c))"
+            }
+            t.check("Migration V4 → V5 on disk: every expense keeps its category, channel, amount and funding account (old QR/Bank Transfer guesses not rewritten); balances, movements and learned categories kept; the new channel-rule table works",
+                    passed, expected: "identical, 1 rule, 1 channel rule", actual: actual)
+        }
         return results
     }
 }

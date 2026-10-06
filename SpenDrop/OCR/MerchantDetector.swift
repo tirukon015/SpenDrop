@@ -15,6 +15,8 @@ public struct MerchantDetector {
         public let name: String
         public let keywords: [String]
         public let defaultCategory: ExpenseCategory
+        /// The merchant sells several kinds of things (e.g. plain "Grab"): its category is only a suggestion.
+        public var ambiguous: Bool = false
     }
 
     public static let knownMerchants: [KnownMerchant] = [
@@ -32,11 +34,13 @@ public struct MerchantDetector {
         KnownMerchant(name: "Texas Chicken", keywords: ["texas chicken"], defaultCategory: .food),
         KnownMerchant(name: "Marrybrown", keywords: ["marrybrown"], defaultCategory: .food),
         KnownMerchant(name: "The Coffee Bean", keywords: ["coffee bean", "cbtl"], defaultCategory: .food),
-        KnownMerchant(name: "Mamak", keywords: ["mamak", "restoran", "nasi kandar", "pelita", "syed"], defaultCategory: .food),
+        // Generic words such as "restoran", "mamak" or "nasi kandar" are category signals (CategoryDetector), not a merchant.
+        KnownMerchant(name: "Nasi Kandar Pelita", keywords: ["nasi kandar pelita", "restoran nasi kandar pelita", "pelita nasi kandar"], defaultCategory: .food),
 
         // Transport & Rides
         KnownMerchant(name: "Grab", keywords: ["grabcar", "grab ride", "grab taxi", "grab driver", "myteksi"], defaultCategory: .transport),
         KnownMerchant(name: "GrabFood", keywords: ["grabfood", "grab food"], defaultCategory: .food),
+        KnownMerchant(name: "Grab", keywords: ["grab"], defaultCategory: .transport, ambiguous: true),
         KnownMerchant(name: "Foodpanda", keywords: ["foodpanda", "food panda", "delivery hero"], defaultCategory: .food),
         KnownMerchant(name: "Shell", keywords: ["shell petrol", "shell station", "shell"], defaultCategory: .transport),
         KnownMerchant(name: "Petronas", keywords: ["petronas", "mesra"], defaultCategory: .transport),
@@ -47,7 +51,7 @@ public struct MerchantDetector {
 
         // Groceries & Retail
         KnownMerchant(name: "MYDIN", keywords: ["mydin"], defaultCategory: .groceries),
-        KnownMerchant(name: "7-Eleven", keywords: ["7-eleven", "7 eleven", "seven eleven"], defaultCategory: .groceries),
+        KnownMerchant(name: "7-Eleven", keywords: ["7-eleven", "7 eleven", "7eleven", "seven eleven"], defaultCategory: .groceries),
         KnownMerchant(name: "Lotus's", keywords: ["lotus's", "lotuss", "tesco"], defaultCategory: .groceries),
         KnownMerchant(name: "Jaya Grocer", keywords: ["jaya grocer", "trendcell"], defaultCategory: .groceries),
         KnownMerchant(name: "Village Grocer", keywords: ["village grocer", "the food purveyor"], defaultCategory: .groceries),
@@ -192,6 +196,7 @@ public struct MerchantDetector {
             "transaction type", "transfer type", "transfer method", "payment type", "account number",
             "account no", "transfer to", "paid to", "receiver", "recipient", "beneficiary",
             "beneficiary name", "recipient bank", "receiving bank", "recipient bank/e-wallet",
+            "recipient's name", "recipient name", "recipient's bank", "beneficiary's name", "beneficiary's bank", "merchant name",
             "date & time", "date/time", "date", "time", "when", "repeat", "remark", "remarks",
             "duitnow ref no.", "duitnow ref no", "reference no.", "reference no",
             "gong cha", "rm 2 gong cha", "is here on near me!", "near me", "fund transfer"
@@ -322,13 +327,8 @@ public struct MerchantDetector {
         }
 
         // Check if normalized name matches known brand for canonical casing & branding
-        let lower = name.lowercased()
-        for item in knownMerchants {
-            for kw in item.keywords {
-                if lower == kw || lower.contains(kw) || kw.contains(lower) {
-                    return item.name
-                }
-            }
+        if let item = knownMerchant(for: name) {
+            return item.name
         }
 
         return name
@@ -389,7 +389,7 @@ public struct MerchantDetector {
 
         // STRATEGY 2: Explicit Labeled Field (Key-Value)
         let sameLinePatterns = [
-            #"^(?:merchant(?:\s*name)?|payee(?:\s*name)?|beneficiary(?:\s*name)?|recipient(?:\s*name)?|receiver(?:\s*name)?|paid\s*to|pay\s*to|store|shop)\s*[:\-]\s*(.+)$"#,
+            #"^(?:merchant(?:\s*name)?|payee(?:\s*name)?|beneficiary(?:['’]s)?(?:\s*name)?|recipient(?:['’]s)?(?:\s*name)?|receiver(?:['’]s)?(?:\s*name)?|paid\s*to|pay\s*to|store|shop)\s*[:\-]\s*(.+)$"#,
             #"^(?:nama\s*penerima|diterima\s*oleh|kepada|penerima)\s*[:\-]\s*(.+)$"#,
             #"^to\s*[:\-]\s*(.+)$"#,
             #"\b(?:payment\s+(?:rm|myr)?\s*[0-9.,]+\s+to|paid\s+to|transfer\s+to)\s+([A-Za-z0-9\s&'.()\-]{2,35}?)(?:\s+accepted|\s+successful|\s+on|\.|$)"#
@@ -424,7 +424,7 @@ public struct MerchantDetector {
 
         // Standalone label on line i, value on line i+offset
         let standaloneLabelRegex = try? NSRegularExpression(
-            pattern: #"^(?:merchant(?:\s*name)?|payee(?:\s*name)?|beneficiary(?:\s*name)?|recipient(?:\s*name)?|receiver(?:\s*name)?|paid\s*to|pay\s*to|transfer\s*to|to|store|shop|kepada|penerima|nama\s*penerima)\s*[:\-]?$"#,
+            pattern: #"^(?:merchant(?:\s*name)?|payee(?:\s*name)?|beneficiary(?:['’]s)?(?:\s*name)?|recipient(?:['’]s)?(?:\s*name)?|receiver(?:['’]s)?(?:\s*name)?|paid\s*to|pay\s*to|transfer\s*to|to|store|shop|kepada|penerima|nama\s*penerima)\s*[:\-]?$"#,
             options: [.caseInsensitive]
         )
         if let regex = standaloneLabelRegex {
@@ -502,14 +502,34 @@ public struct MerchantDetector {
     }
 
     private static func categoryForMerchant(_ name: String) -> ExpenseCategory? {
-        let lower = name.lowercased()
+        guard let item = knownMerchant(for: name), !item.ambiguous else { return nil }
+        return item.defaultCategory
+    }
+
+    /// The known merchant a name refers to, matching whole words only: "MCD" and "McDonald's Bangsar" are
+    /// McDonald's, but "MCDERMOTT LAW", "SHELLY BEAUTY", "DIGITAL STORE" and "ATMOS CAFE" are not.
+    public static func knownMerchant(for name: String?) -> KnownMerchant? {
+        guard let name else { return nil }
+        let text = " " + normalizedWords(name) + " "
+        guard text.trimmingCharacters(in: .whitespaces).count >= 2 else { return nil }
         for item in knownMerchants {
-            for kw in item.keywords {
-                if lower.contains(kw) || kw.contains(lower) {
-                    return item.defaultCategory
-                }
+            for keyword in item.keywords {
+                let kw = normalizedWords(keyword)
+                guard !kw.isEmpty else { continue }
+                if text.contains(" " + kw + " ") { return item }
             }
         }
         return nil
+    }
+
+    /// Lowercase words separated by single spaces; apostrophes kept inside words ("lotus's"), other
+    /// punctuation becomes a separator except "-" between letters/digits ("7-eleven").
+    static func normalizedWords(_ text: String) -> String {
+        let lowered = text.lowercased().replacingOccurrences(of: "\u{2019}", with: "'")
+        var out = ""
+        for ch in lowered {
+            if ch.isLetter || ch.isNumber || ch == "'" || ch == "-" || ch == "." || ch == "*" { out.append(ch) } else { out.append(" ") }
+        }
+        return out.split(separator: " ").joined(separator: " ")
     }
 }
