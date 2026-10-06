@@ -1,0 +1,11 @@
+{
+  "$comment": "How an expense is divided between participants (expenses.split_method / ExpenseShare). purpose: shared = everyone incl. me shares; paidFor = one side paid entirely for the other.",
+  "methods": [
+    { "id": "equal",   "label": "Split Equally" },
+    { "id": "parts",   "label": "Parts" },
+    { "id": "amounts", "label": "Custom Amount" }
+  ],
+  "purposes": ["shared", "paidFor"],
+  "maxParts": 99,
+  "autoCalculateDefault": true
+}

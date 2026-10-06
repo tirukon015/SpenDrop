@@ -1,0 +1,5 @@
+{
+  "$comment": "Money is always stored as integer minor units (sen). The app currently records Malaysian Ringgit with the code 'RM' (as stored by iOS). Other currencies are never added together.",
+  "default": "RM",
+  "currencies": [ { "code": "RM", "iso4217": "MYR", "symbol": "RM", "minorUnits": 2 } ]
+}

@@ -1,0 +1,17 @@
+{
+  "$comment": "HOW a payment was made. Never a funding account and never the login account. Raw values are the values stored by iOS (PaymentChannel.rawValue) and in the cloud (expenses.payment_channel). UNKNOWN is explicit and valid: never guess a channel without evidence.",
+  "default": "UNKNOWN",
+  "channels": [
+    { "id": "APPLE_PAY",      "label": "Apple Pay",      "icon": "apple.logo",             "tint": "primary" },
+    { "id": "QR_PAYMENT",     "label": "QR Payment",     "icon": "qrcode",                 "tint": "indigo" },
+    { "id": "DUITNOW_QR",     "label": "DuitNow QR",     "icon": "qrcode.viewfinder",      "tint": "pink" },
+    { "id": "TNG_QR",         "label": "Touch 'n Go QR", "icon": "qrcode",                 "tint": "blue" },
+    { "id": "BANK_TRANSFER",  "label": "Bank Transfer",  "icon": "arrow.left.arrow.right", "tint": "teal" },
+    { "id": "ONLINE_BANKING", "label": "Online Banking", "icon": "globe",                  "tint": "cyan" },
+    { "id": "CARD",           "label": "Card",           "icon": "creditcard.fill",        "tint": "purple" },
+    { "id": "E_WALLET",       "label": "E-Wallet",       "icon": "iphone",                 "tint": "blue" },
+    { "id": "CASH",           "label": "Cash",           "icon": "banknote.fill",          "tint": "green" },
+    { "id": "OTHER",          "label": "Other",          "icon": "ellipsis.circle",        "tint": "orange" },
+    { "id": "UNKNOWN",        "label": "Unknown",        "icon": "questionmark.circle",    "tint": "gray" }
+  ]
+}

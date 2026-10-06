@@ -1,0 +1,14 @@
+{
+  "$comment": "Money that is not an expense. direction: in / out / internal (own transfer, never counted as income or spending). personBalanceSign: effect on the balance with a PayBook person (+1 = they owe me more, -1 = I owe them more / they owe me less, 0 = no person).",
+  "kinds": [
+    { "id": "income",            "label": "Income",             "direction": "in",       "personBalanceSign": 0 },
+    { "id": "loanReceived",      "label": "Loan received",      "direction": "in",       "personBalanceSign": -1 },
+    { "id": "repaymentReceived", "label": "Repayment received", "direction": "in",       "personBalanceSign": -1 },
+    { "id": "refund",            "label": "Refund",             "direction": "in",       "personBalanceSign": 0 },
+    { "id": "otherIn",           "label": "Other money in",     "direction": "in",       "personBalanceSign": 0 },
+    { "id": "loanGiven",         "label": "Loan given",         "direction": "out",      "personBalanceSign": 1 },
+    { "id": "repaymentMade",     "label": "Repayment made",     "direction": "out",      "personBalanceSign": 1 },
+    { "id": "otherOut",          "label": "Other money out",    "direction": "out",      "personBalanceSign": 0 },
+    { "id": "ownTransfer",       "label": "Own transfer",       "direction": "internal", "personBalanceSign": 0 }
+  ]
+}

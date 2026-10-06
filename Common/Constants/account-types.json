@@ -1,0 +1,10 @@
+{
+  "$comment": "Funding account types (WHERE the money came from). A funding account is never the SpenDrop login account and never a payment channel.",
+  "types": [
+    { "id": "bank",    "label": "Bank" },
+    { "id": "eWallet", "label": "E-Wallet" },
+    { "id": "cash",    "label": "Cash" },
+    { "id": "other",   "label": "Other" }
+  ],
+  "commonFundingAccounts": ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
+}

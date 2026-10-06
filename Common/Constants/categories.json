@@ -1,0 +1,18 @@
+{
+  "$comment": "Expense categories. Raw values are stored by iOS (ExpenseCategory.rawValue) and in expenses.category. Icons are SF Symbol names; each platform maps them to its closest equivalent.",
+  "default": "Other",
+  "categories": [
+    { "id": "Food",          "icon": "fork.knife",         "tint": "orange" },
+    { "id": "Groceries",     "icon": "cart.fill",          "tint": "green" },
+    { "id": "Transport",     "icon": "car.fill",           "tint": "blue" },
+    { "id": "Shopping",      "icon": "bag.fill",           "tint": "pink" },
+    { "id": "Bills",         "icon": "bolt.fill",          "tint": "red" },
+    { "id": "Entertainment", "icon": "tv.fill",            "tint": "purple" },
+    { "id": "Education",     "icon": "book.fill",          "tint": "indigo" },
+    { "id": "Health",        "icon": "heart.fill",         "tint": "mint" },
+    { "id": "Travel",        "icon": "airplane",           "tint": "teal" },
+    { "id": "Personal",      "icon": "person.fill",        "tint": "cyan" },
+    { "id": "Subscription",  "icon": "repeat.circle.fill", "tint": "yellow" },
+    { "id": "Other",         "icon": "ellipsis.circle.fill", "tint": "gray" }
+  ]
+}
