@@ -6,6 +6,7 @@
 > the native **iOS** app ([`iOS/`](iOS)), the responsive **Web App** ([`WebApp/`](WebApp)), shared contracts and
 > business rules ([`Common/`](Common)), the Supabase backend ([`Supabase/`](Supabase)) and documentation ([`Docs/`](Docs)).
 > See [`Docs/Repository-Structure.md`](Docs/Repository-Structure.md) and [`Docs/Architecture.md`](Docs/Architecture.md).
+> **SpenDrop Web:** https://spendrop.vercel.app (setup: [`Docs/WebApp-Setup.md`](Docs/WebApp-Setup.md)).
 >
 > Full engineering documentation, security review, test evidence and case study: [`Docs/SPENDROP_DOCUMENTATION.md`](Docs/SPENDROP_DOCUMENTATION.md)
 > Optional account & cloud backup setup: [`Docs/SUPABASE_SETUP.md`](Docs/SUPABASE_SETUP.md)

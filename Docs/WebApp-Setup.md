@@ -45,8 +45,9 @@ tables, policies, two functions and a private `receipts` bucket; it does not mod
 Add these to **Redirect URLs** (keep the existing iOS `spendrop://auth-callback`):
 
 ```
-https://<your-vercel-domain>/auth/callback
-https://<your-vercel-domain>/auth/confirm
+https://spendrop.vercel.app/auth/callback
+https://spendrop.vercel.app/auth/confirm
+https://spendrop-*-rpoms.vercel.app/auth/callback     (preview deployments, optional)
 http://localhost:3000/auth/callback
 ```
 
@@ -57,6 +58,9 @@ Optional: set **Site URL** to the Web App's production URL if you want email lin
 Web App by default. Leave it as is to keep the iOS behaviour unchanged.
 
 ## Deploy (Vercel)
+
+**Live:** https://spendrop.vercel.app — Vercel project `spendrop` (team RPOMS), connected to `tirukon015/SpenDrop`,
+root directory `WebApp`. Every push to `master` deploys to production; other branches get preview URLs.
 
 - Project root directory: **`WebApp`** (framework: Next.js, build: `npm run build`).
 - Environment variables (Production + Preview), public values only:

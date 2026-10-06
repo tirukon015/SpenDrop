@@ -7,8 +7,9 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: true,
   reporter: [["list"]],
-  use: { baseURL: "http://localhost:3100", trace: "retain-on-failure" },
-  webServer: {
+  // E2E_BASE_URL=https://spendrop.vercel.app npx playwright test -g @public  → checks the live site (no sign-in).
+  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3100", trace: "retain-on-failure" },
+  webServer: process.env.E2E_BASE_URL ? undefined : {
     command: "NEXT_PUBLIC_SPENDROP_DEMO=1 npm run build && NEXT_PUBLIC_SPENDROP_DEMO=1 npx next start -p 3100",
     url: "http://localhost:3100/login",
     reuseExistingServer: true,
