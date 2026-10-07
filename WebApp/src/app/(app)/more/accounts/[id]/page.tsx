@@ -33,7 +33,7 @@ export default function AccountDetailPage() {
         const activity = accountActivity(account.id, account.currency, live.expenses, live.movements);
         return (
           <>
-            <PageHeader title={account.name} back={{ href: "/more/accounts", label: "Accounts" }}
+            <PageHeader title={account.name} back={{ href: "/more/accounts", label: "Bank Accounts" }}
               actions={<Button size="sm" variant="tinted" onClick={() => setEditing(true)}><Pencil aria-hidden className="size-4" /> Edit</Button>} />
             <Page className="flex max-w-3xl flex-col gap-5">
               <div className="grid grid-cols-3 gap-3">
