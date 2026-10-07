@@ -23,7 +23,7 @@ fun MoreScreen(openAccount: () -> Unit, openAccounts: () -> Unit, openSettings: 
             item {
                 SDCard { ListRow("Account", subtitle = "Optional sign-in for cloud backup", icon = Icons.Filled.AccountCircle, chevron = true, onClick = openAccount) }
                 Spacer(Modifier.height(16.dp))
-                SDCard { ListRow("Accounts", subtitle = "Recorded money in and out per account", icon = Icons.Filled.AccountBalance, chevron = true, onClick = openAccounts) }
+                SDCard { ListRow("Bank Accounts", subtitle = "Banks, e-wallets and cash · money in and out", icon = Icons.Filled.AccountBalance, chevron = true, onClick = openAccounts) }
                 Spacer(Modifier.height(16.dp))
                 SDCard { ListRow("Settings", subtitle = "Backup & restore, preferences, diagnostics, about", icon = Icons.Filled.Settings, iconTint = SD.colors.gray, chevron = true, onClick = openSettings) }
             }
