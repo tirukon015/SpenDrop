@@ -49,43 +49,6 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
-            // USER ACCOUNT
-            Section(header: Text("Account")) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.blue, Color.indigo],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 50, height: 50)
-
-                        Text("TR")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(UserDataBackupService.defaultAccountName)
-                                .font(.headline)
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.blue)
-                        }
-
-                        Text(UserDataBackupService.defaultAccountEmail)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-
             // BACKUP & RESTORE
             Section(header: Text("Backup & Data Recovery")) {
                 HStack {
@@ -313,6 +276,20 @@ public struct SettingsView: View {
                     Text("SpenDrop")
                         .foregroundStyle(.secondary)
                 }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Developer")
+                        Spacer()
+                        Text("Touhidul Islam Rukon")
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("SpenDrop is designed and built by Touhidul Islam Rukon.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .padding(.vertical, 2)
 
                 HStack {
                     Text("Version")

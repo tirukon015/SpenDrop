@@ -85,7 +85,7 @@ final class SpenDropUITests: XCTestCase {
     private func addAccount(_ name: String) {
         tab("More")
         app.buttons["more.accounts"].tap()
-        let add = app.navigationBars["Accounts"].buttons["Add Account"]
+        let add = app.navigationBars["Bank Accounts"].buttons["Add Account"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
         let field = app.textFields["Name (e.g. Maybank)"]
@@ -94,7 +94,7 @@ final class SpenDropUITests: XCTestCase {
         field.typeText(name)
         app.navigationBars["New Account"].buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
-        app.navigationBars["Accounts"].buttons.element(boundBy: 0).tap()   // back to More
+        app.navigationBars["Bank Accounts"].buttons.element(boundBy: 0).tap()   // back to More
     }
 
     func test01_FiveTabsInOrder() {
@@ -499,7 +499,7 @@ final class SpenDropUITests: XCTestCase {
         if (autoCalc.value as? String) == "1" { autoCalc.switches.firstMatch.exists ? autoCalc.switches.firstMatch.tap() : autoCalc.tap() }
         for (field, value) in [("split.amount.me", "40"), ("split.amount.Bijoy", "30"), ("split.amount.Riyad", "30")] {
             let box = app.textFields[field]
-            for _ in 0..<4 where !box.isHittable { app.swipeDown() }
+            bringIntoView(box)
             box.replaceText(value)
         }
         XCTAssertTrue(app.staticTexts["Bijoy owes you RM 30.00"].waitForExistence(timeout: 5))
@@ -587,13 +587,14 @@ final class SpenDropUITests: XCTestCase {
         XCTAssertEqual(autoCalc.value as? String, "0")
         for (field, value) in [("split.amount.me", "70"), ("split.amount.Vijay", "50"), ("split.amount.Riyadh", "50")] {
             let box = app.textFields[field]
-            for _ in 0..<4 where !box.isHittable { app.swipeDown() }
+            bringIntoView(box)
             box.replaceText(value)
         }
         let problem = app.descendants(matching: .any)["split.problem"]
         XCTAssertTrue(problem.waitForExistence(timeout: 5))
         XCTAssertEqual(problem.label, "RM 30.00 remains unassigned.")
         XCTAssertEqual(app.textFields["split.amount.Riyadh"].value as? String, "50", "nothing redistributed")
+        bringIntoView(app.textFields["split.amount.Riyadh"])
         app.textFields["split.amount.Riyadh"].replaceText("80")
         save = app.buttons["Save Expense"]
         for _ in 0..<5 where !save.isHittable { app.swipeUp() }
@@ -617,6 +618,17 @@ final class SpenDropUITests: XCTestCase {
 
     /// Hybrid Split in Add Expense: RM200; group RM100 divided between Riad + Bijoy; Bijoy +RM20 individual; the rest by
     /// You, Riad and Bijoy → You 26.67, Riad 76.67, Bijoy 96.66. Saved once; Edit restores the Hybrid Split.
+    /// Scrolls slowly until the element sits in the visible middle of the screen (not under the navigation bar or the
+    /// keyboard), so taps land on it on small iPhones and with large text too.
+    private func bringIntoView(_ element: XCUIElement) {
+        let height = app.frame.height
+        let keyboardTop = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY : height - 40
+        for _ in 0..<12 {
+            if element.exists && element.isHittable && element.frame.minY > 150 && element.frame.maxY < keyboardTop - 10 { return }
+            if element.exists && element.frame.minY <= 150 { app.swipeDown(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
+        }
+    }
+
     func test19_HybridSplitInAddExpense() {
         openAdd("Expense")
         typeAmount("200")
@@ -641,28 +653,33 @@ final class SpenDropUITests: XCTestCase {
 
         let groupAmount = app.textFields["split.group1.amount"]
         XCTAssertTrue(groupAmount.waitForExistence(timeout: 5))
+        bringIntoView(groupAmount)
         groupAmount.tap(); groupAmount.typeText("100")
         XCTAssertEqual(problem.label, "Choose who shares group fixed amount 1.")
         for id in ["split.group1.member.Riad", "split.group1.member.Bijoy"] {
             let box = app.buttons[id]
-            for _ in 0..<4 where !box.isHittable { app.swipeUp() }
+            bringIntoView(box)
             box.tap()
             XCTAssertEqual(box.value as? String, "Selected")
         }
         XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 50.00 · Bijoy RM 50.00")
+        snap("Hybrid group card")
 
         let addIndividual = app.buttons["split.addIndividual"]
-        for _ in 0..<4 where !addIndividual.isHittable { app.swipeUp() }
+        bringIntoView(addIndividual)
         addIndividual.tap()
         let personMenu = app.buttons["split.individual1.person"]
         XCTAssertTrue(personMenu.waitForExistence(timeout: 5))
+        bringIntoView(personMenu)
         personMenu.tap()
         let bijoyItem = app.buttons.matching(NSPredicate(format: "label == 'Bijoy' AND NOT (identifier BEGINSWITH 'split.')")).firstMatch
         XCTAssertTrue(bijoyItem.waitForExistence(timeout: 5))
         bijoyItem.tap()
         XCTAssertEqual(problem.label, "Enter the individual fixed amount for Bijoy.")
         let individualAmount = app.textFields["split.individual1.amount"]
+        bringIntoView(individualAmount)
         individualAmount.tap(); individualAmount.typeText("20")
+        snap("Hybrid individual card")
 
         XCTAssertEqual(app.staticTexts["split.hybridRemaining"].label, "RM 80.00")
         XCTAssertFalse(problem.exists, "the split is complete")
@@ -677,7 +694,7 @@ final class SpenDropUITests: XCTestCase {
         snap("Hybrid split")
 
         // Live: a bigger group amount updates everything at once (no Calculate button).
-        for _ in 0..<6 where !groupAmount.isHittable { app.swipeDown() }
+        bringIntoView(groupAmount)
         groupAmount.replaceText("120")
         XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 60.00 · Bijoy RM 60.00")
         XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 100.00")
