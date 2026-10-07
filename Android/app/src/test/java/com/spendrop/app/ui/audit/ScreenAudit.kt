@@ -8,9 +8,12 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
@@ -64,7 +67,14 @@ class ScreenAudit {
         wait("Today"); shot("01_home")
         rule.onNodeWithText("Transactions").performClick(); wait("SPENT"); shot("02_transactions")
         rule.onAllNodesWithText("PayBook").onFirst().performClick(); wait("Owed to you"); shot("03_paybook")
+        rule.onNode(hasScrollToNodeAction()).performTouchInput { swipeUp() }; rule.onNode(hasScrollToNodeAction()).performTouchInput { swipeUp() }; shot("03b_paybook_bottom")
         rule.onNodeWithText("Breakdown").performClick(); wait("TOTAL SPENT"); shot("04_breakdown")
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("BY CATEGORY")); shot("04b_breakdown_daily7")
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Last 30 Days"))
+        rule.onNodeWithText("Last 30 Days").performClick(); rule.waitForIdle()
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("BY CATEGORY")); shot("04c_breakdown_daily30")
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("All records", substring = true)); shot("04d_breakdown_trend")
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Last 7 Days")); rule.onAllNodesWithText("Last 7 Days").onLast().performClick()
         rule.onNodeWithText("More").performClick(); wait("Settings"); shot("05_more")
         rule.onNodeWithText("Settings").performClick(); wait("Stored Transactions"); shot("06_settings")
         rule.onNodeWithContentDescription("Back").performClick()
@@ -82,6 +92,17 @@ class ScreenAudit {
         rule.onNodeWithText("Mei Ling (Sample)").performClick()
         rule.waitForIdle(); rule.onNodeWithText("Total").performScrollTo(); shot("12_add_expense_split_on")
         rule.onNodeWithText("Paid by").performScrollTo(); shot("12b_add_expense_split_bottom")
+        rule.onNodeWithTag("hybridToggle").performScrollTo().performClick()
+        rule.onNodeWithTag("groupAmount-0").performScrollTo().performTextInput("60")
+        rule.onNodeWithTag("group0-Mei Ling (Sample)").performScrollTo().performClick()
+        rule.onNodeWithTag("group0-You").performScrollTo().performClick()
+        rule.onNodeWithText("Add Individual Fixed Amount").performScrollTo().performClick()
+        rule.onNodeWithTag("individualPerson-0").performScrollTo().performClick()
+        rule.onAllNodesWithText("Aiman (Sample)").onLast().performClick()
+        rule.onNodeWithTag("individualAmount-0").performScrollTo().performTextInput("15")
+        rule.onNodeWithTag("hybridToggle").performScrollTo(); shot("12c_hybrid_group")
+        rule.onNodeWithText("INDIVIDUAL FIXED AMOUNTS").performScrollTo(); shot("12d_hybrid_individual")
+        rule.onNodeWithText("FINAL CALCULATION").performScrollTo(); shot("12e_hybrid_final")
         rule.onNodeWithContentDescription("Back").performClick()
         if (rule.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithText("Discard").performClick()
         rule.onNodeWithText("Transactions").performClick(); wait("SPENT")
@@ -89,6 +110,11 @@ class ScreenAudit {
         rule.onNodeWithContentDescription("Back").performClick()
         rule.onAllNodesWithText("PayBook").onFirst().performClick(); wait("Owed to you")
         rule.onAllNodesWithText("(Sample)", substring = true).onFirst().performClick(); wait("NET BALANCE"); shot("14_person")
+        rule.onNodeWithContentDescription("Back").performClick()
+        wait("Owed to you"); rule.onAllNodesWithText("Add Person", useUnmergedTree = true).onFirst().performClick(); wait("PERSON"); shot("14b_add_person")
+        rule.onNode(isToggleable()).performScrollTo().performClick(); rule.waitForIdle(); shot("14c_add_person_payment")
+        rule.onNodeWithTag("personName").performTextInput("Riad Hasan")
+        rule.onNodeWithTag("methodNotes").performScrollTo(); shot("14d_add_person_payment_bottom")
         rule.onNodeWithContentDescription("Back").performClick()
         rule.onNodeWithText("More").performClick(); rule.onNodeWithText("Settings").performClick(); wait("Stored Transactions")
         rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Permissions & Access"))

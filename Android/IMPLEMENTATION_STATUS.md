@@ -40,7 +40,8 @@ Last updated: 2026-10-07 (overnight autonomous build).
 - Installed and run on the OPPO (CPH2269, Android 11): Google sign-in and live sync checked by hand.
 - Camera runtime permission, in-app receipt camera, Permissions & Access screen.
 - UI spacing pass on all screens; more room under the status bar for page titles.
-- **Bulk Screenshot Import** (same rules as iOS and Web: `Common/BusinessRules/bulk-import.md`). Tests: `./gradlew :core:test` 284, `:app:testDebugUnitTest` 49, 0 failures.
+- **Hybrid Split** (`Common/BusinessRules/split-hybrid.md`): group fixed + individual fixed + remaining. Shares are saved as normal amounts; the rule is one optional `splitRule` on the expense (database version 2, tested upgrade from version 1). Cloud: needs migration `20261008000000_hybrid_split.sql`; until it's applied the rule stays on the device and the split syncs as plain custom amounts.
+- **Bulk Screenshot Import** (same rules as iOS and Web: `Common/BusinessRules/bulk-import.md`). Tests: `./gradlew :core:test` 298, `:app:testDebugUnitTest` 52, 0 failures.
 
 ## Verification
 

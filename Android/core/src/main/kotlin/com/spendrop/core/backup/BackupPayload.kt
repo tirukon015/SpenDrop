@@ -91,6 +91,8 @@ data class ExpenseDto(
     val payerNameSnapshot: String? = null,
     val splitMethodRaw: String? = null,
     val shares: List<ExpenseShareDto>? = null,
+    /** Hybrid Split rule (optional string; omitted when null, absent in older backups). */
+    val splitRule: String? = null,
 )
 
 @Serializable

@@ -229,7 +229,7 @@ object BackupMerge {
             if (isV2) {
                 expense = expense.copy(
                     accountId = account(dto.accountId), paidByMe = dto.paidByMe ?: true, payerId = person(dto.payerId),
-                    payerNameSnapshot = dto.payerNameSnapshot, splitMethodRaw = dto.splitMethodRaw,
+                    payerNameSnapshot = dto.payerNameSnapshot, splitMethodRaw = dto.splitMethodRaw, splitRule = dto.splitRule,
                 )
                 val backupShares = dto.shares.orEmpty()
                 val keep = backupShares.map { key(it.id) }.toSet()

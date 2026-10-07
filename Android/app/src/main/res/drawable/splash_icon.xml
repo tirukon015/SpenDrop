@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launch screen icon. The splash screen shows its icon through a circle (192dp of a 288dp box), which cut the corners
+  off the square launcher art. This is the whole icon as a rounded square (like the iOS launch icon), sized so all of it
+  sits inside that circle: 288dp − 2 × 70dp = 148dp.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="70dp">
+    <bitmap android:src="@drawable/splash_icon_art" android:gravity="fill" android:filter="true" android:antialias="true" />
+</inset>

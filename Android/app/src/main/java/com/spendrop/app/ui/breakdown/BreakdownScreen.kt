@@ -129,7 +129,7 @@ private fun spending(
                 Segmented(DailySpendingRange.entries, b.daily.range, { it.displayName }, onRange, horizontalPadding = 0.dp)
                 Text(b.daily.subtitle, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(bottom = 8.dp))
                 val blue = SD.colors.blue
-                BarChart(b.daily.points.map { Bar(it.dayLabel, it.amountMinor, blue, "${it.fullDateString}: ${Fmt.money(it.amountMinor)}, ${it.count} transactions") }, barWidth = 22)
+                BarChart(b.daily.points.map { Bar(it.dayLabel, it.amountMinor, blue, "${it.fullDateString}: ${Fmt.money(it.amountMinor)}, ${it.count} transactions") })
                 b.daily.footnote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 6.dp)) }
             }
         }
@@ -226,11 +226,12 @@ private fun Trend(t: TrendCard, cashFlow: Boolean, onGranularity: (PeriodGroupin
     SectionHeader(t.title)
     SDCard(padding = 12.dp) {
         Segmented(PeriodGrouping.Granularity.entries, t.granularity, { it.displayName }, onGranularity, horizontalPadding = 0.dp)
-        val green = SD.colors.green; val purple = SD.colors.purple
+        // Same as iOS: spending in blue; cash flow as Money In (green) beside Money Out (gray).
+        val green = SD.colors.green; val gray = SD.colors.secondaryLabel; val blue = SD.colors.blue
         BarChart(t.buckets.map { bk ->
-            if (cashFlow) Bar(bk.label, bk.netMinor, green, "${bk.label}: in ${Fmt.money(bk.inMinor)}, out ${Fmt.money(bk.outMinor)}, net ${Fmt.money(bk.netMinor)}")
-            else Bar(bk.label, bk.spendingMinor, purple, "${bk.label}: ${Fmt.money(bk.spendingMinor)}")
-        }, barWidth = 30, signed = cashFlow)
+            if (cashFlow) Bar(bk.label, listOf(bk.inMinor, bk.outMinor), listOf(green, gray), "${bk.label}: in ${Fmt.money(bk.inMinor)}, out ${Fmt.money(bk.outMinor)}, net ${Fmt.money(bk.netMinor)}")
+            else Bar(bk.label, bk.spendingMinor, blue, "${bk.label}: ${Fmt.money(bk.spendingMinor)}")
+        }, slotWidth = 44.dp, legend = if (cashFlow) listOf("Money In" to green, "Money Out" to gray) else emptyList())
         Text(t.footnote, style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 6.dp))
     }
 }

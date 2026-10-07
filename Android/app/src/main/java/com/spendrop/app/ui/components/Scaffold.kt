@@ -59,9 +59,8 @@ fun SDScreen(
                     )
                 },
                 navigationIcon = nav, actions = actions, colors = colors, scrollBehavior = scroll,
-                // A little breathing room below the status bar so the title doesn't touch the top edge.
-                // A little room between the status bar and the title, inside the bar so its background covers it.
-                windowInsets = TopAppBarDefaults.windowInsets.add(WindowInsets(top = 8.dp)),
+                // Room between the status bar and the title, inside the bar so its background covers it.
+                windowInsets = TopAppBarDefaults.windowInsets.add(WindowInsets(top = 14.dp)),
             )
         },
         floatingActionButton = floatingActionButton,

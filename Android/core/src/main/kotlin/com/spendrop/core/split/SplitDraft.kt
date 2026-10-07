@@ -8,6 +8,11 @@ import com.spendrop.core.model.ExpenseShare
 import com.spendrop.core.model.FinanceSnapshot
 import com.spendrop.core.model.Person
 import com.spendrop.core.model.SplitMethod
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -42,7 +47,37 @@ data class SplitDraft(
     val payer: Person? = null,
     /** Participants whose amount the user typed, oldest first (drives Auto Calculate). */
     val typedOrder: List<String> = emptyList(),
+    /**
+     * Hybrid Split (Common/BusinessRules/split-hybrid.md). null = off. While on it decides the shares (group fixed
+     * amounts, individual fixed amounts, then the rest equally); [method] is kept only to return to when it is off.
+     */
+    val hybrid: Hybrid? = null,
 ) {
+    /** The three layers of a Hybrid Split. Participant ids refer to [participants]. */
+    data class Hybrid(
+        val groups: List<Group> = listOf(Group()),
+        val individuals: List<Individual> = emptyList(),
+        val remainderIds: Set<String> = emptySet(),
+    )
+
+    /** A TOTAL amount divided equally between [memberIds] (RM 100 between two people = RM 50 each). */
+    data class Group(val id: String = Ids.new(), val amountText: String = "", val memberIds: Set<String> = emptySet()) {
+        /** The empty starter group (no amount, nobody) is ignored. */
+        val isBlank: Boolean get() = amountText.isBlank() && memberIds.isEmpty()
+        val amountMinor: Long? get() = Money.parseMinor(amountText)?.takeIf { it > 0 }
+    }
+
+    /** An amount for one person only (never divided). */
+    data class Individual(val id: String = Ids.new(), val participantId: String? = null, val amountText: String = "") {
+        val isBlank: Boolean get() = participantId == null && amountText.isBlank()
+        val amountMinor: Long? get() = Money.parseMinor(amountText)?.takeIf { it > 0 }
+    }
+
+    /** One participant's final amount and how it is made up. */
+    data class HybridLine(val participantId: String, val groupMinor: Long, val individualMinor: Long, val remainingMinor: Long) {
+        val totalMinor: Long get() = groupMinor + individualMinor + remainingMinor
+    }
+
     data class Participant(
         val id: String = Ids.new(),
         val person: Person? = null,
@@ -70,6 +105,16 @@ data class SplitDraft(
     /** Why a split can't be saved yet. */
     sealed class Problem {
         data class Calculator(val error: SplitCalculator.SplitError) : Problem()
+        /** Hybrid Split problems (numbering and wording: split-hybrid.md). */
+        data class GroupNoAmount(val number: Int) : Problem()
+        data class GroupNoMembers(val number: Int) : Problem()
+        data object IndividualNoPerson : Problem()
+        data class IndividualNoAmount(val name: String) : Problem()
+        data class IndividualDuplicate(val name: String) : Problem()
+        data object NothingFixed : Problem()
+        data class FixedAllocationsExceedTotal(val overMinor: Long) : Problem()
+        data class NoOneForRemaining(val remainingMinor: Long) : Problem()
+        data class NotInAnyLayer(val name: String) : Problem()
         /** Fixed amounts alone are more than the total (by this many sen). */
         data class FixedExceedTotal(val overMinor: Long) : Problem()
         /** Money is left over and Auto Calculate has nobody to give it to (everyone has a typed amount). */
@@ -94,6 +139,9 @@ data class SplitDraft(
 
     val others: List<Participant> get() = participants.filter { !it.isMe }
 
+    /** Hybrid Split is on (only for a shared split). */
+    val isHybrid: Boolean get() = hybrid != null && purpose == Purpose.SHARED
+
     fun contains(person: Person): Boolean = participants.any { it.person?.id == person.id }
 
     // MARK: Editing (each returns the new draft)
@@ -101,21 +149,150 @@ data class SplitDraft(
     /** Adds a person once. Returns this same instance when they were already in the split. */
     fun add(person: Person): SplitDraft {
         if (contains(person)) return this
-        return copy(participants = participants + Participant(person = person, name = person.name))
+        val p = Participant(person = person, name = person.name)
+        // While Hybrid Split is on, a new person shares the remaining amount only.
+        return copy(participants = participants + p, hybrid = hybrid?.let { it.copy(remainderIds = it.remainderIds + p.id) })
     }
 
     /** Removes a participant. Me cannot be removed. A payer who is not a participant is allowed and kept. */
     fun remove(id: String): SplitDraft {
         val p = participants.firstOrNull { it.id == id } ?: return this
         if (p.isMe) return this
-        return copy(participants = participants.filter { it.id != id }, typedOrder = typedOrder.filter { it != id })
+        return copy(
+            participants = participants.filter { it.id != id },
+            typedOrder = typedOrder.filter { it != id },
+            hybrid = hybrid?.let { h ->
+                h.copy(
+                    groups = h.groups.map { g -> g.copy(memberIds = g.memberIds - id) },
+                    individuals = h.individuals.filter { it.participantId != id },
+                    remainderIds = h.remainderIds - id,
+                )
+            },
+        )
     }
 
     fun setParts(parts: Int, id: String): SplitDraft =
         mapParticipant(id) { it.copy(parts = min(max(parts, 1), SplitCalculator.MAX_PARTS)) }
 
-    fun setPurpose(purpose: Purpose): SplitDraft = copy(purpose = purpose)
+    /** "Paid for someone" has no Hybrid Split: choosing it turns Hybrid Split off. */
+    fun setPurpose(purpose: Purpose): SplitDraft = copy(purpose = purpose, hybrid = if (purpose == Purpose.SHARED) hybrid else null)
     fun setPayer(payer: Person?): SplitDraft = copy(payer = payer)
+
+    // MARK: Hybrid Split
+
+    /** On: one empty group, no individual amounts, everyone shares the rest. Off: back to [method]. Shared splits only. */
+    fun setHybridEnabled(on: Boolean): SplitDraft = when {
+        !on -> copy(hybrid = null)
+        hybrid != null || purpose != Purpose.SHARED -> this
+        else -> copy(hybrid = Hybrid(remainderIds = participants.map { it.id }.toSet()))
+    }
+
+    private fun editHybrid(f: (Hybrid) -> Hybrid): SplitDraft = hybrid?.let { copy(hybrid = f(it)) } ?: this
+    private fun known(id: String?) = id == null || participants.any { it.id == id }
+
+    fun addGroup(): SplitDraft = editHybrid { it.copy(groups = it.groups + Group()) }
+    fun removeGroup(groupId: String): SplitDraft = editHybrid { it.copy(groups = it.groups.filter { g -> g.id != groupId }) }
+    fun setGroupAmountText(groupId: String, text: String): SplitDraft =
+        editHybrid { it.copy(groups = it.groups.map { g -> if (g.id == groupId) g.copy(amountText = text) else g }) }
+    fun setGroupMember(groupId: String, participantId: String, selected: Boolean): SplitDraft {
+        if (!known(participantId)) return this
+        return editHybrid { h ->
+            h.copy(groups = h.groups.map { g -> if (g.id != groupId) g else g.copy(memberIds = if (selected) g.memberIds + participantId else g.memberIds - participantId) })
+        }
+    }
+
+    fun addIndividual(participantId: String? = null): SplitDraft =
+        if (!known(participantId)) this else editHybrid { it.copy(individuals = it.individuals + Individual(participantId = participantId)) }
+    fun removeIndividual(individualId: String): SplitDraft = editHybrid { it.copy(individuals = it.individuals.filter { i -> i.id != individualId }) }
+    fun setIndividualPerson(individualId: String, participantId: String?): SplitDraft =
+        if (!known(participantId)) this
+        else editHybrid { it.copy(individuals = it.individuals.map { i -> if (i.id == individualId) i.copy(participantId = participantId) else i }) }
+    fun setIndividualAmountText(individualId: String, text: String): SplitDraft =
+        editHybrid { it.copy(individuals = it.individuals.map { i -> if (i.id == individualId) i.copy(amountText = text) else i }) }
+
+    fun setInRemainder(participantId: String, selected: Boolean): SplitDraft {
+        if (!known(participantId)) return this
+        return editHybrid { it.copy(remainderIds = if (selected) it.remainderIds + participantId else it.remainderIds - participantId) }
+    }
+
+    /** Σ group amounts (empty / invalid amounts count as 0 for the live preview). */
+    val groupAllocationMinor: Long get() = hybrid?.groups?.sumOf { it.amountMinor ?: 0L } ?: 0L
+    /** Σ individual amounts (empty / invalid amounts count as 0 for the live preview). */
+    val individualAllocationMinor: Long get() = hybrid?.individuals?.sumOf { it.amountMinor ?: 0L } ?: 0L
+    /** Total − all fixed allocations (negative when they are more than the total). */
+    fun hybridRemainingMinor(totalMinor: Long): Long = totalMinor - groupAllocationMinor - individualAllocationMinor
+
+    /** How a group's amount divides between its members right now (participant id → sen); empty when it can't yet. */
+    fun groupPreview(groupId: String): Map<String, Long> {
+        val g = hybrid?.groups?.firstOrNull { it.id == groupId } ?: return emptyMap()
+        val amount = g.amountMinor ?: return emptyMap()
+        val members = participants.filter { it.id in g.memberIds }
+        if (members.isEmpty()) return emptyMap()
+        return members.map { it.id }.zip(divideEqually(amount, members)).toMap()
+    }
+
+    /** The existing Split Equally rule for one amount: exact sen, ties Me first when I paid, then participant order. */
+    private fun divideEqually(amount: Long, people: List<Participant>): List<Long> = when {
+        people.isEmpty() -> emptyList()
+        amount == 0L -> people.map { 0L }
+        people.size == 1 -> listOf(amount)
+        else -> {
+            val inputs = people.map { SplitCalculator.Participant(isMe = it.isMe) }
+            SplitCalculator.calculate(amount, SplitMethod.EQUAL, inputs, iPaid = iPaid, requireMe = inputs.any { it.isMe }).valueOrNull()!!
+        }
+    }
+
+    private fun label(p: Participant) = if (p.isMe) "You" else (p.person?.name ?: p.name)
+
+    /** One line per participant (group + individual + remaining), or the first problem (split-hybrid.md order). */
+    fun hybridLines(totalMinor: Long): Outcome<List<HybridLine>, Problem> {
+        val h = hybrid ?: return Outcome.Err(Problem.NothingFixed)
+        if (totalMinor <= 0) return Outcome.Err(Problem.Calculator(SplitCalculator.SplitError.NonPositiveTotal))
+        if (others.isEmpty()) return Outcome.Err(Problem.Calculator(SplitCalculator.SplitError.TooFewParticipants))
+        val byId = participants.associateBy { it.id }
+        val groups = ArrayList<Pair<Long, List<Participant>>>()
+        h.groups.forEachIndexed { index, g ->
+            if (g.isBlank) return@forEachIndexed
+            val amount = g.amountMinor ?: return Outcome.Err(Problem.GroupNoAmount(index + 1))
+            val members = participants.filter { it.id in g.memberIds }
+            if (members.isEmpty()) return Outcome.Err(Problem.GroupNoMembers(index + 1))
+            groups += amount to members
+        }
+        val individuals = ArrayList<Pair<Participant, Long>>()
+        for (ind in h.individuals) {
+            if (ind.isBlank) continue
+            val p = ind.participantId?.let { byId[it] } ?: return Outcome.Err(Problem.IndividualNoPerson)
+            val amount = ind.amountMinor ?: return Outcome.Err(Problem.IndividualNoAmount(label(p)))
+            if (individuals.any { it.first.id == p.id }) return Outcome.Err(Problem.IndividualDuplicate(label(p)))
+            individuals += p to amount
+        }
+        if (groups.isEmpty() && individuals.isEmpty()) return Outcome.Err(Problem.NothingFixed)
+        val fixed = groups.sumOf { it.first } + individuals.sumOf { it.second }
+        if (fixed > totalMinor) return Outcome.Err(Problem.FixedAllocationsExceedTotal(fixed - totalMinor))
+        val remaining = totalMinor - fixed
+        val sharing = participants.filter { it.id in h.remainderIds }
+        if (remaining > 0 && sharing.isEmpty()) return Outcome.Err(Problem.NoOneForRemaining(remaining))
+        participants.firstOrNull { p ->
+            !p.isMe && groups.none { g -> g.second.any { it.id == p.id } } && individuals.none { it.first.id == p.id } && p.id !in h.remainderIds
+        }?.let { return Outcome.Err(Problem.NotInAnyLayer(label(it))) }
+
+        val group = HashMap<String, Long>()
+        for ((amount, members) in groups) members.zip(divideEqually(amount, members)).forEach { (p, v) -> group[p.id] = (group[p.id] ?: 0L) + v }
+        val individual = individuals.associate { it.first.id to it.second }
+        val rest = sharing.zip(divideEqually(remaining, sharing)).associate { it.first.id to it.second }
+        return Outcome.Ok(participants.map { p -> HybridLine(p.id, group[p.id] ?: 0L, individual[p.id] ?: 0L, rest[p.id] ?: 0L) })
+    }
+
+    /** Canonical JSON of the rule (split-hybrid.md): participant positions, ignored rows left out. */
+    fun hybridRuleJson(): String? {
+        val h = hybrid ?: return null
+        val pos = participants.withIndex().associate { it.value.id to it.index }
+        fun list(ids: Collection<String>) = ids.mapNotNull { pos[it] }.sorted().joinToString(",", "[", "]")
+        val groups = h.groups.filter { !it.isBlank }.joinToString(",", "[", "]") { g -> "{\"amountMinor\":${g.amountMinor ?: 0},\"members\":${list(g.memberIds)}}" }
+        val individuals = h.individuals.filter { !it.isBlank && it.participantId in pos }
+            .joinToString(",", "[", "]") { i -> "{\"participant\":${pos[i.participantId]},\"amountMinor\":${i.amountMinor ?: 0}}" }
+        return "{\"type\":\"hybrid\",\"version\":1,\"groups\":$groups,\"individuals\":$individuals,\"remaining\":${list(h.remainderIds)}}"
+    }
 
     /**
      * Sets a typed amount: kept exactly as typed (replaces any fixed amount for that person). Clearing the box hands
@@ -196,7 +373,7 @@ data class SplitDraft(
     }
 
     /** True when Auto Calculate works out this person's amount (nothing typed for them). */
-    fun isCalculated(id: String): Boolean = autoCalculate && method == SplitMethod.AMOUNTS && !paidForMe && !typedOrder.contains(id)
+    fun isCalculated(id: String): Boolean = !isHybrid && autoCalculate && method == SplitMethod.AMOUNTS && !paidForMe && !typedOrder.contains(id)
 
     /** The amount to show in a person's box: what they typed, or the calculated amount. */
     fun displayAmountText(id: String, totalMinor: Long): String {
@@ -209,7 +386,7 @@ data class SplitDraft(
     /** Fixed amounts of the people Auto Calculate works out (the "Fixed" line of the summary). */
     val fixedTotalMinor: Long
         get() {
-            if (!autoCalculate || method != SplitMethod.AMOUNTS) return 0
+            if (isHybrid || !autoCalculate || method != SplitMethod.AMOUNTS) return 0
             return sharingParticipants.filter { isCalculated(it.id) }.sumOf { it.fixedMinor ?: 0L }
         }
 
@@ -218,6 +395,7 @@ data class SplitDraft(
 
     /** What the shares add up to for this total: typed amounts, fixed amounts and the calculated remainder. */
     fun assignedMinor(totalMinor: Long): Long {
+        if (isHybrid) return hybridLines(totalMinor).valueOrNull()?.sumOf { it.totalMinor } ?: (groupAllocationMinor + individualAllocationMinor)
         if (!autoCalculate || method != SplitMethod.AMOUNTS || paidForMe) return assignedTypedMinor()
         val group = sharingParticipants
         val typed = group.filter { !isCalculated(it.id) }.sumOf { Money.parseMinor(it.amountText) ?: 0L }
@@ -232,6 +410,10 @@ data class SplitDraft(
 
     /** One amount per entry in [participants] (people outside the sharing group get 0). */
     fun calculate(totalMinor: Long): Outcome<List<Long>, Problem> {
+        if (isHybrid) return when (val r = hybridLines(totalMinor)) {
+            is Outcome.Ok -> Outcome.Ok(r.value.map { it.totalMinor })
+            is Outcome.Err -> r
+        }
         if (method == SplitMethod.AMOUNTS && autoCalculate && !paidForMe) return autoAmounts(totalMinor)
         return when (val r = plainCalculate(totalMinor)) {
             is Outcome.Ok -> r
@@ -316,6 +498,15 @@ data class SplitDraft(
         val error = calculate(totalMinor).errorOrNull() ?: return null
         return when (error) {
             is Problem.FixedExceedTotal -> "Fixed amounts exceed the expense total by ${money(error.overMinor)}."
+            is Problem.GroupNoAmount -> "Enter the amount for group fixed amount ${error.number}."
+            is Problem.GroupNoMembers -> "Choose who shares group fixed amount ${error.number}."
+            Problem.IndividualNoPerson -> "Choose a person for each individual fixed amount."
+            is Problem.IndividualNoAmount -> "Enter the individual fixed amount for ${error.name}."
+            is Problem.IndividualDuplicate -> "${error.name} already has an individual fixed amount."
+            Problem.NothingFixed -> "Add a group fixed amount or an individual fixed amount."
+            is Problem.FixedAllocationsExceedTotal -> "Fixed allocations exceed the transaction total by ${money(error.overMinor)}."
+            is Problem.NoOneForRemaining -> "${money(error.remainingMinor)} is left after the fixed allocations. Choose who shares the remaining amount."
+            is Problem.NotInAnyLayer -> "${error.name} isn't in any part of the split. Add them to an allocation or remove them."
             is Problem.NoOneForRemainder ->
                 "${money(error.remainingMinor)} remains unassigned. Select at least one participant for the remaining amount (clear someone's amount)."
             is Problem.Calculator -> when (val e = error.error) {
@@ -341,6 +532,7 @@ data class SplitDraft(
      */
     fun apply(expense: Expense, currentShares: List<ExpenseShare>, now: Long): SplitSave? {
         val amounts = shares(expense.amountMinor) ?: return null
+        if (isHybrid) return applyHybrid(expense, amounts, currentShares, now)
         val sharing = sharingParticipants.map { it.id }.toSet()
         val rows = ArrayList<ExpenseShare>()
         for ((index, p) in participants.withIndex()) {
@@ -363,6 +555,38 @@ data class SplitDraft(
         }
         val updated = expense.copy(
             splitMethodRaw = method.raw,
+            splitRule = null,
+            paidByMe = payer == null,
+            payerId = payer?.id,
+            payerNameSnapshot = payer?.name,
+            updatedAt = now,
+        )
+        return SplitSave(updated, rows, currentShares.map { it.id })
+    }
+
+    /**
+     * Saved like a Custom Amount split (method "amounts", entered = final share, so older app versions and analytics see
+     * normal amounts), plus the rule on the expense so it can be reopened and edited.
+     */
+    private fun applyHybrid(expense: Expense, amounts: List<Long>, currentShares: List<ExpenseShare>, now: Long): SplitSave {
+        val rows = participants.mapIndexed { index, p ->
+            ExpenseShare(
+                id = Ids.new(),
+                expenseId = expense.id,
+                personId = if (p.isMe) null else p.person?.id,
+                isMe = p.isMe,
+                nameSnapshot = if (p.isMe) "Me" else (p.person?.name ?: p.name),
+                amountMinor = amounts[index],
+                parts = null,
+                enteredMinor = amounts[index],
+                sortIndex = index,
+                createdAt = now,
+                updatedAt = now,
+            )
+        }
+        val updated = expense.copy(
+            splitMethodRaw = SplitMethod.AMOUNTS.raw,
+            splitRule = hybridRuleJson(),
             paidByMe = payer == null,
             payerId = payer?.id,
             payerNameSnapshot = payer?.name,
@@ -420,6 +644,16 @@ data class SplitDraft(
                 ).let { if (it.isMe) it.copy(person = null) else it }
             }.toMutableList()
             if (participants.none { it.isMe }) participants.add(0, Participant.me())
+            // A Hybrid Split carries its rule on the expense; anything unreadable opens as the plain amounts it also is.
+            hybridFromRule(expense.splitRule, ordered, participants)?.let { h ->
+                return SplitDraft(
+                    method = SplitMethod.EQUAL,
+                    purpose = Purpose.SHARED,
+                    participants = participants,
+                    payer = if (expense.paidByMe) null else expense.payerId?.let { byId[it] },
+                    hybrid = h,
+                )
+            }
             return SplitDraft(
                 method = expense.splitMethod ?: SplitMethod.AMOUNTS,
                 purpose = purpose,
@@ -430,10 +664,35 @@ data class SplitDraft(
             )
         }
 
+        /**
+         * Reads a saved Hybrid Split rule. Positions are the shares' sortIndex; null when there's no rule, it isn't a
+         * hybrid rule, or it refers to a share that doesn't exist.
+         */
+        internal fun hybridFromRule(rule: String?, shares: List<ExpenseShare>, participants: List<Participant>): Hybrid? {
+            if (rule.isNullOrBlank()) return null
+            return runCatching {
+                val o = kotlinx.serialization.json.Json.parseToJsonElement(rule).jsonObject
+                if (o["type"]?.jsonPrimitive?.content != "hybrid") return null
+                val idAt = shares.associate { it.sortIndex to it.id }.filterValues { id -> participants.any { it.id == id } }
+                fun id(e: kotlinx.serialization.json.JsonElement) = idAt[e.jsonPrimitive.int] ?: error("unknown participant")
+                Hybrid(
+                    groups = o["groups"]!!.jsonArray.map { g ->
+                        val go = g.jsonObject
+                        Group(amountText = text(go["amountMinor"]!!.jsonPrimitive.long), memberIds = go["members"]!!.jsonArray.map(::id).toSet())
+                    }.ifEmpty { listOf(Group()) },
+                    individuals = o["individuals"]!!.jsonArray.map { i ->
+                        val io = i.jsonObject
+                        Individual(participantId = id(io["participant"]!!), amountText = text(io["amountMinor"]!!.jsonPrimitive.long))
+                    },
+                    remainderIds = o["remaining"]!!.jsonArray.map(::id).toSet(),
+                )
+            }.getOrNull()
+        }
+
         /** Makes the expense a normal (unshared) expense again: shares removed, I paid. */
         fun removeSplit(expense: Expense, shares: List<ExpenseShare>, now: Long): SplitSave =
             SplitSave(
-                expense.copy(splitMethodRaw = null, paidByMe = true, payerId = null, payerNameSnapshot = null, updatedAt = now),
+                expense.copy(splitMethodRaw = null, splitRule = null, paidByMe = true, payerId = null, payerNameSnapshot = null, updatedAt = now),
                 emptyList(),
                 shares.map { it.id },
             )
@@ -446,6 +705,11 @@ data class SplitDraft(
         fun recalculateAfterAmountChange(expense: Expense, shares: List<ExpenseShare>, people: List<Person>, now: Long): RecalculateResult {
             if (!ExpenseMath.isShared(shares)) return RecalculateResult(true, null)
             val draft = fromExpense(expense, shares, people) ?: return RecalculateResult(true, null)
+            // Hybrid Split: recalculated with the same rule; if it no longer works the shares stay as they were.
+            if (draft.isHybrid) {
+                val save = draft.apply(expense, shares, now)
+                return RecalculateResult(save != null || ExpenseMath.sharesMatchAmount(expense, shares), save)
+            }
             if (draft.method == SplitMethod.AMOUNTS) return RecalculateResult(ExpenseMath.sharesMatchAmount(expense, shares), null)
             val save = draft.apply(expense, shares, now)
             return RecalculateResult(save != null, save)

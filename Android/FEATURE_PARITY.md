@@ -72,6 +72,7 @@ The inventory comes from reading the iOS sources (see `Docs/IOS-Audit.md`), the 
 | Auto Calculate per split, default ON; OFF requires exact total | ✓ | ✓ | U (Common vectors) | PASS |
 | Fixed amounts (fixed + equal share of the rest) | ✓ | ✓ | U (Common vectors) | PASS |
 | Remaining / allocated amount, iOS problem messages | ✓ | ✓ | U | PASS |
+| Hybrid Split: group fixed amounts (a total divided between the group, several groups), individual fixed amounts (one person, several), the rest split equally between a chosen group; a person can be in every layer; live, saved and reopened | ✓ | ✓ | U (shared `split-hybrid-vectors.json`, 27 cases + layers, live changes, reload, bad-rule fallback, backup, cloud rows), R (Add Expense flow at phone and tablet widths; v1→v2 database upgrade) | PASS |
 | Paid for someone; payer Me / someone else | ✓ | ✓ | U | PASS |
 | Rounding: integer sen, largest remainder, extra sen to Me when I paid | ✓ | ✓ | U (Common vectors) | PASS |
 | Same as last time suggestion | ✓ | ✓ | U | PASS |
