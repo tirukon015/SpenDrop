@@ -39,6 +39,9 @@ public final class Expense {
     public var payerNameSnapshot: String? = nil
     /// nil = not shared. See `SplitMethod`.
     public var splitMethodRaw: String? = nil
+    /// Hybrid Split (schema V6): the rule as canonical JSON (Common/BusinessRules/split-hybrid.md); nil = a normal
+    /// split. The shares are always stored as plain Custom Amounts, so nothing else depends on this.
+    public var splitRule: String? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \ExpenseShare.expense)
     public var shares: [ExpenseShare] = []

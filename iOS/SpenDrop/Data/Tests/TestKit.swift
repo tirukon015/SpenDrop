@@ -64,6 +64,7 @@ public enum AllTestSuites {
         ("Restore ranges", "--run-restore-tests", { blocking { await RestoreRangeTests.runAllTests() } }),
         ("Daily backup", "--run-daily-backup-tests", { blocking { await DailyBackupTests.runAllTests() } }),
         ("Bulk import", "--run-bulk-import-tests", { blocking { await BulkImportTests.runAllTests() } }),
+        ("Hybrid split", "--run-split-hybrid-tests", { SplitHybridTests.runAllTests() }),
         // Must stay last: proves none of the suites above touched the user's real database.
         ("Test isolation", "--run-all-tests", { isolationCheck() })
     ]

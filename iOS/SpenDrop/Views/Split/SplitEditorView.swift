@@ -146,6 +146,12 @@ public struct InlineSplitSection: View {
     private var amounts: [Int]? { draft.shares(totalMinor: totalMinor) }
 
     private var allocatedMinor: Int {
+        if draft.usesHybrid {
+            if let amounts { return amounts.reduce(0, +) }
+            let fixed = draft.groupAllocationMinor + draft.individualAllocationMinor
+            let remaining = totalMinor - fixed
+            return fixed + (!draft.remainderIDs.isEmpty && remaining > 0 ? remaining : 0)
+        }
         if draft.method == .amounts { return draft.assignedMinor(totalMinor: totalMinor) }
         return amounts?.reduce(0, +) ?? 0
     }
@@ -156,7 +162,7 @@ public struct InlineSplitSection: View {
     }
 
     /// Amounts + Auto Calculate: the fixed icon is offered (not for Paid for Someone, not when calculating is off).
-    private var fixedAvailable: Bool { draft.method == .amounts && draft.autoCalculate && draft.purpose == .shared }
+    private var fixedAvailable: Bool { draft.method == .amounts && draft.autoCalculate && draft.purpose == .shared && !draft.usesHybrid }
 
     private var frequentSuggestions: [PayBookProfile] {
         people.filter { $0.isFrequent && !$0.isArchived && !draft.contains($0) }
@@ -195,6 +201,18 @@ public struct InlineSplitSection: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("split.purpose")
 
+            if draft.purpose == .shared {
+                Toggle("Hybrid Split", isOn: Binding(get: { draft.usesHybrid },
+                                                     set: { on in withAnimation(.easeInOut(duration: 0.2)) { draft.setHybrid(on) } }))
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityIdentifier("split.hybrid")
+                    .accessibilityHint("Group fixed amounts, individual fixed amounts, and the rest split equally.")
+            }
+
+            if draft.usesHybrid {
+                hybridSection
+            }
+
             if draft.purpose == .paidFor {
                 Text(draft.paidForMe ? "Someone paid the whole amount for you: it's all your share."
                                      : "You paid the whole amount for the people below. Your share is RM 0.00.")
@@ -202,7 +220,7 @@ public struct InlineSplitSection: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !draft.paidForMe {
+            if !draft.paidForMe && !draft.usesHybrid {
             Picker("Split", selection: Binding(get: { draft.method }, set: { method in
                 switch method {
                 case .amounts: draft.useCustomAmounts(totalMinor: totalMinor)
@@ -218,7 +236,7 @@ public struct InlineSplitSection: View {
             .accessibilityIdentifier("split.method")
             }
 
-            Text(draft.paidForMe ? "For" : draft.iPaidForOthers ? "Paid for" : "Split between")
+            Text(draft.paidForMe ? "For" : draft.iPaidForOthers ? "Paid for" : draft.usesHybrid ? "FINAL CALCULATION" : "Split between")
                 .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
 
             VStack(spacing: 0) {
@@ -253,7 +271,7 @@ public struct InlineSplitSection: View {
                 .accessibilityIdentifier("split.addPerson")
             }
 
-            if draft.method == .amounts && !draft.paidForMe {
+            if draft.method == .amounts && !draft.paidForMe && !draft.usesHybrid {
                 Toggle("Auto Calculate", isOn: Binding(get: { draft.autoCalculate },
                                                        set: { draft.setAutoCalculate($0, totalMinor: totalMinor) }))
                     .font(.subheadline)
@@ -349,6 +367,171 @@ public struct InlineSplitSection: View {
         }
     }
 
+    // MARK: Hybrid Split
+
+    private func displayName(_ participant: SplitDraft.Participant) -> String { participant.isMe ? "You" : participant.name }
+    private func idSuffix(_ participant: SplitDraft.Participant) -> String { participant.isMe ? "me" : participant.name }
+
+    /// "RM 50.00 group + RM 20.00 individual + RM 26.66 remaining" (only the parts this person has).
+    private func hybridDetail(index: Int) -> String? {
+        guard let split = try? draft.hybridSplit(totalMinor: totalMinor).get() else { return nil }
+        var parts: [String] = []
+        let group = split.groupTotal(for: index)
+        if group > 0 { parts.append("\(format(group)) group") }
+        if split.individualParts[index] > 0 { parts.append("\(format(split.individualParts[index])) individual") }
+        if split.remainingParts[index] > 0 { parts.append("\(format(split.remainingParts[index])) remaining") }
+        return parts.isEmpty ? "Not included" : parts.joined(separator: " + ")
+    }
+
+    private func checkbox(_ participant: SplitDraft.Participant, selected: Bool, id: String, set: @escaping (Bool) -> Void) -> some View {
+        Button { set(!selected) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(selected ? Color.blue : Color.secondary)
+                Text(displayName(participant)).font(.subheadline).foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(displayName(participant))
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier(id)
+    }
+
+    private func moneyField(_ placeholder: String, text: Binding<String>, id: String, label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(currency).foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 90)
+                .accessibilityLabel(label)
+                .accessibilityIdentifier(id)
+        }
+        .font(.subheadline)
+    }
+
+    private func signed(_ minor: Int) -> String { minor < 0 ? "−\(format(-minor))" : format(minor) }
+
+    @ViewBuilder
+    private var hybridSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("HYBRID SPLIT").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+
+            // 1. Group fixed amounts: each amount is a TOTAL divided equally between its members.
+            ForEach(Array(draft.hybridGroups.enumerated()), id: \.element.id) { position, group in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(draft.hybridGroups.count > 1 ? "GROUP FIXED AMOUNT \(position + 1)" : "GROUP FIXED AMOUNT")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Remove", role: .destructive) { withAnimation { draft.removeHybridGroup(group.id) } }
+                            .font(.caption)
+                            .accessibilityIdentifier("split.group\(position + 1).remove")
+                    }
+                    HStack {
+                        Text("Amount (total for the group)").font(.subheadline)
+                        Spacer()
+                        moneyField("0.00", text: Binding(get: { group.amountText }, set: { draft.setGroupAmountText($0, for: group.id) }),
+                                   id: "split.group\(position + 1).amount", label: "Group \(position + 1) amount, total for the group")
+                    }
+                    Text("Divide this amount between").font(.caption).foregroundStyle(.secondary)
+                    ForEach(draft.participants) { participant in
+                        checkbox(participant, selected: group.memberIDs.contains(participant.id),
+                                 id: "split.group\(position + 1).member.\(idSuffix(participant))") { on in
+                            draft.setGroupMember(on, participant: participant.id, group: group.id)
+                        }
+                    }
+                    let preview = draft.groupPreview(group.id)
+                    if !preview.isEmpty {
+                        Text(preview.map { "\(displayName($0.participant)) \(format($0.minor))" }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("split.group\(position + 1).preview")
+                    }
+                    HStack {
+                        Text("Group allocation").foregroundStyle(.secondary)
+                        Spacer()
+                        Text(format(SplitDraft.positiveMinor(group.amountText) ?? 0))
+                    }
+                    .font(.footnote)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("split.group\(position + 1).allocation")
+                }
+                Divider()
+            }
+            Button { withAnimation { draft.addHybridGroup() } } label: {
+                Label(draft.hybridGroups.isEmpty ? "Add Group Fixed Amount" : "Add Another Group", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("split.addGroup")
+            Divider()
+
+            // 2. Individual fixed amounts: for one person only, never divided.
+            Text("INDIVIDUAL FIXED AMOUNTS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            ForEach(Array(draft.hybridIndividuals.enumerated()), id: \.element.id) { position, row in
+                let chosen = draft.participants.first { $0.id == row.participantID }
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(draft.participants) { participant in
+                            Button(displayName(participant)) { draft.setIndividualPerson(participant.id, for: row.id) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(chosen.map(displayName) ?? "Person")
+                                .foregroundStyle(chosen == nil ? Color.secondary : Color.primary)
+                            Image(systemName: "chevron.down").font(.caption2)
+                        }
+                        .font(.subheadline)
+                    }
+                    .accessibilityIdentifier("split.individual\(position + 1).person")
+                    Spacer()
+                    moneyField("0.00", text: Binding(get: { row.amountText }, set: { draft.setIndividualAmountText($0, for: row.id) }),
+                               id: "split.individual\(position + 1).amount", label: "Individual fixed amount \(position + 1)")
+                    Button(role: .destructive) { withAnimation { draft.removeIndividual(row.id) } } label: {
+                        Text("Remove").font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("split.individual\(position + 1).remove")
+                }
+            }
+            Button { withAnimation { draft.addIndividual() } } label: {
+                Label("Add Individual Fixed Amount", systemImage: "plus").font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("split.addIndividual")
+            HStack {
+                Text("Individual allocation").foregroundStyle(.secondary)
+                Spacer()
+                Text(format(draft.individualAllocationMinor))
+            }
+            .font(.footnote)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("split.individualAllocation")
+            Divider()
+
+            // 3. Remaining amount: split equally.
+            let remaining = draft.hybridRemainingMinor(totalMinor: totalMinor)
+            HStack {
+                Text("REMAINING AMOUNT").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Text(signed(remaining))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(remaining < 0 ? Color.orange : Color.primary)
+                    .accessibilityIdentifier("split.hybridRemaining")
+            }
+            Text("Split remaining between").font(.caption).foregroundStyle(.secondary)
+            ForEach(draft.participants) { participant in
+                checkbox(participant, selected: draft.remainderIDs.contains(participant.id), id: "split.remaining.\(idSuffix(participant))") { on in
+                    draft.setInRemainder(on, participant: participant.id)
+                }
+            }
+            Text("Auto Calculate: ON · split equally").font(.caption).foregroundStyle(.secondary)
+            Divider()
+        }
+    }
+
     @ViewBuilder
     private func participantRow(_ participant: SplitDraft.Participant) -> some View {
         let index = draft.participants.firstIndex(where: { $0.id == participant.id }) ?? 0
@@ -365,10 +548,19 @@ public struct InlineSplitSection: View {
                 if fixedAvailable, let fixed = participant.fixedMinor {
                     Text("\(format(fixed)) fixed + equal share").font(.caption2).foregroundStyle(.secondary)
                 }
+                if draft.usesHybrid, let detail = hybridDetail(index: index) {
+                    Text(detail).font(.caption2).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("split.finalDetail.\(participant.isMe ? "me" : participant.name)")
+                }
             }
             Spacer()
             if draft.paidForMe {
                 Text(format(totalMinor)).font(.subheadline).foregroundStyle(.secondary)
+            } else if draft.usesHybrid {
+                Text(amounts.map { format($0[index]) } ?? "—")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(amounts == nil ? Color.secondary : Color.primary)
+                    .accessibilityIdentifier("split.final.\(participant.isMe ? "me" : participant.name)")
             } else {
             switch draft.method {
             case .equal:
