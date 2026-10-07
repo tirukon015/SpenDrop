@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -100,15 +100,6 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () 
         val sampleLoaded = SampleData.isLoaded(s)
         LazyColumn(contentPadding = padding) {
             item {
-                SectionHeader("Account")
-                SDCard {
-                    when (val st = authState) {
-                        is AuthState.SignedIn -> ListRow(st.user.name ?: st.user.email ?: "Signed in", subtitle = st.user.email, icon = Icons.Filled.Verified)
-                        else -> ListRow("Not signed in", subtitle = "SpenDrop works fully on this phone without an account.")
-                    }
-                }
-            }
-            item {
                 SectionHeader("Backup & data recovery")
                 SDCard {
                     ListRow("Stored Transactions", value = "${s.expenses.size}"); RowDivider()
@@ -172,6 +163,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () 
                 SectionHeader("About")
                 SDCard {
                     ListRow("App Name", value = "SpenDrop"); RowDivider()
+                    ListRow("Developer", subtitle = "SpenDrop is designed and built by Touhidul Islam Rukon.", value = "Touhidul Islam Rukon"); RowDivider()
                     ListRow("Version", value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"); RowDivider()
                     ListRow("Device", value = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"); RowDivider()
                     ListRow("Storage Engine", value = "Room (on device) + Auto-Backup"); RowDivider()

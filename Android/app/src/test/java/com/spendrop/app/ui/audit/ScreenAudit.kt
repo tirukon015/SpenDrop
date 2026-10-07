@@ -78,7 +78,7 @@ class ScreenAudit {
         rule.onNodeWithText("More").performClick(); wait("Settings"); shot("05_more")
         rule.onNodeWithText("Settings").performClick(); wait("Stored Transactions"); shot("06_settings")
         rule.onNodeWithContentDescription("Back").performClick()
-        rule.onNodeWithText("Accounts").performClick(); wait("My accounts".uppercase()); shot("07_accounts")
+        rule.onNodeWithText("Bank Accounts").performClick(); wait("My bank accounts".uppercase()); shot("07_accounts")
         rule.onNodeWithContentDescription("Back").performClick()
         rule.onNodeWithText("Account").performClick(); wait("Sign In"); shot("08_account")
         rule.onNodeWithContentDescription("Back").performClick()

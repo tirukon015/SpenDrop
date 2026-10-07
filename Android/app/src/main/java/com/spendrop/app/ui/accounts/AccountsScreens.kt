@@ -62,14 +62,14 @@ fun AccountsScreen(container: AppContainer, nav: AccountsNav) {
     val snapshot by container.repository.snapshot.collectAsState()
     var editing by remember { mutableStateOf<Account?>(null) }
     var adding by remember { mutableStateOf(false) }
-    SDScreen(title = "Accounts", onBack = nav.back, actions = { IconButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, "Add account") } }) { padding ->
+    SDScreen(title = "Bank Accounts", onBack = nav.back, actions = { IconButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, "Add account") } }) { padding ->
         val s = snapshot ?: return@SDScreen LoadingState(modifier = Modifier.padding(padding))
         val active = s.accounts.filter { !it.isArchived }
         val archived = s.accounts.filter { it.isArchived }
         val unlinked = s.movements.filter { it.accountId == null && it.counterAccountId == null }
         LazyColumn(contentPadding = padding) {
             item {
-                SectionHeader("My accounts")
+                SectionHeader("My bank accounts")
                 SDCard {
                     if (active.isEmpty()) Text("No accounts yet. Accounts are created automatically from your expenses, or add one with +.", color = SD.colors.secondaryLabel, modifier = Modifier.padding(16.dp))
                     active.forEachIndexed { i, a -> AccountSummary(s, a) { nav.detail(a.id) }; if (i < active.lastIndex) RowDivider() }
