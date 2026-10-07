@@ -88,7 +88,30 @@ public struct TransactionReconciliationEngine {
                 expense.date >= startWindow && expense.date <= endWindow
             }
         )
-        let candidates = ((try? context.fetch(descriptor)) ?? []).filter { Money.minorUnits(from: $0.amount) == amountMinor }
+        let fetched = (try? context.fetch(descriptor)) ?? []
+        return findMatch(amount: amount, merchant: merchant, date: date, reference: reference,
+                         paymentChannel: paymentChannel, fundingAccount: fundingAccount, among: fetched)
+    }
+
+    /// The same rules as `findMatch(…in:)`, applied to a given list of expenses instead of the store — Bulk Import
+    /// uses it to compare a draft with the drafts before it in the same batch (not saved yet).
+    public func findMatch(
+        amount: Double?,
+        merchant: String?,
+        date: Date?,
+        reference: String?,
+        paymentChannel: PaymentChannel? = nil,
+        fundingAccount: String? = nil,
+        among records: [Expense]
+    ) -> MatchResult {
+        guard let amount = amount, amount > 0 else {
+            return .none
+        }
+        let amountMinor = Money.minorUnits(from: amount)
+        let targetDate = date ?? Date()
+        let candidates = records.filter {
+            abs($0.date.timeIntervalSince(targetDate)) <= 48 * 3600 && Money.minorUnits(from: $0.amount) == amountMinor
+        }
 
         if let ref = Self.normalizedReference(reference),
            let candidate = candidates.first(where: { Self.normalizedReference($0.transactionReference) == ref }) {

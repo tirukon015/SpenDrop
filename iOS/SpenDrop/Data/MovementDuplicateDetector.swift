@@ -8,6 +8,12 @@ public enum MovementDuplicateDetector {
     public static func findMatch(amountMinor: Int, date: Date, reference: String?, kind: MoneyMovementKind,
                                  excluding id: UUID? = nil, in context: ModelContext) -> MoneyMovement? {
         let movements = ((try? context.fetch(FetchDescriptor<MoneyMovement>())) ?? []).filter { $0.id != id }
+        return findMatch(amountMinor: amountMinor, date: date, reference: reference, kind: kind, among: movements)
+    }
+
+    /// The same rules applied to a given list of (possibly unsaved) movements, e.g. earlier Bulk Import drafts.
+    public static func findMatch(amountMinor: Int, date: Date, reference: String?, kind: MoneyMovementKind,
+                                 among movements: [MoneyMovement]) -> MoneyMovement? {
         if let reference = TransactionReconciliationEngine.normalizedReference(reference),
            let byReference = movements.first(where: { TransactionReconciliationEngine.normalizedReference($0.transactionReference) == reference }) {
             return byReference
