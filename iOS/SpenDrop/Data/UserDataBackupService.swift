@@ -8,6 +8,8 @@ public final class UserDataBackupService {
 
     public static let defaultAccountName = "Touhidul Islam Rukon"
     public static let defaultAccountEmail = "tirukon015@gmail.com"
+    /// Written to `accountName` in exported backups (Android writes the same).
+    public static let exportAccountName = "SpenDrop user"
     private static let autoBackupFileName = "SpenDrop_AutoBackup.json"
 
     // MARK: - Codable DTOs for Persistent Backup
@@ -45,7 +47,7 @@ public final class UserDataBackupService {
         public init(
             version: Int = 1,
             appName: String = "SpenDrop",
-            accountName: String = "Touhidul Islam Rukon",
+            accountName: String = exportAccountName,
             exportDate: Date = Date(),
             expenses: [ExpenseDTO],
             paybookProfiles: [PayBookProfileDTO]
@@ -105,6 +107,9 @@ public final class UserDataBackupService {
         public var payerId: UUID? = nil
         public var payerNameSnapshot: String? = nil
         public var splitMethodRaw: String? = nil
+        /// Hybrid Split rule (canonical JSON, see split-hybrid.md); nil = a normal split. Omitted from the JSON when
+        /// nil, so older backups load unchanged.
+        public var splitRule: String? = nil
         public var shares: [ExpenseShareDTO]? = nil
 
         public init(from expense: Expense) {
@@ -137,6 +142,7 @@ public final class UserDataBackupService {
             self.payerId = expense.payer?.id
             self.payerNameSnapshot = expense.payerNameSnapshot
             self.splitMethodRaw = expense.splitMethodRaw
+            self.splitRule = expense.splitRule
             self.shares = expense.shares.sorted { $0.sortIndex < $1.sortIndex }.map { ExpenseShareDTO(from: $0) }
         }
 
@@ -1138,7 +1144,8 @@ public final class UserDataBackupService {
         var payload = BackupPayload(
             version: BackupPayload.currentVersion,
             appName: "SpenDrop",
-            accountName: defaultAccountName,
+            // Never the developer's name in a user's backup (same as Android).
+            accountName: exportAccountName,
             exportDate: Date(),
             expenses: expenses.map { ExpenseDTO(from: $0) },
             paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }
@@ -1520,6 +1527,7 @@ public final class UserDataBackupService {
             expense.payer = person(dto.payerId)
             expense.payerNameSnapshot = dto.payerNameSnapshot
             expense.splitMethodRaw = dto.splitMethodRaw
+            expense.splitRule = dto.splitRule
 
             // The backup's share list is the truth for this expense: update/insert by id, remove the rest.
             let backupShares = dto.shares ?? []
