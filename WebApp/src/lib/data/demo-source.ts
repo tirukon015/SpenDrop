@@ -79,13 +79,17 @@ export class DemoSource implements DataSource {
     await tick();
     const live = shares.reduce((t, s) => t + s.amountMinor, 0);
     if (shares.length > 0 && live !== expense.amountMinor) throw new DataError("The split doesn't add up to the amount.", "validation");
-    this.put("expenses", recordToRow(expense));
+    // Always written, so a Hybrid Split edited into a normal split loses its rule.
+    this.put("expenses", { ...recordToRow(expense), split_rule: expense.splitRule ?? null });
     const keep = new Set(shares.map((s) => s.id));
     for (const row of Object.values(this.tables.expense_shares)) {
       if (row.expense_id === expense.id && !row.deleted_at && !keep.has(row.id as string))
         this.put("expense_shares", { ...row, deleted_at: expense.updatedAt, updated_at: expense.updatedAt });
     }
-    for (const s of shares) this.put("expense_shares", { ...recordToRow(s), expense_id: expense.id, deleted_at: null, updated_at: expense.updatedAt });
+    for (const s of shares)
+      this.put("expense_shares", {
+        ...recordToRow(s), expense_id: expense.id, deleted_at: null, updated_at: expense.updatedAt,
+      });
     this.persist();
   }
 

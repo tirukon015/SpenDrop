@@ -80,6 +80,11 @@ export interface Expense extends SyncMeta {
   payerId: ID | null;
   payerNameSnapshot: string | null;
   splitMethod: SplitMethod | null;
+  /**
+   * Hybrid Split rule as canonical JSON (Common/BusinessRules/split-hybrid.md); null/missing = a normal split.
+   * Missing on older records and before the cloud migration is applied.
+   */
+  splitRule?: string | null;
   receiptPath: string | null;
   isSampleData: boolean;
 }

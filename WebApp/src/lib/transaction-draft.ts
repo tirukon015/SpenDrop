@@ -230,9 +230,14 @@ export async function persistDraft(d: TransactionDraft, ctx: SaveContext): Promi
       paymentSource: expense?.paymentSource ?? null, date: when, notes: d.notes.trim() || null, transactionReference: d.reference.trim() || null,
       sourceType: expense?.sourceType ?? (d.receipt ? "screenshot" : "manual"),
       paidByMe: !split?.payerId, payerId: split?.payerId ?? null, payerNameSnapshot: split?.payerName ?? null,
-      splitMethod: split ? split.method : null, receiptPath, isSampleData: expense?.isSampleData ?? false,
+      splitMethod: split ? S.savedMethod(split) : null, receiptPath, isSampleData: expense?.isSampleData ?? false,
       createdAt: expense?.createdAt ?? now, updatedAt: now, deletedAt: null,
     };
+    // Hybrid Split: its rule goes on the expense (the shares are plain custom amounts). Cleared when editing a Hybrid
+    // Split into a normal split.
+    const rule = split ? S.splitRule(split, amountMinor) : null;
+    if (rule) record.splitRule = rule;
+    else if (expense?.splitRule) record.splitRule = null;
     await saveExpense(record, shares);
     await learn(ctx, finalMerchant, derived.category, derived.channel, d.funding).catch(() => undefined);
     return { kind: "expense", id, createdAccount: created };
