@@ -626,23 +626,53 @@ public struct DebtSettlementTests {
             let storeURL = dir.appendingPathComponent("default.store")
             var before: [String: Int] = [:]
             var expenseIDs = Set<UUID>()
+            // The V3 store is written with the frozen V2 model types (the shapes V3 shipped with); the expected
+            // balances come from the same records built with the live types in memory.
             do {
+                let ctx = TestKit.context()
+                let account = Account(name: "Maybank", type: .bank); ctx.insert(account)
+                let bijoy = PayBookProfile(name: "Bijoy"); ctx.insert(bijoy)
+                let labib = PayBookProfile(name: "Labib"); ctx.insert(labib)
+                let dinner = Expense(amount: 100, merchant: "Dinner", category: .food, paymentChannel: .qrPayment, fundingAccount: "Maybank"); ctx.insert(dinner)
+                dinner.account = account
+                var d = SplitDraft(); d.add(bijoy); d.apply(to: dinner, in: ctx)
+                let taxi = Expense(amount: 20, merchant: "Taxi", category: .transport, paymentChannel: .unknown); ctx.insert(taxi)
+                var t2 = SplitDraft(); t2.add(labib); t2.payer = labib; t2.apply(to: taxi, in: ctx)
+                ctx.insert(MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: bijoy, account: account))
+                ctx.insert(MoneyMovement(kind: .repaymentReceived, amountMinor: 2000, person: bijoy, account: account))
+                try? ctx.save()
+                before = ["Bijoy": PersonLedger.balances(for: bijoy)["RM"] ?? 0, "Labib": PersonLedger.balances(for: labib)["RM"] ?? 0]
+            }
+            do {
+                typealias V2 = SpenDropSchemaV2
                 let v3 = Schema(versionedSchema: SpenDropSchemaV3.self)
                 if let container = try? ModelContainer(for: v3, configurations: [ModelConfiguration(schema: v3, url: storeURL)]) {
                     let ctx = ModelContext(container)
-                    let account = Account(name: "Maybank", type: .bank); ctx.insert(account)
-                    let bijoy = PayBookProfile(name: "Bijoy"); ctx.insert(bijoy)
-                    let labib = PayBookProfile(name: "Labib"); ctx.insert(labib)
-                    let dinner = Expense(amount: 100, merchant: "Dinner", category: .food, paymentChannel: .qrPayment, fundingAccount: "Maybank"); ctx.insert(dinner)
-                    dinner.account = account
-                    var d = SplitDraft(); d.add(bijoy); d.apply(to: dinner, in: ctx)
-                    let taxi = Expense(amount: 20, merchant: "Taxi", category: .transport, paymentChannel: .unknown); ctx.insert(taxi)
-                    var t2 = SplitDraft(); t2.add(labib); t2.payer = labib; t2.apply(to: taxi, in: ctx)
-                    ctx.insert(MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: bijoy, account: account))
-                    ctx.insert(MoneyMovement(kind: .repaymentReceived, amountMinor: 2000, person: bijoy, account: account))
+                    let account = V2.Account(name: "Maybank", typeRaw: AccountType.bank.rawValue, currency: "RM", sortIndex: 0); ctx.insert(account)
+                    let bijoy = V2.PayBookProfile(name: "Bijoy"); ctx.insert(bijoy)
+                    let labib = V2.PayBookProfile(name: "Labib"); ctx.insert(labib)
+                    func expense(_ merchant: String, _ amount: Double, _ category: ExpenseCategory, _ channel: PaymentChannel, payer: V2.PayBookProfile?,
+                                 shares: [(V2.PayBookProfile?, Int)]) -> V2.Expense {
+                        let e = V2.Expense(amount: amount, merchant: merchant); ctx.insert(e)
+                        e.categoryRaw = category.rawValue
+                        e.paymentChannelRaw = channel.rawValue
+                        e.splitMethodRaw = SplitMethod.equal.rawValue
+                        e.payer = payer; e.paidByMe = payer == nil; e.payerNameSnapshot = payer?.name
+                        for (index, (person, minor)) in shares.enumerated() {
+                            let share = V2.ExpenseShare(isMe: person == nil, nameSnapshot: person?.name ?? "Me", amountMinor: minor, sortIndex: index)
+                            ctx.insert(share); share.expense = e; share.person = person
+                        }
+                        return e
+                    }
+                    let dinner = expense("Dinner", 100, .food, .qrPayment, payer: nil, shares: [(nil, 5000), (bijoy, 5000)])
+                    dinner.fundingAccount = "Maybank"; dinner.account = account
+                    _ = expense("Taxi", 20, .transport, .unknown, payer: labib, shares: [(nil, 1000), (labib, 1000)])
+                    for (kind, minor) in [(MoneyMovementKind.loanGiven, 5000), (.repaymentReceived, 2000)] {
+                        let m = V2.MoneyMovement(directionRaw: kind.direction.rawValue, kindRaw: kind.rawValue, amountMinor: minor); ctx.insert(m)
+                        m.person = bijoy; m.personNameSnapshot = bijoy.name; m.account = account
+                    }
                     try? ctx.save()
-                    before = ["Bijoy": PersonLedger.balances(for: bijoy)["RM"] ?? 0, "Labib": PersonLedger.balances(for: labib)["RM"] ?? 0]
-                    expenseIDs = Set(TestKit.fetch(Expense.self, in: ctx).map(\.id))
+                    expenseIDs = Set(((try? ctx.fetch(FetchDescriptor<V2.Expense>())) ?? []).map(\.id))
                 }
             }
             var actual = "open failed"

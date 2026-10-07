@@ -117,7 +117,7 @@ public struct AccountView: View {
                         ForEach(CloudBackupService.retentionChoices, id: \.self) { Text("\($0) days").tag($0) }
                     }
                     .accessibilityIdentifier("account.retention")
-                    row("Backup Format", "Version \(UserDataBackupService.BackupPayload.currentVersion) · schema \(SpenDropSchemaV5.versionIdentifier)")
+                    row("Backup Format", "Version \(UserDataBackupService.BackupPayload.currentVersion) · schema \(SpenDropSchemaV6.versionIdentifier)")
                     if cloud.lastBackupSizeBytes > 0 {
                         row("Last Backup Size", ByteCountFormatter.string(fromByteCount: Int64(cloud.lastBackupSizeBytes), countStyle: .file))
                     }

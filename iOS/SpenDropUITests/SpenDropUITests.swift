@@ -615,6 +615,106 @@ final class SpenDropUITests: XCTestCase {
         snap("Next transaction Auto Calculate ON")
     }
 
+    /// Hybrid Split in Add Expense: RM200; group RM100 divided between Riad + Bijoy; Bijoy +RM20 individual; the rest by
+    /// You, Riad and Bijoy → You 26.67, Riad 76.67, Bijoy 96.66. Saved once; Edit restores the Hybrid Split.
+    func test19_HybridSplitInAddExpense() {
+        openAdd("Expense")
+        typeAmount("200")
+        let merchant = app.textFields["e.g. McDonald's, Mamak, Rahim (optional)"]
+        for _ in 0..<4 where !merchant.isHittable { app.swipeUp() }
+        merchant.tap(); merchant.typeText("Steamboat")
+        turnOnSplit()
+        for person in ["Riad", "Bijoy"] { addNewPersonToSplit(person) }
+
+        let toggle = app.switches["split.hybrid"]
+        for _ in 0..<10 where !(toggle.exists && toggle.isHittable) { app.swipeDown(velocity: .slow) }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertFalse(app.segmentedControls["split.method"].exists, "the method picker is not used while Hybrid Split is on")
+
+        let problem = app.descendants(matching: .any)["split.problem"]
+        XCTAssertTrue(problem.waitForExistence(timeout: 5))
+        XCTAssertEqual(problem.label, "Add a group fixed amount or an individual fixed amount.")
+        XCTAssertFalse(app.buttons["Save Expense"].isEnabled)
+
+        let groupAmount = app.textFields["split.group1.amount"]
+        XCTAssertTrue(groupAmount.waitForExistence(timeout: 5))
+        groupAmount.tap(); groupAmount.typeText("100")
+        XCTAssertEqual(problem.label, "Choose who shares group fixed amount 1.")
+        for id in ["split.group1.member.Riad", "split.group1.member.Bijoy"] {
+            let box = app.buttons[id]
+            for _ in 0..<4 where !box.isHittable { app.swipeUp() }
+            box.tap()
+            XCTAssertEqual(box.value as? String, "Selected")
+        }
+        XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 50.00 · Bijoy RM 50.00")
+
+        let addIndividual = app.buttons["split.addIndividual"]
+        for _ in 0..<4 where !addIndividual.isHittable { app.swipeUp() }
+        addIndividual.tap()
+        let personMenu = app.buttons["split.individual1.person"]
+        XCTAssertTrue(personMenu.waitForExistence(timeout: 5))
+        personMenu.tap()
+        let bijoyItem = app.buttons.matching(NSPredicate(format: "label == 'Bijoy' AND NOT (identifier BEGINSWITH 'split.')")).firstMatch
+        XCTAssertTrue(bijoyItem.waitForExistence(timeout: 5))
+        bijoyItem.tap()
+        XCTAssertEqual(problem.label, "Enter the individual fixed amount for Bijoy.")
+        let individualAmount = app.textFields["split.individual1.amount"]
+        individualAmount.tap(); individualAmount.typeText("20")
+
+        XCTAssertEqual(app.staticTexts["split.hybridRemaining"].label, "RM 80.00")
+        XCTAssertFalse(problem.exists, "the split is complete")
+        let detail = app.staticTexts["split.finalDetail.Bijoy"]
+        for _ in 0..<4 where !detail.isHittable { app.swipeUp() }
+        XCTAssertEqual(detail.label, "RM 50.00 group + RM 20.00 individual + RM 26.66 remaining")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 96.66")
+        XCTAssertEqual(app.staticTexts["split.final.Riad"].label, "RM 76.67")
+        XCTAssertEqual(app.staticTexts["split.final.me"].label, "RM 26.67")
+        XCTAssertTrue(app.staticTexts["Riad owes you RM 76.67"].exists)
+        XCTAssertTrue(app.staticTexts["Bijoy owes you RM 96.66"].exists)
+        snap("Hybrid split")
+
+        // Live: a bigger group amount updates everything at once (no Calculate button).
+        for _ in 0..<6 where !groupAmount.isHittable { app.swipeDown() }
+        groupAmount.replaceText("120")
+        XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 60.00 · Bijoy RM 60.00")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 100.00")
+        groupAmount.replaceText("100")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 96.66")
+
+        let save = app.buttons["Save Expense"]
+        for _ in 0..<8 where !save.isHittable { app.swipeUp() }
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        tab("PayBook")
+        app.staticTexts["Bijoy"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Bijoy owes you RM 96.66"].waitForExistence(timeout: 5))
+
+        tab("Transactions")
+        let row = app.staticTexts["Steamboat"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let edit = app.buttons["Edit"].firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let restored = app.switches["split.hybrid"]
+        for _ in 0..<12 where !(restored.exists && restored.isHittable) { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(restored.waitForExistence(timeout: 5))
+        XCTAssertEqual(restored.value as? String, "1", "Edit restores Hybrid Split")
+        XCTAssertEqual(app.textFields["split.group1.amount"].value as? String, "100.00")
+        XCTAssertEqual(app.buttons["split.group1.member.Riad"].value as? String, "Selected")
+        XCTAssertEqual(app.buttons["split.group1.member.me"].value as? String, "Not selected")
+        XCTAssertEqual(app.textFields["split.individual1.amount"].value as? String, "20.00")
+        XCTAssertEqual(app.buttons["split.individual1.person"].label.hasPrefix("Bijoy"), true, app.buttons["split.individual1.person"].label)
+        let bijoyFinal = app.staticTexts["split.final.Bijoy"]
+        for _ in 0..<8 where !bijoyFinal.isHittable { app.swipeUp() }
+        XCTAssertEqual(bijoyFinal.label, "RM 96.66")
+        snap("Edit restores hybrid split")
+    }
+
     /// The screenshot case, through the Share Extension review: Paid by Riyad, You left empty, Riyad RM100 → valid,
     /// saved once; Edit restores Paid by Riyad and the amounts.
     func test17_ShareReviewPaidByOtherPersonPersistsAndEdits() {

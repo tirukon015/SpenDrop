@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import SwiftData
 
@@ -65,7 +66,7 @@ public struct DataSafetyTests {
                 let legacyConfig = ModelConfiguration(schema: legacySchema, url: storeURL)
                 if let legacy = try? ModelContainer(for: legacySchema, configurations: [legacyConfig]) {
                     let ctx = ModelContext(legacy)
-                    let expense = SpenDropSchemaV1.Expense(id: expenseId, amount: 30, merchant: "Lunch")
+                    let expense = SpenDropSchemaV1.Expense(id: expenseId, amount: 30, merchant: "Lunch", fundingAccount: "Maybank")
                     expense.notes = "keep me"
                     expense.imageRelativePath = "receipts/a.jpg"
                     let profile = SpenDropSchemaV1.PayBookProfile(name: "Bijoy")
@@ -87,14 +88,14 @@ public struct DataSafetyTests {
                     let e = expenses.first { $0.id == expenseId }
                     let methods = count(PayBookPaymentMethod.self, in: ctx)
                     passed = expenses.count == 1 && e?.notes == "keep me" && e?.imageRelativePath == "receipts/a.jpg" &&
-                             count(PayBookProfile.self, in: ctx) == 1 && methods == 1
-                    actual = "expenses=\(expenses.count) notes=\(e?.notes ?? "nil") profiles=\(count(PayBookProfile.self, in: ctx)) methods=\(methods)"
+                             count(PayBookProfile.self, in: ctx) == 1 && methods == 1 && e?.account?.name == "Maybank"
+                    actual = "expenses=\(expenses.count) notes=\(e?.notes ?? "nil") profiles=\(count(PayBookProfile.self, in: ctx)) methods=\(methods) account=\(e?.account?.name ?? "nil")"
                 } else {
                     actual = "versioned open threw"
                 }
             }
             record("Versioned schema opens existing unversioned store", passed,
-                   expected: "1 expense (fields intact), 1 profile, 1 method", actual: actual,
+                   expected: "1 expense (fields intact, linked to account Maybank), 1 profile, 1 method", actual: actual,
                    details: "Simulates upgrading a device database created before explicit versioning")
         }
 
@@ -116,6 +117,102 @@ public struct DataSafetyTests {
             record("V2 schema still matches the shipped V2 model", now == shipped,
                    expected: "identical fingerprint", actual: now == shipped ? "identical" : "DIFFERENT: \(now)",
                    details: "If this fails, a live model changed without freezing V2 first")
+        }
+
+        // 1d. V2–V5 were frozen when V6 changed Expense. The frozen V5 model must have exactly the Core Data version
+        //     hashes of the shipped V5 model, or existing stores would be "an unknown model version" (safe mode).
+        //     Hashes recorded from the shipped V5 model (live types before V6) on 2026-10-07.
+        do {
+            let shipped: [String: String] = [
+                "Account": "7GwxZCuhAx+YfzfemfITSOLutdiluOZqznE5HnTiLN0=",
+                "ChannelRule": "fO6rKEykYrpeEJK4VFrG2RorA4+F9pHofBOoarV9DSE=",
+                "ClassificationRule": "p94qvMxNtPEDaATigd0hEypBNJ5zEgSVazI61eP8CtM=",
+                "Expense": "7DGIAhlSrwxLW0H1pd2ZCbXqiNJn2/w/+bnMWbeNweI=",
+                "ExpenseShare": "jz14UjeZc9QxnQHZ6cJVZ50cVqWfjZTf7saddWXGioU=",
+                "MoneyMovement": "6UXYCYdCFaBHtw0DsxiEAQBkHoJpa2FdhmsQk0pDB+E=",
+                "PayBookContact": "UlvDublLdTPtKdgQsCvELE/sVa0z+6mWSTprgf3E0tc=",
+                "PayBookPaymentMethod": "39Gk48926ZUIdlM1BIj8kh9wSlBkg7mT+TXQ8IBo04Q=",
+                "PayBookProfile": "A/mRAj1+kOXSd7rlNB9ARmMLirJYTLXHO+WqUYHWnio=",
+                "SampleDataRecord": "KP1UttJYMA7wEbnqGAlGmLac+Uxog7N0b1dFPPJmjJU=",
+                "SettlementAllocation": "sxGHVj+cwH8lJYMdsIItAxWevI7taCkne15jn0ZTSQI="
+            ]
+            let frozen = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV5.models)?
+                .entityVersionHashesByName.mapValues { $0.base64EncodedString() } ?? [:]
+            let current = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV6.models)?
+                .entityVersionHashesByName.mapValues { $0.base64EncodedString() } ?? [:]
+            let changed = current.keys.filter { current[$0] != shipped[$0] }.sorted()
+            record("Frozen V5 model has the shipped V5 version hashes", frozen == shipped && changed == ["Expense"],
+                   expected: "identical hashes; V6 changes only Expense",
+                   actual: frozen == shipped ? "identical; V6 changed \(changed)" : "DIFFERENT: \(frozen.keys.filter { frozen[$0] != shipped[$0] }.sorted())",
+                   details: "If this fails, devices with a V2–V5 database would open in safe mode")
+        }
+
+        // 1e. V6 = V5 + one optional Expense field, nothing else.
+        do {
+            let v5 = ExpenseDataContainer.schemaFingerprint(Schema(versionedSchema: SpenDropSchemaV5.self))
+            let expected = v5.replacingOccurrences(of: "splitMethodRaw:Optional<String>,transactionReference",
+                                                   with: "splitMethodRaw:Optional<String>,splitRule:Optional<String>,transactionReference")
+            let now = ExpenseDataContainer.schemaFingerprint(ExpenseDataContainer.currentSchema)
+            record("V6 only adds optional splitRule to Expense", now == expected && expected != v5,
+                   expected: "V5 + Expense.splitRule:Optional<String>",
+                   actual: now == expected ? "as expected" : "DIFFERENT: \(now)")
+        }
+
+        // 1f. A V5 database (shipped model) with a split expense upgrades to V6 with every share intact and the new
+        //     splitRule nil; a Hybrid Split can then be saved and read back.
+        do {
+            let storeURL = freshDir("v5-upgrade").appendingPathComponent("default.store")
+            let expenseId = UUID()
+            var created = false
+            do {
+                let v5Schema = Schema(versionedSchema: SpenDropSchemaV5.self)
+                if let v5 = try? ModelContainer(for: v5Schema, configurations: [ModelConfiguration(schema: v5Schema, url: storeURL)]) {
+                    let ctx = ModelContext(v5)
+                    let expense = SpenDropSchemaV2.Expense(id: expenseId, amount: 30, merchant: "Dinner")
+                    expense.splitMethodRaw = "parts"
+                    let bijoy = SpenDropSchemaV2.PayBookProfile(name: "Bijoy")
+                    ctx.insert(expense)
+                    ctx.insert(bijoy)
+                    let mine = SpenDropSchemaV2.ExpenseShare(isMe: true, nameSnapshot: "Me", amountMinor: 1000, parts: 1, sortIndex: 0)
+                    let his = SpenDropSchemaV2.ExpenseShare(isMe: false, nameSnapshot: "Bijoy", amountMinor: 2000, parts: 2, sortIndex: 1)
+                    ctx.insert(mine)
+                    ctx.insert(his)
+                    mine.expense = expense
+                    his.expense = expense
+                    his.person = bijoy
+                    created = (try? ctx.save()) != nil
+                }
+            }
+            var passed = false
+            var actual = "V5 store not created"
+            if created {
+                let config = ModelConfiguration(schema: ExpenseDataContainer.currentSchema, url: storeURL)
+                let result = ExpenseDataContainer.openStoreSafely(storeURL: storeURL, configuration: config, defaults: freshDefaults())
+                var persistent = false
+                if case .persistent = result.status { persistent = true }
+                let ctx = ModelContext(result.container)
+                let e = ((try? ctx.fetch(FetchDescriptor<Expense>())) ?? []).first { $0.id == expenseId }
+                let shares = (e?.shares ?? []).sorted { $0.sortIndex < $1.sortIndex }
+                let intact = shares.map(\.amountMinor) == [1000, 2000] && shares.map(\.parts) == [1, 2] && shares.last?.person?.name == "Bijoy" &&
+                             e?.splitMethod == .parts && e?.splitRule == nil
+                let reloaded = e.flatMap { SplitDraft(expense: $0) }
+                var hybridSaved = false
+                if let e, var draft = reloaded {
+                    draft.setHybrid(true)
+                    let row = draft.addIndividual()
+                    draft.setIndividualPerson(draft.participants[1].id, for: row)
+                    draft.setIndividualAmountText("5", for: row)
+                    hybridSaved = draft.apply(to: e, in: ctx) && (try? ctx.save()) != nil
+                }
+                let after = (e?.shares ?? []).sorted { $0.sortIndex < $1.sortIndex }
+                let back = e.flatMap { SplitDraft(expense: $0) }
+                passed = persistent && intact && reloaded?.method == .parts && reloaded?.usesHybrid == false && hybridSaved &&
+                         after.map(\.amountMinor) == [1250, 1750] && e?.splitRule != nil && back?.usesHybrid == true
+                actual = "persistent=\(persistent) intact=\(intact) shares=\(shares.map(\.amountMinor)) hybridSaved=\(hybridSaved) after=\(after.map(\.amountMinor)) rule=\(e?.splitRule ?? "nil")"
+            }
+            record("V5 database upgrades to V6 with split shares intact", passed,
+                   expected: "opens normally; shares 10/20, parts 1/2, Bijoy linked, splitRule nil; Hybrid Split saves 12.50/17.50 and reloads",
+                   actual: actual, details: "Lightweight V5 -> V6 migration of a real on-disk store")
         }
 
         // 2. SwiftData silently migrates a store with a different model and drops entities it does not know.

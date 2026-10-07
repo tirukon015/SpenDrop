@@ -105,6 +105,9 @@ public final class UserDataBackupService {
         public var payerId: UUID? = nil
         public var payerNameSnapshot: String? = nil
         public var splitMethodRaw: String? = nil
+        /// Hybrid Split rule (canonical JSON, see split-hybrid.md); nil = a normal split. Omitted from the JSON when
+        /// nil, so older backups load unchanged.
+        public var splitRule: String? = nil
         public var shares: [ExpenseShareDTO]? = nil
 
         public init(from expense: Expense) {
@@ -137,6 +140,7 @@ public final class UserDataBackupService {
             self.payerId = expense.payer?.id
             self.payerNameSnapshot = expense.payerNameSnapshot
             self.splitMethodRaw = expense.splitMethodRaw
+            self.splitRule = expense.splitRule
             self.shares = expense.shares.sorted { $0.sortIndex < $1.sortIndex }.map { ExpenseShareDTO(from: $0) }
         }
 
@@ -1520,6 +1524,7 @@ public final class UserDataBackupService {
             expense.payer = person(dto.payerId)
             expense.payerNameSnapshot = dto.payerNameSnapshot
             expense.splitMethodRaw = dto.splitMethodRaw
+            expense.splitRule = dto.splitRule
 
             // The backup's share list is the truth for this expense: update/insert by id, remove the rest.
             let backupShares = dto.shares ?? []
