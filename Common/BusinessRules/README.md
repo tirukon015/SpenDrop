@@ -22,9 +22,15 @@ Every rule below is implemented identically on iOS and Web. The JSON files are e
   typed amounts are kept exactly; what's left (total − typed − fixed) is shared equally by everyone not typed for —
   Me included; each person with a **fixed amount** gets fixed + their equal part. Typing the last untyped person
   hands the earliest-typed person back to the calculation. Clearing a box hands that person back.
+- Reopening a saved Custom Amount split: Auto Calculate is **ON** too, and nothing moves — everyone keeps their saved
+  amount as typed except Me (or, if I'm not in the split, the last person), whose amount is total − the others, i.e.
+  the saved number. Only an edit recalculates.
 - Auto Calculate **OFF**: amounts shown are frozen; nothing changes by itself; "RM X remains unassigned." until it adds up.
 - Errors (exact wording shared): "Fixed amounts exceed the expense total by RM X.", "Shares exceed the total by RM X.",
   "RM X remains unassigned.", "Add at least one other person.".
+- **Hybrid Split** (`split-hybrid.md`, `split-hybrid-vectors.json`): group fixed amounts (a total divided equally
+  between the group), individual fixed amounts (one person, not divided), then the remaining amount split equally
+  between a chosen group. A person's amount is the sum of every layer they're in. Same rounding as Split Equally.
 - **Paid for someone**: I paid for the listed people (my share 0) or someone paid entirely for me (my share = total).
 - A split that doesn't add up is never saved; the transaction amount is never changed to make it fit.
 
