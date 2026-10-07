@@ -85,7 +85,7 @@ final class SpenDropUITests: XCTestCase {
     private func addAccount(_ name: String) {
         tab("More")
         app.buttons["more.accounts"].tap()
-        let add = app.navigationBars["Accounts"].buttons["Add Account"]
+        let add = app.navigationBars["Bank Accounts"].buttons["Add Account"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
         let field = app.textFields["Name (e.g. Maybank)"]
@@ -94,7 +94,7 @@ final class SpenDropUITests: XCTestCase {
         field.typeText(name)
         app.navigationBars["New Account"].buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
-        app.navigationBars["Accounts"].buttons.element(boundBy: 0).tap()   // back to More
+        app.navigationBars["Bank Accounts"].buttons.element(boundBy: 0).tap()   // back to More
     }
 
     func test01_FiveTabsInOrder() {
@@ -499,7 +499,7 @@ final class SpenDropUITests: XCTestCase {
         if (autoCalc.value as? String) == "1" { autoCalc.switches.firstMatch.exists ? autoCalc.switches.firstMatch.tap() : autoCalc.tap() }
         for (field, value) in [("split.amount.me", "40"), ("split.amount.Bijoy", "30"), ("split.amount.Riyad", "30")] {
             let box = app.textFields[field]
-            for _ in 0..<4 where !box.isHittable { app.swipeDown() }
+            bringIntoView(box)
             box.replaceText(value)
         }
         XCTAssertTrue(app.staticTexts["Bijoy owes you RM 30.00"].waitForExistence(timeout: 5))
@@ -587,13 +587,14 @@ final class SpenDropUITests: XCTestCase {
         XCTAssertEqual(autoCalc.value as? String, "0")
         for (field, value) in [("split.amount.me", "70"), ("split.amount.Vijay", "50"), ("split.amount.Riyadh", "50")] {
             let box = app.textFields[field]
-            for _ in 0..<4 where !box.isHittable { app.swipeDown() }
+            bringIntoView(box)
             box.replaceText(value)
         }
         let problem = app.descendants(matching: .any)["split.problem"]
         XCTAssertTrue(problem.waitForExistence(timeout: 5))
         XCTAssertEqual(problem.label, "RM 30.00 remains unassigned.")
         XCTAssertEqual(app.textFields["split.amount.Riyadh"].value as? String, "50", "nothing redistributed")
+        bringIntoView(app.textFields["split.amount.Riyadh"])
         app.textFields["split.amount.Riyadh"].replaceText("80")
         save = app.buttons["Save Expense"]
         for _ in 0..<5 where !save.isHittable { app.swipeUp() }
@@ -613,6 +614,122 @@ final class SpenDropUITests: XCTestCase {
         for _ in 0..<4 where !autoCalc3.isHittable { app.swipeUp() }
         XCTAssertEqual(autoCalc3.value as? String, "1", "OFF applied only to the previous transaction")
         snap("Next transaction Auto Calculate ON")
+    }
+
+    /// Hybrid Split in Add Expense: RM200; group RM100 divided between Riad + Bijoy; Bijoy +RM20 individual; the rest by
+    /// You, Riad and Bijoy → You 26.67, Riad 76.67, Bijoy 96.66. Saved once; Edit restores the Hybrid Split.
+    /// Scrolls slowly until the element sits in the visible middle of the screen (not under the navigation bar or the
+    /// keyboard), so taps land on it on small iPhones and with large text too.
+    private func bringIntoView(_ element: XCUIElement) {
+        let height = app.frame.height
+        let keyboardTop = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY : height - 40
+        for _ in 0..<12 {
+            if element.exists && element.isHittable && element.frame.minY > 150 && element.frame.maxY < keyboardTop - 10 { return }
+            if element.exists && element.frame.minY <= 150 { app.swipeDown(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
+        }
+    }
+
+    func test19_HybridSplitInAddExpense() {
+        openAdd("Expense")
+        typeAmount("200")
+        let merchant = app.textFields["e.g. McDonald's, Mamak, Rahim (optional)"]
+        for _ in 0..<4 where !merchant.isHittable { app.swipeUp() }
+        merchant.tap(); merchant.typeText("Steamboat")
+        turnOnSplit()
+        for person in ["Riad", "Bijoy"] { addNewPersonToSplit(person) }
+
+        let toggle = app.switches["split.hybrid"]
+        for _ in 0..<10 where !(toggle.exists && toggle.isHittable) { app.swipeDown(velocity: .slow) }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertFalse(app.segmentedControls["split.method"].exists, "the method picker is not used while Hybrid Split is on")
+
+        let problem = app.descendants(matching: .any)["split.problem"]
+        XCTAssertTrue(problem.waitForExistence(timeout: 5))
+        XCTAssertEqual(problem.label, "Add a group fixed amount or an individual fixed amount.")
+        XCTAssertFalse(app.buttons["Save Expense"].isEnabled)
+
+        let groupAmount = app.textFields["split.group1.amount"]
+        XCTAssertTrue(groupAmount.waitForExistence(timeout: 5))
+        bringIntoView(groupAmount)
+        groupAmount.tap(); groupAmount.typeText("100")
+        XCTAssertEqual(problem.label, "Choose who shares group fixed amount 1.")
+        for id in ["split.group1.member.Riad", "split.group1.member.Bijoy"] {
+            let box = app.buttons[id]
+            bringIntoView(box)
+            box.tap()
+            XCTAssertEqual(box.value as? String, "Selected")
+        }
+        XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 50.00 · Bijoy RM 50.00")
+        snap("Hybrid group card")
+
+        let addIndividual = app.buttons["split.addIndividual"]
+        bringIntoView(addIndividual)
+        addIndividual.tap()
+        let personMenu = app.buttons["split.individual1.person"]
+        XCTAssertTrue(personMenu.waitForExistence(timeout: 5))
+        bringIntoView(personMenu)
+        personMenu.tap()
+        let bijoyItem = app.buttons.matching(NSPredicate(format: "label == 'Bijoy' AND NOT (identifier BEGINSWITH 'split.')")).firstMatch
+        XCTAssertTrue(bijoyItem.waitForExistence(timeout: 5))
+        bijoyItem.tap()
+        XCTAssertEqual(problem.label, "Enter the individual fixed amount for Bijoy.")
+        let individualAmount = app.textFields["split.individual1.amount"]
+        bringIntoView(individualAmount)
+        individualAmount.tap(); individualAmount.typeText("20")
+        snap("Hybrid individual card")
+
+        XCTAssertEqual(app.staticTexts["split.hybridRemaining"].label, "RM 80.00")
+        XCTAssertFalse(problem.exists, "the split is complete")
+        let detail = app.staticTexts["split.finalDetail.Bijoy"]
+        for _ in 0..<4 where !detail.isHittable { app.swipeUp() }
+        XCTAssertEqual(detail.label, "RM 50.00 group + RM 20.00 individual + RM 26.66 remaining")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 96.66")
+        XCTAssertEqual(app.staticTexts["split.final.Riad"].label, "RM 76.67")
+        XCTAssertEqual(app.staticTexts["split.final.me"].label, "RM 26.67")
+        XCTAssertTrue(app.staticTexts["Riad owes you RM 76.67"].exists)
+        XCTAssertTrue(app.staticTexts["Bijoy owes you RM 96.66"].exists)
+        snap("Hybrid split")
+
+        // Live: a bigger group amount updates everything at once (no Calculate button).
+        bringIntoView(groupAmount)
+        groupAmount.replaceText("120")
+        XCTAssertEqual(app.staticTexts["split.group1.preview"].label, "Riad RM 60.00 · Bijoy RM 60.00")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 100.00")
+        groupAmount.replaceText("100")
+        XCTAssertEqual(app.staticTexts["split.final.Bijoy"].label, "RM 96.66")
+
+        let save = app.buttons["Save Expense"]
+        for _ in 0..<8 where !save.isHittable { app.swipeUp() }
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        tab("PayBook")
+        app.staticTexts["Bijoy"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Bijoy owes you RM 96.66"].waitForExistence(timeout: 5))
+
+        tab("Transactions")
+        let row = app.staticTexts["Steamboat"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let edit = app.buttons["Edit"].firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let restored = app.switches["split.hybrid"]
+        for _ in 0..<12 where !(restored.exists && restored.isHittable) { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(restored.waitForExistence(timeout: 5))
+        XCTAssertEqual(restored.value as? String, "1", "Edit restores Hybrid Split")
+        XCTAssertEqual(app.textFields["split.group1.amount"].value as? String, "100.00")
+        XCTAssertEqual(app.buttons["split.group1.member.Riad"].value as? String, "Selected")
+        XCTAssertEqual(app.buttons["split.group1.member.me"].value as? String, "Not selected")
+        XCTAssertEqual(app.textFields["split.individual1.amount"].value as? String, "20.00")
+        XCTAssertEqual(app.buttons["split.individual1.person"].label.hasPrefix("Bijoy"), true, app.buttons["split.individual1.person"].label)
+        let bijoyFinal = app.staticTexts["split.final.Bijoy"]
+        for _ in 0..<8 where !bijoyFinal.isHittable { app.swipeUp() }
+        XCTAssertEqual(bijoyFinal.label, "RM 96.66")
+        snap("Edit restores hybrid split")
     }
 
     /// The screenshot case, through the Share Extension review: Paid by Riyad, You left empty, Riyad RM100 → valid,
@@ -659,6 +776,53 @@ final class SpenDropUITests: XCTestCase {
         XCTAssertTrue(restoredPayer.label.contains("Riyad"), "Edit restores Paid by Riyad, not Me: \(restoredPayer.label)")
         XCTAssertEqual(app.textFields["split.amount.Riyad"].value as? String, "100.00")
         snap("Edit restores paid by Riyad")
+    }
+
+    /// Bulk Import from Home with fixture screenshots (a receipt, a 2-row history, the same receipt again, one with no
+    /// text): review queue, the full editor inside a card, duplicate skipped by default, "Add 3", each saved separately.
+    func test18_BulkImportReviewQueue() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--ui-testing-bulk-import"]
+        app.launch()
+        let entry = app.buttons["home.bulkImport"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "Bulk Import is offered on Home")
+        entry.tap()
+
+        let add = app.buttons["bulk.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 20), "review queue appears after reading")
+        XCTAssertEqual(add.label, "Add 3 Transactions", "the duplicate of screenshot 1 is skipped by default")
+        XCTAssertEqual(app.staticTexts["bulk.summary"].label, "4 screenshots · 4 transactions detected")
+        XCTAssertTrue(app.staticTexts["Possible Duplicate"].exists)
+        let unreadable = app.descendants(matching: .any)["bulk.unreadable.4"]
+        for _ in 0..<4 where !unreadable.exists { app.swipeUp() }
+        XCTAssertTrue(unreadable.exists, "a screenshot without a transaction is listed")
+        snap("Bulk import review queue")
+        for _ in 0..<4 { app.swipeDown() }
+
+        // A card opens into the normal editor (Save as, fields, Split Money).
+        let card = app.buttons["bulk.card.1.0"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        let split = app.switches["share.splitToggle"]
+        for _ in 0..<5 where !split.isHittable { app.swipeUp() }
+        XCTAssertTrue(split.exists, "the full editor with Split Money is inside the card")
+        XCTAssertTrue(app.buttons["draft.paidFor"].exists, "Paid for Someone is offered")
+        snap("Bulk import card expanded")
+        let collapse = app.buttons["bulk.collapse"]
+        for _ in 0..<5 where !collapse.isHittable { app.swipeUp() }
+        collapse.tap()
+
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(app.staticTexts["Added 3 transactions"].waitForExistence(timeout: 10))
+        app.buttons["bulk.done"].tap()
+
+        tab("Transactions")
+        // The two history rows are dated today (the receipt is dated 16 Sep, outside the default period).
+        for name in ["Grab", "Starbucks"] {
+            XCTAssertTrue(app.staticTexts[name].firstMatch.waitForExistence(timeout: 5), "\(name) saved as its own transaction")
+        }
+        snap("Bulk import saved")
     }
 }
 

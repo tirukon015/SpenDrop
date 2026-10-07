@@ -33,8 +33,8 @@ public struct MoreView: View {
                     } label: {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Accounts")
-                                Text("Recorded money in and out per account")
+                                Text("Bank Accounts")
+                                Text("Banks, e-wallets and cash · money in and out")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

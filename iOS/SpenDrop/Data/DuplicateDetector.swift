@@ -36,6 +36,25 @@ public struct DuplicateDetector {
             in: context
         )
 
+        return Self.result(match)
+    }
+
+    /// The same check against a given list of (possibly unsaved) expenses, e.g. earlier drafts of a Bulk Import.
+    public func checkDuplicate(
+        amount: Double?,
+        merchant: String?,
+        date: Date?,
+        reference: String?,
+        paymentChannel: PaymentChannel? = nil,
+        fundingAccount: String? = nil,
+        among records: [Expense]
+    ) -> DuplicateCheckResult {
+        Self.result(TransactionReconciliationEngine.shared.findMatch(
+            amount: amount, merchant: merchant, date: date, reference: reference,
+            paymentChannel: paymentChannel, fundingAccount: fundingAccount, among: records))
+    }
+
+    private static func result(_ match: MatchResult) -> DuplicateCheckResult {
         if match.isMatch {
             return DuplicateCheckResult(
                 isDuplicate: true,

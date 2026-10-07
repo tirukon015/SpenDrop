@@ -62,7 +62,7 @@ public final class ExpenseDataContainer {
     }
 
     public static var currentSchema: Schema {
-        Schema(versionedSchema: SpenDropSchemaV5.self)
+        Schema(versionedSchema: SpenDropSchemaV6.self)
     }
 
     private static let schemaFingerprintKey = "SpenDrop.lastOpenedSchemaFingerprint"
@@ -196,7 +196,7 @@ public final class ExpenseDataContainer {
     /// Returns false when the store would need a migration (or its metadata cannot be read).
     static func storeMatchesCurrentModel(storeURL: URL) -> Bool {
         guard let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: storeURL),
-              let model = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV5.models) else {
+              let model = NSManagedObjectModel.makeManagedObjectModel(for: SpenDropSchemaV6.models) else {
             return false
         }
         return model.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)

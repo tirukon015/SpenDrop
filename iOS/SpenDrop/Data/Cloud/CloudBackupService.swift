@@ -400,7 +400,7 @@ public final class CloudBackupService {
             uploadedPath = path
             let record = CloudBackupRecord(
                 id: backupID, deviceId: device.id, deviceName: device.name, appVersion: device.appVersion,
-                schemaVersion: "\(SpenDropSchemaV5.versionIdentifier)", backupVersion: payload.version, createdAt: clock(),
+                schemaVersion: "\(SpenDropSchemaV6.versionIdentifier)", backupVersion: payload.version, createdAt: clock(),
                 objectPath: path, expensesCount: payload.expenses.count, peopleCount: payload.paybookProfiles.count,
                 accountsCount: payload.accounts?.count ?? 0, movementsCount: payload.moneyMovements?.count ?? 0, sizeBytes: data.count)
             try await send(config: config, method: "POST", path: "rest/v1/backups", token: token,
