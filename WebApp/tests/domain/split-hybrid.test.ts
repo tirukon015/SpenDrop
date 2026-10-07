@@ -245,7 +245,7 @@ describe("Hybrid Split: saving and loading", () => {
     const loaded = s.draftFromShares({ ...expenseFor(d, 20000), splitRule: rule }, sharesFor(d, 20000), names)!;
     expect(loaded.hybrid).toBeNull();
     expect(loaded.method).toBe("amounts");
-    expect(loaded.autoCalculate).toBe(false);
+    expect(loaded.autoCalculate).toBe(true); // on by default, saved amounts unchanged
     expect(s.shares(loaded, 20000)).toEqual([2667, 7667, 9666]);
   });
 
@@ -257,7 +257,7 @@ describe("Hybrid Split: saving and loading", () => {
     for (const splitRule of [undefined, null]) {
       const d = s.draftFromShares({ paidByMe: true, payerId: null, payerNameSnapshot: null, splitMethod: "amounts", splitRule }, rows, () => undefined)!;
       expect(d.hybrid).toBeNull();
-      expect(d.autoCalculate).toBe(false);
+      expect(d.autoCalculate).toBe(true); // on by default, saved amounts unchanged
       expect(s.shares(d, 9000)).toEqual([6000, 3000]);
     }
   });

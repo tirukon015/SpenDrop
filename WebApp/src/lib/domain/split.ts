@@ -781,14 +781,24 @@ export function draftFromShares(
       return matches.length === 1 ? matches[0].id : undefined;
     })
     : null;
-  return {
+  const draft: SplitDraft = {
     method: hybrid ? "amounts" : expense.splitMethod ?? "amounts",
     purpose,
-    autoCalculate: false,
+    // Auto Calculate is ON when a saved split is reopened too; the saved amounts are kept (below).
+    autoCalculate: true,
     participants,
     payerId: expense.paidByMe ? null : expense.payerId,
     payerName: expense.paidByMe ? null : (expense.payerId && personName(expense.payerId)) || expense.payerNameSnapshot,
     typedOrder: [],
     hybrid,
   };
+  // Custom Amount with Auto Calculate ON, and nothing moves: everyone keeps their saved amount as typed except Me (or the
+  // last person when I'm not in it), whose amount is total − the others — the saved number.
+  // (Also under a Hybrid Split, so turning it off keeps the saved amounts.)
+  if (draft.method === "amounts") {
+    const sharing = sharingParticipants(draft);
+    const calculated = sharing.find((p) => p.isMe) ?? sharing[sharing.length - 1];
+    draft.typedOrder = sharing.map((p) => p.id).filter((id) => id !== calculated?.id);
+  }
+  return draft;
 }

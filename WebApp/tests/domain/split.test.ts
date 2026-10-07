@@ -70,13 +70,15 @@ describe("split editor rules (same as iOS)", () => {
     expect(s.remainingMinor(d, 10000)).toBe(2000);
   });
 
-  it("loads a saved split exactly (Auto Calculate OFF, no fixed amounts inferred)", () => {
+  it("loads a saved split exactly (Auto Calculate ON, amounts unchanged, no fixed amounts inferred)", () => {
     const d = s.draftFromShares({ paidByMe: true, payerId: null, payerNameSnapshot: null, splitMethod: "amounts" }, [
       { id: "1", personId: null, isMe: true, nameSnapshot: "Me", amountMinor: 6000, parts: null, enteredMinor: 6000, sortIndex: 0 },
       { id: "2", personId: "v", isMe: false, nameSnapshot: "Vijay", amountMinor: 3000, parts: null, enteredMinor: 3000, sortIndex: 1 },
     ], () => undefined)!;
-    expect(d.autoCalculate).toBe(false);
+    expect(d.autoCalculate).toBe(true);
     expect(s.shares(d, 9000)).toEqual([6000, 3000]);
     expect(d.participants.every((p) => p.fixedMinor === null)).toBe(true);
+    // Editing Vijay's amount recalculates Me
+    expect(s.shares(s.setAmountText(d, d.participants[1].id, "40", 9000), 9000)).toEqual([5000, 4000]);
   });
 });
