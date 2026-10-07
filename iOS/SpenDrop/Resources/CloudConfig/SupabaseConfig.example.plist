@@ -8,5 +8,8 @@
 	<string>https://YOUR_PROJECT_REF.supabase.co</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>YOUR_ANON_PUBLIC_KEY</string>
+	<!-- Optional: SpenDrop AI server (the web app). Defaults to https://spendrop.vercel.app when omitted. -->
+	<key>SPENDROP_API_URL</key>
+	<string>https://spendrop.vercel.app</string>
 </dict>
 </plist>
