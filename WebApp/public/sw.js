@@ -1,11 +1,11 @@
 // SpenDrop service worker. Deliberately small: it only makes the installed app open when offline by serving
 // cached static assets and an offline page. It never caches Supabase/API responses or any financial data —
 // the app's own per-user IndexedDB cache handles offline reading and is cleared on sign-out.
-const CACHE = "spendrop-shell-v1";
+const CACHE = "spendrop-shell-v2";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL, "/icon.svg"])).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192.png"])).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
