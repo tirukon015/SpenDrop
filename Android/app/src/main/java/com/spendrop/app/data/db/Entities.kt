@@ -40,6 +40,8 @@ data class ExpenseEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long?,
+    /** Added in database version 2: the Hybrid Split rule. */
+    val splitRule: String? = null,
 )
 
 @Entity(tableName = "expense_shares", indices = [Index("expenseId"), Index("personId")])

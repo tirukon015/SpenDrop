@@ -15,14 +15,14 @@ fun ExpenseEntity.toModel() = Expense(
     id, amountMinor, currency, merchant, categoryRaw, fundingAccount, accountId, paymentChannelRaw, fundingInstrument,
     paymentSourceRaw, underlyingBankRaw, paymentMethodRaw, date, notes, transactionReference, externalTransactionId,
     matchingStatusRaw, matchingConfidence, sourceTypeRaw, ocrText, confidence, imageRelativePath, receiptPath, isSampleData,
-    paidByMe, payerId, payerNameSnapshot, splitMethodRaw, createdAt, updatedAt, deletedAt,
+    paidByMe, payerId, payerNameSnapshot, splitMethodRaw, createdAt, updatedAt, deletedAt, splitRule,
 )
 
 fun Expense.toEntity() = ExpenseEntity(
     id, amountMinor, currency, merchant, categoryRaw, fundingAccount, accountId, paymentChannelRaw, fundingInstrument,
     paymentSourceRaw, underlyingBankRaw, paymentMethodRaw, date, notes, transactionReference, externalTransactionId,
     matchingStatusRaw, matchingConfidence, sourceTypeRaw, ocrText, confidence, imageRelativePath, receiptPath, isSampleData,
-    paidByMe, payerId, payerNameSnapshot, splitMethodRaw, createdAt, updatedAt, deletedAt,
+    paidByMe, payerId, payerNameSnapshot, splitMethodRaw, createdAt, updatedAt, deletedAt, splitRule,
 )
 
 fun ExpenseShareEntity.toModel() = ExpenseShare(id, expenseId, personId, isMe, nameSnapshot, amountMinor, parts, enteredMinor, sortIndex, createdAt, updatedAt, deletedAt)

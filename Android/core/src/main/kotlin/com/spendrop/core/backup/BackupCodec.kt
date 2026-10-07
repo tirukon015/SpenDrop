@@ -111,7 +111,7 @@ object BackupCodec {
         matchingStatusRaw = e.matchingStatusRaw, imageRelativePath = e.imageRelativePath, confidence = e.confidence,
         externalTransactionId = e.externalTransactionId, matchingConfidence = e.matchingConfidence, updatedAt = e.updatedAt,
         accountId = e.accountId, paidByMe = e.paidByMe, payerId = e.payerId, payerNameSnapshot = e.payerNameSnapshot,
-        splitMethodRaw = e.splitMethodRaw,
+        splitMethodRaw = e.splitMethodRaw, splitRule = e.splitRule,
         shares = shares.filter { it.deletedAt == null }.sortedBy { it.sortIndex }.map(::shareDto),
     )
 

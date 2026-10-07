@@ -47,6 +47,8 @@ data class Expense(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null,
+    /** Hybrid Split rule (canonical JSON, Common/BusinessRules/split-hybrid.md). null = a normal split. */
+    val splitRule: String? = null,
 ) {
     val category: ExpenseCategory get() = ExpenseCategory.fromRaw(categoryRaw)
     /** The stored channel; for an unrecognised stored value (old records) the iOS conservative fallback. */

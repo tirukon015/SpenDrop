@@ -4,7 +4,19 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import com.spendrop.app.ui.components.RowDivider
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -91,25 +103,41 @@ fun PersonEditScreen(container: AppContainer, personId: String?, onDone: (savedI
             }
         }) { Text("Save", fontWeight = FontWeight.SemiBold) }
     }) { padding ->
-        Column(Modifier.padding(padding).imePadding().verticalScroll(rememberScrollState())) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                PersonAvatar(container, id, Person(id, name.ifBlank { "?" }, createdAt = 0, updatedAt = 0).initials, 88.dp, overrideUri = photo,
-                    modifier = Modifier.clickable { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                Text("Tap to add photo (optional)", color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 6.dp))
+        Column(Modifier.padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            // Photo: live initials (or the chosen photo) with a camera badge; tap to choose.
+            val pickPhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.clickable(role = Role.Button, onClickLabel = "Choose photo", onClick = pickPhoto)) {
+                    val initials = Person(id, name.trim(), createdAt = 0, updatedAt = 0).initials
+                    if (name.isBlank() && photo == null && existing == null) {
+                        Box(Modifier.size(96.dp).clip(CircleShape).background(SD.colors.blue.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Person, null, tint = SD.colors.blue, modifier = Modifier.size(48.dp))
+                        }
+                    } else PersonAvatar(container, id, initials, 96.dp, overrideUri = photo)
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).size(32.dp).clip(CircleShape).background(SD.colors.groupedBackground).padding(3.dp)
+                            .clip(CircleShape).background(SD.colors.blue),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.PhotoCamera, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+                }
+                TextButton(onClick = pickPhoto) { Text(if (photo != null) "Change Photo" else "Add Photo", fontWeight = FontWeight.Medium) }
             }
-            SectionHeader("Person profile")
-            SDCard(padding = 12.dp) {
-                OutlinedTextField(name, { name = it }, label = { Text("Person Name *") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+
+            SectionHeader("Person")
+            SDCard {
+                FormFieldRow("Name", name, "Required", tag = "personName", capitalization = KeyboardCapitalization.Words) { name = it }
+                RowDivider()
+                FormFieldRow("Notes", notes, "Optional", singleLine = false, tag = "personNotes") { notes = it }
             }
-            SectionFooter("Each person can store multiple bank accounts and e-wallets.")
+            SectionFooter("Each person can store several bank accounts and e-wallets.")
+
             if (personId == null) {
-                SectionHeader("Payment method (optional)")
+                SectionHeader("Payment account")
                 SDCard {
                     ListRow("Add Payment Account Now", trailing = { Switch(withMethod, { withMethod = it }) })
-                    if (withMethod) Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { MethodFields(method) { method = it } }
+                    if (withMethod) { RowDivider(); MethodFields(method) { method = it } }
                 }
+                SectionFooter(if (withMethod) "Saved with this person so you can copy it when you pay them." else "Optional. You can add accounts later from their page.")
             }
         }
     }
@@ -153,7 +181,7 @@ fun PaymentMethodEditScreen(container: AppContainer, personId: String, methodId:
     }) { padding ->
         Column(Modifier.padding(padding).imePadding().verticalScroll(rememberScrollState())) {
             SectionHeader(if (person != null) "Account details for ${person.name}" else "Payment method details")
-            SDCard(padding = 12.dp) { MethodFields(form) { form = it } }
+            SDCard { MethodFields(form) { form = it } }
             SectionFooter("Labels help distinguish multiple accounts from the same bank (e.g. Personal vs Business).")
         }
     }

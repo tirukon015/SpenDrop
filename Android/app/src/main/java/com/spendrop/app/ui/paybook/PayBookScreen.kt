@@ -22,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,7 +64,16 @@ fun PayBookScreen(container: AppContainer, openPerson: (String) -> Unit, addPers
     SDScreen(
         title = "PayBook",
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = addPerson, icon = { Icon(Icons.Filled.PersonAdd, null) }, text = { Text("Add Person") })
+            // Solid Material button in the app's blue (the default tonal container was see-through over the list).
+            ExtendedFloatingActionButton(
+                onClick = addPerson,
+                icon = { Icon(Icons.Filled.PersonAdd, null) },
+                text = { Text("Add Person", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) },
+                containerColor = com.spendrop.app.ui.theme.SD.colors.blue,
+                contentColor = androidx.compose.ui.graphics.Color.White,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.testTag("addPerson"),
+            )
         },
     ) { padding ->
         val s = snapshot ?: return@SDScreen LoadingState(modifier = Modifier.padding(padding))
@@ -75,7 +86,8 @@ fun PayBookScreen(container: AppContainer, openPerson: (String) -> Unit, addPers
                 }
             }
         }
-        LazyColumn(contentPadding = padding) {
+        // Extra space at the end so the last person can scroll clear of the Add Person button.
+        LazyColumn(contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 96.dp)) {
             item {
                 OutlinedTextField(
                     search, { search = it }, placeholder = { Text("Search people, banks, accounts...", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },

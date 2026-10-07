@@ -99,6 +99,11 @@ data class ExpenseRow(
     @SerialName("payer_id") val payerId: String?,
     @SerialName("payer_name_snapshot") val payerNameSnapshot: String?,
     @SerialName("split_method") val splitMethod: String?,
+    /**
+     * Hybrid Split rule (migration 20261008000000_hybrid_split). [SPLIT_RULE_MISSING] when the server doesn't send the
+     * column (not migrated yet), so a pull never wipes the rule this device has.
+     */
+    @SerialName("split_rule") val splitRule: String? = SPLIT_RULE_MISSING,
     @SerialName("receipt_path") val receiptPath: String?,
     @SerialName("is_sample_data") val isSampleData: Boolean,
     @SerialName("created_at") val createdAt: String,
@@ -223,6 +228,9 @@ object CloudTables {
 }
 
 /** Mappers between :core records and cloud rows. */
+/** Default of [ExpenseRow.splitRule]: the key wasn't in the server's row. Never sent (equal to the default). */
+const val SPLIT_RULE_MISSING = "\u0000missing"
+
 object CloudRows {
     /** Writes every column except server-owned defaults (user_id, server_updated_at); nulls are sent explicitly. */
     val json: Json = Json { ignoreUnknownKeys = true; encodeDefaults = false; explicitNulls = true }
@@ -257,7 +265,8 @@ object CloudRows {
         accountId = idOrNull(e.accountId), paymentSource = e.paymentSourceRaw, date = ts(e.date), notes = e.notes,
         transactionReference = e.transactionReference, sourceType = e.sourceTypeRaw, paidByMe = e.paidByMe,
         payerId = idOrNull(e.payerId), payerNameSnapshot = e.payerNameSnapshot, splitMethod = e.splitMethodRaw,
-        receiptPath = e.receiptPath, isSampleData = e.isSampleData, createdAt = ts(e.createdAt), updatedAt = ts(e.updatedAt),
+        // Left out when empty: the save RPC treats a missing key as null, and older servers never see it.
+        splitRule = e.splitRule ?: SPLIT_RULE_MISSING, receiptPath = e.receiptPath, isSampleData = e.isSampleData, createdAt = ts(e.createdAt), updatedAt = ts(e.updatedAt),
         deletedAt = tsOrNull(e.deletedAt),
     )
 
@@ -273,7 +282,7 @@ object CloudRows {
             accountId = idOrNull(r.accountId), paymentSourceRaw = r.paymentSource ?: start.paymentSourceRaw, date = ms(r.date),
             notes = r.notes, transactionReference = r.transactionReference, sourceTypeRaw = r.sourceType, paidByMe = r.paidByMe,
             payerId = idOrNull(r.payerId), payerNameSnapshot = r.payerNameSnapshot, splitMethodRaw = r.splitMethod,
-            receiptPath = r.receiptPath, isSampleData = r.isSampleData, createdAt = ms(r.createdAt), updatedAt = ms(r.updatedAt),
+            splitRule = if (r.splitRule == SPLIT_RULE_MISSING) start.splitRule else r.splitRule, receiptPath = r.receiptPath, isSampleData = r.isSampleData, createdAt = ms(r.createdAt), updatedAt = ms(r.updatedAt),
             deletedAt = msOrNull(r.deletedAt),
         )
     }
