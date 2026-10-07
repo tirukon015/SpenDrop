@@ -1,0 +1,169 @@
+{
+  "accountName" : "me@example.com",
+  "accounts" : [
+    {
+      "createdAt" : "2026-01-01T04:00:00Z",
+      "currency" : "RM",
+      "id" : "A1B2C3D4-0000-4000-8000-00000000000A",
+      "isArchived" : false,
+      "name" : "Maybank",
+      "sortIndex" : 0,
+      "typeRaw" : "bank"
+    }
+  ],
+  "appName" : "SpenDrop",
+  "channelRules" : [
+    {
+      "channelRaw" : "APPLE_PAY",
+      "createdAt" : "2026-09-01T02:00:00Z",
+      "fundingKey" : "maybank",
+      "hitCount" : 2,
+      "id" : "C0000000-0000-4000-8000-000000000001",
+      "merchantKey" : "mcdonald's",
+      "updatedAt" : "2026-09-30T02:00:00Z"
+    }
+  ],
+  "classificationRules" : [
+    {
+      "categoryRaw" : "Food",
+      "createdAt" : "2026-09-01T02:00:00Z",
+      "hitCount" : 3,
+      "id" : "D0000000-0000-4000-8000-000000000001",
+      "merchantKey" : "mcdonald's",
+      "suggestedTypeRaw" : "expense",
+      "updatedAt" : "2026-09-30T02:00:00Z"
+    }
+  ],
+  "expenses" : [
+    {
+      "accountId" : "A1B2C3D4-0000-4000-8000-00000000000A",
+      "amount" : 30,
+      "categoryRaw" : "Food",
+      "createdAt" : "2026-10-01T12:05:00Z",
+      "currency" : "RM",
+      "date" : "2026-10-01T12:00:00Z",
+      "fundingAccount" : "Maybank",
+      "id" : "E0000000-0000-4000-8000-000000000001",
+      "isSampleData" : false,
+      "matchingStatusRaw" : "UNMATCHED",
+      "merchant" : "Dinner",
+      "paidByMe" : false,
+      "payerId" : "B0000000-0000-4000-8000-000000000001",
+      "payerNameSnapshot" : "Bijoy",
+      "paymentChannelRaw" : "UNKNOWN",
+      "paymentMethodRaw" : "unknown",
+      "paymentSourceRaw" : "Unknown",
+      "shares" : [
+        {
+          "amountMinor" : 1500,
+          "id" : "5A000000-0000-4000-8000-000000000001",
+          "isMe" : true,
+          "nameSnapshot" : "Me",
+          "sortIndex" : 0
+        },
+        {
+          "amountMinor" : 1500,
+          "id" : "5A000000-0000-4000-8000-000000000002",
+          "isMe" : false,
+          "nameSnapshot" : "Bijoy",
+          "personId" : "B0000000-0000-4000-8000-000000000001",
+          "sortIndex" : 1
+        }
+      ],
+      "sourceTypeRaw" : "manual",
+      "splitMethodRaw" : "equal",
+      "updatedAt" : "2026-10-01T12:06:00Z"
+    },
+    {
+      "amount" : 18.5,
+      "categoryRaw" : "Food",
+      "confidence" : 0.91,
+      "createdAt" : "2026-10-04T16:11:00Z",
+      "currency" : "RM",
+      "date" : "2026-10-04T16:10:00Z",
+      "externalTransactionId" : "EXT-1",
+      "fundingAccount" : "Maybank",
+      "id" : "E0000000-0000-4000-8000-000000000002",
+      "imageRelativePath" : "receipts\/mcd.jpg",
+      "isSampleData" : false,
+      "matchingConfidence" : 0.7,
+      "matchingStatusRaw" : "UNMATCHED",
+      "merchant" : "McDonald’s",
+      "notes" : "Line 1\nTax \"incl.\" 6%",
+      "ocrText" : "McDonald's\nTOTAL RM 18.50",
+      "paidByMe" : true,
+      "paymentChannelRaw" : "APPLE_PAY",
+      "paymentMethodRaw" : "digital_wallet",
+      "paymentSourceRaw" : "Apple Pay",
+      "shares" : [
+
+      ],
+      "sourceTypeRaw" : "screenshot",
+      "transactionReference" : "APL-771829",
+      "underlyingBankRaw" : "Maybank",
+      "updatedAt" : "2026-10-04T16:12:00Z"
+    }
+  ],
+  "exportDate" : "2026-10-04T17:32:00Z",
+  "moneyMovements" : [
+    {
+      "accountId" : "A1B2C3D4-0000-4000-8000-00000000000A",
+      "amountMinor" : 15000,
+      "createdAt" : "2026-10-02T04:00:00Z",
+      "currency" : "RM",
+      "date" : "2026-10-02T04:00:00Z",
+      "directionRaw" : "out",
+      "id" : "F0000000-0000-4000-8000-000000000001",
+      "kindRaw" : "loanGiven",
+      "paymentChannelRaw" : "UNKNOWN",
+      "personId" : "B0000000-0000-4000-8000-000000000001",
+      "personNameSnapshot" : "Bijoy",
+      "sourceTypeRaw" : "manual",
+      "updatedAt" : "2026-10-02T04:00:00Z"
+    }
+  ],
+  "paybookProfiles" : [
+    {
+      "createdAt" : "2026-01-02T04:00:00Z",
+      "id" : "B0000000-0000-4000-8000-000000000001",
+      "isArchived" : false,
+      "isFrequent" : true,
+      "name" : "Bijoy",
+      "paymentMethods" : [
+        {
+          "accountIdentifier" : "1234567890",
+          "createdAt" : "2026-01-02T04:00:00Z",
+          "id" : "3E000000-0000-4000-8000-000000000001",
+          "label" : "Main",
+          "paymentTypeRaw" : "Bank Account",
+          "provider" : "Maybank",
+          "updatedAt" : "2026-01-02T04:00:00Z"
+        }
+      ],
+      "updatedAt" : "2026-09-01T04:00:00Z"
+    }
+  ],
+  "sampleRecords" : [
+    {
+      "createdAt" : "2026-09-01T04:00:00Z",
+      "entityRaw" : "expense",
+      "recordID" : "E0000000-0000-4000-8000-000000000002"
+    }
+  ],
+  "settlementAllocations" : [
+    {
+      "amountMinor" : 1500,
+      "createdAt" : "2026-10-03T04:00:00Z",
+      "currency" : "RM",
+      "date" : "2026-10-03T04:00:00Z",
+      "direction" : 1,
+      "expenseID" : "E0000000-0000-4000-8000-000000000001",
+      "groupID" : "6A000000-0000-4000-8000-000000000001",
+      "id" : "7A000000-0000-4000-8000-000000000001",
+      "kindRaw" : "assign",
+      "paymentID" : "F0000000-0000-4000-8000-000000000001",
+      "personID" : "B0000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "version" : 4
+}
