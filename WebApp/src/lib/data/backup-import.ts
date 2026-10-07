@@ -158,6 +158,8 @@ export function planBackupImport(payload: unknown, existing: Dataset, opts: { in
       .filter((s): s is ExpenseShare => s !== null);
     // Only keep a split whose shares add up exactly (a broken split is imported as a normal expense).
     const validSplit = shares.length > 0 && shares.reduce((t, s) => t + s.amountMinor, 0) === amountMinor;
+    // Hybrid Split rule (optional; older backups have none and load exactly as before).
+    const splitRule = validSplit && typeof e.splitRule === "string" && e.splitRule.length > 0 && e.splitRule.length <= 4000 ? e.splitRule : null;
     const added = take("expenses", records.expenses, {
       id: eid, amountMinor, currency: e.currency || "RM", merchant: String(e.merchant ?? "Unknown").slice(0, 200) || "Unknown",
       category: isCategory(e.categoryRaw) ? e.categoryRaw : "Other",
@@ -168,6 +170,7 @@ export function planBackupImport(payload: unknown, existing: Dataset, opts: { in
       payerId: paidByMe ? null : payerId, payerNameSnapshot: paidByMe ? null : (e.payerNameSnapshot ?? null),
       splitMethod: validSplit && ["equal", "parts", "amounts"].includes(e.splitMethodRaw) ? e.splitMethodRaw : null,
       receiptPath: null, isSampleData: Boolean(e.isSampleData), createdAt: created, updatedAt: iso(e.updatedAt, created), deletedAt: null,
+      ...(splitRule ? { splitRule } : {}),
     } satisfies Expense);
     if (added && validSplit) records.shares.push(...shares);
   }

@@ -8,6 +8,14 @@ import { DataError, type BackupMeta, type DataSource, type PulledRows } from "./
 
 const PAGE = 1000;
 
+/** expenses.split_rule is added by migration 20261008000000_hybrid_split (may not be applied yet). */
+const withoutSplitRule = (row: Record<string, unknown>) => {
+  const { split_rule: _rule, ...rest } = row; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return rest;
+};
+/** Normal expenses don't send the new column at all, so they save the same before and after the migration. */
+const withoutEmptySplitRule = (row: Record<string, unknown>) => (row.split_rule == null ? withoutSplitRule(row) : row);
+
 export class SupabaseSource implements DataSource {
   readonly kind = "supabase" as const;
   constructor(
@@ -41,8 +49,15 @@ export class SupabaseSource implements DataSource {
   }
 
   async upsert(table: TableName, rows: Record<string, unknown>[]) {
-    for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await this.client.from(table).upsert(rows.slice(i, i + 500), { onConflict: "id" });
+    const list = table === "expenses" ? rows.map(withoutEmptySplitRule) : rows;
+    for (let i = 0; i < list.length; i += 500) {
+      const page = list.slice(i, i + 500);
+      let { error } = await this.client.from(table).upsert(page, { onConflict: "id" });
+      // Before migration 20261008000000 expenses.split_rule doesn't exist yet: save without it (the split stays a
+      // plain custom-amount split, exactly like the save RPC does).
+      if (error && table === "expenses" && error.message?.includes("split_rule")) {
+        ({ error } = await this.client.from(table).upsert(page.map(withoutSplitRule), { onConflict: "id" }));
+      }
       if (error) throw error;
     }
   }
