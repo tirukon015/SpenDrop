@@ -16,7 +16,7 @@ export default function AccountsPage() {
   const rows = useMemo(() => live.accounts.map((a) => ({ account: a, activity: accountActivity(a.id, a.currency, live.expenses, live.movements) })), [live]);
   return (
     <>
-      <PageHeader title="Accounts" subtitle="Funding accounts — where money comes from" back={{ href: "/more", label: "More" }}
+      <PageHeader title="Bank Accounts" subtitle="Banks, e-wallets and cash — where money comes from" back={{ href: "/more", label: "More" }}
         actions={<Button onClick={() => setAdding(true)}><Plus aria-hidden className="size-4" /> <span className="max-sm:sr-only">Add Account</span></Button>} />
       <Page className="flex max-w-3xl flex-col gap-3">
         {rows.length === 0 ? (
