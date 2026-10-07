@@ -132,8 +132,8 @@ public struct SplitDraft: Equatable {
         } else if !expense.paidByMe, expense.shares.count == 1, mine != nil {
             purpose = .paidFor
         }
-        // Existing typed amounts are kept exactly as they are.
-        autoCalculate = false
+        // Auto Calculate is ON when a saved split is reopened too; the saved amounts are kept (see below).
+        autoCalculate = true
         let ordered = expense.shares.sorted { a, b in
             if a.isMe != b.isMe { return a.isMe }
             return a.sortIndex < b.sortIndex
@@ -167,6 +167,14 @@ public struct SplitDraft: Equatable {
                 }
                 remainderIDs = Set(rule.remaining.compactMap { idBySortIndex[$0] })
             }
+        }
+        // Custom Amount with Auto Calculate ON, and nothing moves: everyone keeps their saved amount as typed except Me
+        // (or the last person when I'm not in it), whose amount is total − the others — the saved number.
+        // (Also under a Hybrid Split, so turning it off keeps the saved amounts.)
+        if method == .amounts {
+            let sharing = sharingParticipants
+            let calculated = sharing.first(where: \.isMe) ?? sharing.last
+            typedOrder = sharing.map(\.id).filter { $0 != calculated?.id }
         }
     }
 

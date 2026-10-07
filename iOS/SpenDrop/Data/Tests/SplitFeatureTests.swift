@@ -1227,10 +1227,14 @@ public enum AutoCalculateTests {
         fixed.apply(to: dinner, in: ctx); try? ctx.save()
         let stored = dinner.shares.sorted { $0.sortIndex < $1.sortIndex }.map(\.amountMinor)
         let reopened = SplitDraft(expense: dinner)
-        t.check("20. Saved shares hold the final amounts (5000 / 10000 / 5000 = 20000); reopening shows them unchanged with Auto Calculate OFF (nothing recalculated)",
-                stored == [5000, 10000, 5000] && stored.reduce(0, +) == dinner.amountMinor && reopened?.autoCalculate == false &&
-                reopened?.shares(totalMinor: 20000) == [5000, 10000, 5000] && DebtSettlementTests.net(vijay) >= 10000,
-                expected: "[5000, 10000, 5000]", actual: "\(stored) \(String(describing: reopened?.shares(totalMinor: 20000)))")
+        var reedited = reopened
+        if let r = reedited { reedited?.setAmountText("40", for: id(r, "Riyadh"), totalMinor: 20000) }
+        t.check("20. Saved shares hold the final amounts (5000 / 10000 / 5000 = 20000); reopening shows them unchanged with Auto Calculate ON; editing Riyadh to 40 recalculates only Me (60)",
+                stored == [5000, 10000, 5000] && stored.reduce(0, +) == dinner.amountMinor && reopened?.autoCalculate == true &&
+                reopened?.shares(totalMinor: 20000) == [5000, 10000, 5000] && DebtSettlementTests.net(vijay) >= 10000 &&
+                reedited?.shares(totalMinor: 20000) == [6000, 10000, 4000],
+                expected: "[5000, 10000, 5000] ON → [6000, 10000, 4000]",
+                actual: "\(stored) \(String(describing: reopened?.shares(totalMinor: 20000))) auto=\(String(describing: reopened?.autoCalculate)) edited=\(String(describing: reedited?.shares(totalMinor: 20000)))")
 
         // 10. Paid for someone keeps its own rule (my share 0) and has no fixed amounts
         var paidFor = SplitDraft(); paidFor.purpose = .paidFor; paidFor.method = .amounts; paidFor.add(vijay)
@@ -1245,10 +1249,14 @@ public enum AutoCalculateTests {
         oldDraft.apply(to: old, in: ctx); try? ctx.save()
         let before = old.shares.map(\.amountMinor).sorted()
         let loaded = SplitDraft(expense: old)!
-        t.check("21. An existing Amounts expense opens with its exact shares, Auto Calculate OFF and no fixed amounts inferred",
-                loaded.shares(totalMinor: 9000) == [6000, 3000] && !loaded.autoCalculate && loaded.participants.allSatisfy { $0.fixedMinor == nil } &&
-                old.shares.map(\.amountMinor).sorted() == before,
-                expected: "[6000, 3000], OFF", actual: "\(String(describing: loaded.shares(totalMinor: 9000)))")
+        var edited = loaded
+        edited.setAmountText("45", for: id(edited, "Vijay"), totalMinor: 9000)
+        t.check("21. An existing Amounts expense opens with its exact shares, Auto Calculate ON (Me calculated = 90 − 30, Vijay kept as typed) and no fixed amounts inferred; Vijay → 45 makes Me 45",
+                loaded.shares(totalMinor: 9000) == [6000, 3000] && loaded.autoCalculate && loaded.isCalculated(id(loaded, "Me")) &&
+                !loaded.isCalculated(id(loaded, "Vijay")) && loaded.displayAmountText(for: id(loaded, "Me"), totalMinor: 9000) == "60.00" &&
+                loaded.participants.allSatisfy { $0.fixedMinor == nil } && old.shares.map(\.amountMinor).sorted() == before &&
+                edited.shares(totalMinor: 9000) == [4500, 4500],
+                expected: "[6000, 3000], ON → [4500, 4500]", actual: "\(String(describing: loaded.shares(totalMinor: 9000))) auto=\(loaded.autoCalculate) edited=\(String(describing: edited.shares(totalMinor: 9000)))")
         return results
     }
 }
