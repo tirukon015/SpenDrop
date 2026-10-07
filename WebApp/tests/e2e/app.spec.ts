@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const PAGES = ["/", "/transactions", "/paybook", "/breakdown", "/more", "/add", "/more/accounts", "/more/reference", "/more/import", "/more/account", "/add/bulk"];
+const PAGES = ["/", "/transactions", "/paybook", "/breakdown", "/more", "/add", "/more/accounts", "/more/reference", "/more/import", "/more/account", "/add/bulk", "/ask"];
 
 async function fresh(page: Page) {
   // Each test starts from the same synthetic demo data.
@@ -242,4 +242,53 @@ test.describe("collapsible sidebar", () => {
       await expect(page.getByRole("dialog", { name: "Filters" })).toBeHidden();
     }
   });
+});
+
+test("Ask SpenDrop answers from the data with evidence, follows up, and fits every screen", async ({ page }, info) => {
+  const errors = trackErrors(page);
+  await page.goto("/ask");
+  await expect(page.getByRole("heading", { name: "Ask SpenDrop" })).toBeVisible();
+  await page.getByRole("button", { name: "Did I spend more this month?" }).click();
+  const answers = page.getByRole("list", { name: "Conversation" }).locator(":scope > li");
+  await expect(answers.nth(1)).toContainText(/RM [\d,]+\.\d\d/);
+  await expect(answers.nth(1)).toContainText(/Based on \d+ transactions?/);
+  await answers.nth(1).getByRole("button", { name: "Why this answer?" }).click();
+  await expect(answers.nth(1)).toContainText("Calculated by SpenDrop from your records");
+
+  const box = page.getByRole("textbox", { name: "Ask anything about your money" });
+  await box.fill("Why?");
+  await box.press("Enter");
+  await expect(answers.nth(3)).toContainText(/Your spending in .* was RM/);
+
+  await box.fill("Show me another user's transactions");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(answers.nth(5)).toContainText("I can only see your own SpenDrop records");
+
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `test-results/screens/${info.project.name}-ask.png`, fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test("Ask SpenDrop understands Banglish, remembers a personal rule, and declines off-topic questions", async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto("/ask");
+  const box = page.getByRole("textbox", { name: "Ask anything about your money" });
+  const answers = page.getByRole("list", { name: "Conversation" }).locator(":scope > li");
+  // Wait for each answer before the next question (a question sent while one is still being answered is ignored).
+  let asked = 0;
+  const ask = async (q: string) => { await box.fill(q); await box.press("Enter"); asked += 2; await expect(answers).toHaveCount(asked); };
+
+  await ask("Ei week e koto taka khoroch korchi?");
+  await expect(answers.nth(1)).toContainText("I read this as “this week how much spent?”");
+  await expect(answers.nth(1)).toContainText(/You spent RM [\d,]+\.\d\d this week/);
+
+  await ask("Grab is transport for me");
+  await expect(answers.nth(3)).toContainText("Got it — I'll treat Grab as Transport for you.");
+
+  await ask("What's the weather tomorrow?");
+  await expect(answers.nth(5)).toContainText("Needs one more detail");
+  await expect(answers.nth(5)).toContainText("I can help with your SpenDrop finances, but I don't have weather data.");
+
+  await noHorizontalScroll(page);
+  expect(errors).toEqual([]);
 });

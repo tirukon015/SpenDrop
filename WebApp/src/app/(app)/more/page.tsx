@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ChevronRight, CloudDownload, Images, Landmark, LogOut, Monitor, Moon, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { BookOpen, ChevronRight, CloudDownload, Images, Landmark, LogOut, Monitor, Moon, ShieldCheck, Sparkles, Sun, UserRound } from "lucide-react";
 import { useEffect } from "react";
 import { Page, PageHeader, SyncStatus } from "@/components/app-shell";
 import { useData } from "@/components/providers/data-provider";
@@ -20,6 +20,7 @@ export default function MorePage() {
   }, [appearance]);
 
   const rows = [
+    { href: "/ask", icon: Sparkles, tint: "indigo" as const, title: "Ask SpenDrop", detail: "Ask anything about your spending" },
     { href: "/more/account", icon: UserRound, tint: "blue" as const, title: "Account", detail: source?.email ?? "Your SpenDrop account" },
     { href: "/more/accounts", icon: Landmark, tint: "blue" as const, title: "Bank Accounts", detail: `${live.accounts.length} funding account${live.accounts.length === 1 ? "" : "s"} · recorded money in and out` },
     { href: "/add/bulk", icon: Images, tint: "indigo" as const, title: "Bulk Screenshot Import", detail: "Add many transactions from payment screenshots at once" },

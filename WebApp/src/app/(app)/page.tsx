@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, CalendarClock, ChartColumn, CloudDownload, Plus, ReceiptText, SunMedium, Users } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, ChartColumn, CloudDownload, Plus, ReceiptText, Sparkles, SunMedium, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Page, PageHeader, SyncStatus } from "@/components/app-shell";
@@ -77,7 +77,12 @@ export default function HomePage() {
 
   return (
     <>
-      <PageHeader title="Home" subtitle={monthName} actions={<span className="md:hidden"><SyncStatus compact /></span>} />
+      <PageHeader title="Home" subtitle={monthName} actions={
+        <span className="flex items-center gap-2 md:hidden">
+          <SyncStatus compact />
+          <Link href="/ask" aria-label="Ask SpenDrop" className="inline-flex size-9 items-center justify-center rounded-full bg-card text-[var(--sd-accent-text)] shadow-card"><Sparkles aria-hidden className="size-[18px]" /></Link>
+        </span>
+      } />
       <Page className="flex flex-col gap-5">
         {error && <ErrorBanner message={error} onRetry={refresh} />}
 

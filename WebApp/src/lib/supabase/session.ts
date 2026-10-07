@@ -4,6 +4,8 @@ import { isDemoMode, isSupabaseConfigured, supabasePublicKey, supabaseUrl } from
 
 /** Paths that never require a signed-in user. */
 const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/manifest.webmanifest", "/sw.js", "/icons"];
+/** API routes authenticate every request themselves and answer 401 JSON instead of redirecting to the login page. */
+const API_PREFIX = "/api/";
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
@@ -41,7 +43,7 @@ export async function updateSession(request: NextRequest) {
   const signedIn = Boolean(data?.claims?.sub);
   const { pathname, search } = request.nextUrl;
 
-  if (!signedIn && !isPublic(pathname)) {
+  if (!signedIn && !isPublic(pathname) && !pathname.startsWith(API_PREFIX)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
