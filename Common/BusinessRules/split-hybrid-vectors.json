@@ -1,0 +1,810 @@
+{
+ "$comment": "Hybrid Split (split-hybrid.md). shares = [Me, ...people] in sen. payer absent = I paid, else the payer's name. amount null = box empty; person null = no person chosen; 'Me' = You.",
+ "cases": [
+  {
+   "name": "Request example: group RM100 Riad+Bijoy, Bijoy +RM20, rest You+Riad+Bijoy",
+   "total": 20000,
+   "people": [
+    "Riad",
+    "Bijoy"
+   ],
+   "groups": [
+    {
+     "amount": 10000,
+     "members": [
+      "Riad",
+      "Bijoy"
+     ]
+    }
+   ],
+   "individuals": [
+    {
+     "person": "Bijoy",
+     "amount": 2000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "Riad",
+    "Bijoy"
+   ],
+   "expect": {
+    "shares": [
+     2667,
+     7667,
+     9666
+    ],
+    "groupAllocation": 10000,
+    "individualAllocation": 2000,
+    "remaining": 8000
+   }
+  },
+  {
+   "name": "Group with 2 people, person only in group",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 6000,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me"
+   ],
+   "expect": {
+    "shares": [
+     4000,
+     3000,
+     3000
+    ],
+    "groupAllocation": 6000,
+    "individualAllocation": 0,
+    "remaining": 4000
+   }
+  },
+  {
+   "name": "Group with 3 people, uneven division",
+   "total": 15000,
+   "people": [
+    "A",
+    "B",
+    "C"
+   ],
+   "groups": [
+    {
+     "amount": 10000,
+     "members": [
+      "A",
+      "B",
+      "C"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me"
+   ],
+   "expect": {
+    "shares": [
+     5000,
+     3334,
+     3333,
+     3333
+    ],
+    "groupAllocation": 10000,
+    "individualAllocation": 0,
+    "remaining": 5000
+   }
+  },
+  {
+   "name": "Group including Me, uneven (Me first when I paid)",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 1000,
+     "members": [
+      "Me",
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "A",
+    "B"
+   ],
+   "expect": {
+    "shares": [
+     334,
+     4833,
+     4833
+    ],
+    "groupAllocation": 1000,
+    "individualAllocation": 0,
+    "remaining": 9000
+   }
+  },
+  {
+   "name": "Individual fixed for one person",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 2000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "shares": [
+     4000,
+     6000
+    ],
+    "groupAllocation": 0,
+    "individualAllocation": 2000,
+    "remaining": 8000
+   }
+  },
+  {
+   "name": "Multiple individual fixed amounts",
+   "total": 20000,
+   "people": [
+    "Riad",
+    "Bijoy"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "Riad",
+     "amount": 2000
+    },
+    {
+     "person": "Bijoy",
+     "amount": 3000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "Riad",
+    "Bijoy"
+   ],
+   "expect": {
+    "shares": [
+     5000,
+     7000,
+     8000
+    ],
+    "groupAllocation": 0,
+    "individualAllocation": 5000,
+    "remaining": 15000
+   }
+  },
+  {
+   "name": "Person only in individual fixed",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "B",
+     "amount": 1500
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "shares": [
+     4250,
+     4250,
+     1500
+    ],
+    "groupAllocation": 0,
+    "individualAllocation": 1500,
+    "remaining": 8500
+   }
+  },
+  {
+   "name": "Group + individual exactly equal the total",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 8000,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [
+    {
+     "person": "B",
+     "amount": 2000
+    }
+   ],
+   "remaining": [],
+   "expect": {
+    "shares": [
+     0,
+     4000,
+     6000
+    ],
+    "groupAllocation": 8000,
+    "individualAllocation": 2000,
+    "remaining": 0
+   }
+  },
+  {
+   "name": "Remaining zero with a remaining group",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 8000,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [
+    {
+     "person": "B",
+     "amount": 2000
+    }
+   ],
+   "remaining": [
+    "Me"
+   ],
+   "expect": {
+    "shares": [
+     0,
+     4000,
+     6000
+    ],
+    "groupAllocation": 8000,
+    "individualAllocation": 2000,
+    "remaining": 0
+   }
+  },
+  {
+   "name": "Fixed allocations exceed the total",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 8000,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 3000
+    }
+   ],
+   "remaining": [
+    "Me"
+   ],
+   "expect": {
+    "problem": "Fixed allocations exceed the transaction total by RM 10.00."
+   }
+  },
+  {
+   "name": "Two groups + remaining",
+   "total": 20000,
+   "people": [
+    "Riad",
+    "Bijoy"
+   ],
+   "groups": [
+    {
+     "amount": 10000,
+     "members": [
+      "Riad",
+      "Bijoy"
+     ]
+    },
+    {
+     "amount": 6000,
+     "members": [
+      "Me",
+      "Riad"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "Riad",
+    "Bijoy"
+   ],
+   "expect": {
+    "shares": [
+     4334,
+     9333,
+     6333
+    ],
+    "groupAllocation": 16000,
+    "individualAllocation": 0,
+    "remaining": 4000
+   }
+  },
+  {
+   "name": "Decimals: uneven group, individual, remaining",
+   "total": 15055,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 5001,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 1250
+    }
+   ],
+   "remaining": [
+    "Me",
+    "B"
+   ],
+   "expect": {
+    "shares": [
+     4402,
+     3751,
+     6902
+    ],
+    "groupAllocation": 5001,
+    "individualAllocation": 1250,
+    "remaining": 8804
+   }
+  },
+  {
+   "name": "Someone else paid: leftover sen in participant order",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [
+    {
+     "amount": 1001,
+     "members": [
+      "A",
+      "B"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A",
+    "B"
+   ],
+   "expect": {
+    "shares": [
+     3000,
+     3501,
+     3499
+    ],
+    "groupAllocation": 1001,
+    "individualAllocation": 0,
+    "remaining": 8999
+   },
+   "payer": "A"
+  },
+  {
+   "name": "Empty starter group is ignored",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": null,
+     "members": []
+    }
+   ],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 2000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "shares": [
+     4000,
+     6000
+    ],
+    "groupAllocation": 0,
+    "individualAllocation": 2000,
+    "remaining": 8000
+   }
+  },
+  {
+   "name": "Nothing fixed",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Add a group fixed amount or an individual fixed amount."
+   }
+  },
+  {
+   "name": "Group without members",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": 1000,
+     "members": []
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Choose who shares group fixed amount 1."
+   }
+  },
+  {
+   "name": "Group without an amount",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": null,
+     "members": [
+      "A"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Enter the amount for group fixed amount 1."
+   }
+  },
+  {
+   "name": "Negative group amount",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": -500,
+     "members": [
+      "A"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Enter the amount for group fixed amount 1."
+   }
+  },
+  {
+   "name": "Second group problem is numbered",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": 1000,
+     "members": [
+      "A"
+     ]
+    },
+    {
+     "amount": 2000,
+     "members": []
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Choose who shares group fixed amount 2."
+   }
+  },
+  {
+   "name": "Problems are checked group by group",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": 1000,
+     "members": []
+    },
+    {
+     "amount": null,
+     "members": [
+      "A"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Choose who shares group fixed amount 1."
+   }
+  },
+  {
+   "name": "Individual without a person",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": null,
+     "amount": 1000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Choose a person for each individual fixed amount."
+   }
+  },
+  {
+   "name": "Individual without an amount",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": null
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Enter the individual fixed amount for A."
+   }
+  },
+  {
+   "name": "Individual for Me without an amount",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "Me",
+     "amount": null
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Enter the individual fixed amount for You."
+   }
+  },
+  {
+   "name": "Two individual amounts for the same person",
+   "total": 10000,
+   "people": [
+    "A"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 1000
+    },
+    {
+     "person": "A",
+     "amount": 500
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "A already has an individual fixed amount."
+   }
+  },
+  {
+   "name": "Individual rows are checked row by row",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": null
+    },
+    {
+     "person": null,
+     "amount": 500
+    }
+   ],
+   "groups": [],
+   "remaining": [
+    "Me",
+    "A",
+    "B"
+   ],
+   "expect": {
+    "problem": "Enter the individual fixed amount for A."
+   }
+  },
+  {
+   "name": "Money left and nobody shares it",
+   "total": 20000,
+   "people": [
+    "Riad",
+    "Bijoy"
+   ],
+   "groups": [
+    {
+     "amount": 10000,
+     "members": [
+      "Riad",
+      "Bijoy"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [],
+   "expect": {
+    "problem": "RM 100.00 is left after the fixed allocations. Choose who shares the remaining amount."
+   }
+  },
+  {
+   "name": "A person in no layer",
+   "total": 10000,
+   "people": [
+    "A",
+    "B"
+   ],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "A",
+     "amount": 1000
+    }
+   ],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "B isn't in any part of the split. Add them to an allocation or remove them."
+   }
+  },
+  {
+   "name": "Only Me in the split",
+   "total": 10000,
+   "people": [],
+   "groups": [],
+   "individuals": [
+    {
+     "person": "Me",
+     "amount": 1000
+    }
+   ],
+   "remaining": [
+    "Me"
+   ],
+   "expect": {
+    "problem": "Add at least one other person."
+   }
+  },
+  {
+   "name": "No total yet",
+   "total": 0,
+   "people": [
+    "A"
+   ],
+   "groups": [
+    {
+     "amount": 1000,
+     "members": [
+      "A"
+     ]
+    }
+   ],
+   "individuals": [],
+   "remaining": [
+    "Me",
+    "A"
+   ],
+   "expect": {
+    "problem": "Enter the expense amount first."
+   }
+  }
+ ]
+}
