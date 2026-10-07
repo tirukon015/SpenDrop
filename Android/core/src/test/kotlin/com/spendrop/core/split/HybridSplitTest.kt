@@ -189,6 +189,14 @@ class HybridSplitTest {
         assertEquals(save.expense.splitRule, again.expense.splitRule)
     }
 
+    @Test fun reopenedHybridTurnedOffKeepsTheSavedAmountsWithAutoCalculateOn() {
+        val save = example.apply(expense, emptyList(), 1)!!
+        val off = SplitDraft.fromExpense(save.expense, save.newShares, people)!!.setHybridEnabled(false)
+        assertTrue(off.autoCalculate)
+        assertEquals(SplitMethod.AMOUNTS, off.method)
+        assertEquals(listOf(2667L, 7667L, 9666L), off.shares(20000))
+    }
+
     @Test fun unreadableRuleOpensAsPlainAmounts() {
         val save = example.apply(expense, emptyList(), 1)!!
         for (bad in listOf("not json", """{"type":"other"}""", save.expense.splitRule!!.replace("[1,2]", "[1,7]"))) {

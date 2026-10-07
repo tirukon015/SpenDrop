@@ -645,23 +645,23 @@ data class SplitDraft(
             }.toMutableList()
             if (participants.none { it.isMe }) participants.add(0, Participant.me())
             // A Hybrid Split carries its rule on the expense; anything unreadable opens as the plain amounts it also is.
-            hybridFromRule(expense.splitRule, ordered, participants)?.let { h ->
-                return SplitDraft(
-                    method = SplitMethod.EQUAL,
-                    purpose = Purpose.SHARED,
-                    participants = participants,
-                    payer = if (expense.paidByMe) null else expense.payerId?.let { byId[it] },
-                    hybrid = h,
-                )
-            }
-            return SplitDraft(
-                method = expense.splitMethod ?: SplitMethod.AMOUNTS,
+            val hybrid = if (purpose == Purpose.SHARED) hybridFromRule(expense.splitRule, ordered, participants) else null
+            val draft = SplitDraft(
+                hybrid = hybrid,
+                // A Hybrid Split is saved as custom amounts: turning Hybrid off keeps those amounts.
+                method = if (hybrid != null) SplitMethod.AMOUNTS else expense.splitMethod ?: SplitMethod.AMOUNTS,
                 purpose = purpose,
-                // Existing typed amounts are kept exactly as they are.
-                autoCalculate = false,
+                autoCalculate = true,
                 participants = participants,
                 payer = if (expense.paidByMe) null else expense.payerId?.let { byId[it] },
             )
+            // Auto Calculate is ON when a saved Custom Amount split is reopened too, and nothing moves: everyone keeps
+            // their saved amount as typed except one person (Me when I'm in it), whose amount is total − the others —
+            // the same number that was saved. Only an edit changes anything. (Also under a Hybrid Split.)
+            if (draft.method != SplitMethod.AMOUNTS) return draft
+            val sharing = draft.sharingParticipants
+            val calculated = sharing.firstOrNull { it.isMe } ?: sharing.lastOrNull()
+            return draft.copy(typedOrder = sharing.map { it.id }.filter { it != calculated?.id })
         }
 
         /**

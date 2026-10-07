@@ -120,7 +120,7 @@ class AutoCalculateTest {
         assertEquals(listOf(7667L, 7667L, 7666L), live.shares(23000))
     }
 
-    @Test fun t20_savedSharesAreFinalReopenedOff() {
+    @Test fun t20_savedSharesReopenWithAutoCalculateOnUnchanged() {
         val fixed = threeWay(20000).let { it.setFixed(5000, id(it, "Vijay"), 20000)!! }
         val dinner = store.expense(20000, "Fixed dinner")
         store.apply(fixed, dinner)
@@ -128,8 +128,11 @@ class AutoCalculateTest {
         val reopened = SplitDraft.fromExpense(store.expense(dinner.id), store.shares(dinner), store.s.people)
         assertEquals(listOf(5000L, 10000L, 5000L), stored)
         assertEquals(20000L, stored.sum())
-        assertEquals(false, reopened?.autoCalculate)
+        // Auto Calculate is on by default even when reopening; the saved amounts don't move.
+        assertEquals(true, reopened?.autoCalculate)
         assertEquals(listOf(5000L, 10000L, 5000L), reopened?.shares(20000))
+        assertTrue(reopened!!.isCalculated(reopened.participants[0].id)) // Me = total − the others
+        assertFalse(reopened.isCalculated(reopened.participants[1].id))
         assertTrue(store.net(vijay) >= 10000)
     }
 
@@ -146,7 +149,9 @@ class AutoCalculateTest {
         val before = store.shares(old).map { it.amountMinor }.sorted()
         val loaded = SplitDraft.fromExpense(store.expense(old.id), store.shares(old), store.s.people)!!
         assertEquals(listOf(6000L, 3000L), loaded.shares(9000))
-        assertFalse(loaded.autoCalculate)
+        assertTrue(loaded.autoCalculate)
+        // Editing someone else's amount now recalculates Me automatically
+        assertEquals(listOf(5000L, 4000L), loaded.setAmountText("40", loaded.participants[1].id, 9000).shares(9000))
         assertTrue(loaded.participants.all { it.fixedMinor == null })
         assertEquals(before, store.shares(old).map { it.amountMinor }.sorted())
     }
