@@ -319,13 +319,16 @@ function autoAmounts(d: SplitDraft, totalMinor: number): Result<number[], DraftP
   return ok(result);
 }
 
+/** Custom amounts: an empty box is RM 0.00 (what it shows), never "missing"; non-numbers are reported. Same as iOS. */
+export const enteredMinor = (text: string) => (text.trim() === "" ? 0 : parseMinor(text));
+
 function plainCalculate(d: SplitDraft, totalMinor: number): Result<number[], SplitError> {
   if (paidForMe(d)) {
     if (!(totalMinor > 0)) return fail({ type: "nonPositiveTotal" });
     return ok(d.participants.map((p) => (p.isMe ? totalMinor : 0)));
   }
   const group = sharingParticipants(d);
-  const inputs = group.map((p) => ({ isMe: p.isMe, parts: p.parts, enteredMinor: parseMinor(p.amountText) }));
+  const inputs = group.map((p) => ({ isMe: p.isMe, parts: p.parts, enteredMinor: enteredMinor(p.amountText) }));
   const result = calculateSplit(totalMinor, d.method, inputs, iPaid(d), !iPaidForOthers(d));
   if (!result.ok) return result;
   return ok(d.participants.map((p) => {
@@ -399,7 +402,10 @@ export function problem(d: SplitDraft, totalMinor: number, currency = "RM"): str
     case "missingMe":
     case "moreThanOneMe": return "A split must include you exactly once.";
     case "invalidParts": return `Parts must be whole numbers from 1 to ${MAX_PARTS}.`;
-    case "missingAmount": return `Enter an amount for ${sharing[e.error.index]?.name ?? "everyone"}.`;
+    case "missingAmount": {
+      const p = sharing[e.error.index];
+      return `Enter a valid amount for ${p ? (p.isMe ? "You" : p.name) : "everyone"}.`;
+    }
     case "negativeAmount": return `${sharing[e.error.index]?.name ?? "An"}'s amount can't be negative.`;
     case "amountsDoNotMatchTotal":
       return e.error.differenceMinor > 0

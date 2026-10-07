@@ -19,8 +19,6 @@ public struct AddExpenseView: View {
     @State private var entryType: TransactionEntryType = .expense
     // Optional split (Phase 4). nil = normal expense.
     @State private var splitDraft: SplitDraft?
-    /// Opens the split editor; carries the mode so the sheet never reads a stale value.
-    @State private var splitRequest: SplitEditorRequest?
     @State private var categoryTouched = false
 
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
@@ -408,47 +406,37 @@ public struct AddExpenseView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
 
-                            // SPLIT TRANSACTION (off = normal expense; on = split right here, no extra screen)
-                            if let draft = splitDraft, draft.purpose == .paidFor {
-                                Button {
-                                    splitRequest = SplitEditorRequest(purpose: .paidFor)
-                                } label: {
-                                    SplitSummaryRow(draft: draft, totalMinor: Money.minorUnits(from: parsedAmount), currency: currency)
-                                        .padding()
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("addExpense.split")
-                            } else {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
-                                        withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
-                                    })) {
-                                        HStack(spacing: 10) {
-                                            Image(systemName: "person.2.fill").foregroundStyle(.blue)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Split Transaction").font(.subheadline.weight(.semibold))
-                                                Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
-                                            }
+                            // SPLIT TRANSACTION (off = normal expense; on = split right here, no extra screen).
+                            // The same InlineSplitSection is used by Edit, scan review and the Share Extension.
+                            VStack(alignment: .leading, spacing: 12) {
+                                Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
+                                    withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
+                                })) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Split Transaction").font(.subheadline.weight(.semibold))
+                                            Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
                                         }
                                     }
-                                    .accessibilityIdentifier("addExpense.splitToggle")
-                                    if splitDraft != nil {
-                                        Divider()
-                                        InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
-                                                           totalMinor: Money.minorUnits(from: parsedAmount), currency: currency)
-                                    }
                                 }
-                                .padding()
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .accessibilityIdentifier("addExpense.splitToggle")
+                                if splitDraft != nil {
+                                    Divider()
+                                    InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
+                                                       totalMinor: Money.minorUnits(from: parsedAmount), currency: currency)
+                                }
                             }
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                             if splitDraft == nil {
                                 // "I paid RM100 for Bijoy" / "Bijoy paid for me" without typing anyone's share.
                                 Button {
-                                    splitRequest = SplitEditorRequest(purpose: .paidFor)
+                                    var draft = SplitDraft()
+                                    draft.purpose = .paidFor
+                                    withAnimation(.easeInOut(duration: 0.2)) { splitDraft = draft }
                                 } label: {
                                     HStack(spacing: 10) {
                                         Image(systemName: "arrow.right.circle.fill").foregroundStyle(.blue)
@@ -542,12 +530,6 @@ public struct AddExpenseView: View {
                         }
                     }
                     .accessibilityLabel("Record type: \(entryType.title)")
-                }
-            }
-            .sheet(item: $splitRequest) { request in
-                SplitEditorView(totalMinor: Money.minorUnits(from: parsedAmount), currency: currency, merchant: merchant, initial: splitDraft,
-                                purpose: request.purpose) { result in
-                    splitDraft = result
                 }
             }
             .sheet(item: $parsedTransaction) { parsed in
@@ -768,8 +750,3 @@ public struct AddExpenseView: View {
 }
 
 
-/// Identifiable request for the split editor sheet (Split with others / Paid for Someone).
-struct SplitEditorRequest: Identifiable {
-    let id = UUID()
-    let purpose: SplitDraft.Purpose?
-}

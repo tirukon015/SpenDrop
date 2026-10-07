@@ -49,6 +49,7 @@ public enum AllTestSuites {
         ("Debts & settlements", "--run-debt-tests", { DebtSettlementTests.runAllTests() }),
         ("Split transaction", "--run-split-transaction-tests", { SplitTransactionTests.runAllTests() }),
         ("Auto Calculate & fixed", "--run-auto-calculate-tests", { AutoCalculateTests.runAllTests() }),
+        ("Split everywhere", "--run-split-everywhere-tests", { SplitEverywhereTests.runAllTests() }),
         ("Sample data", "--run-sample-data-tests", { SampleDataTests.runAllTests() }),
         ("PayBook filter", "--run-paybook-filter-tests", { PayBookFilterTests.runAllTests() }),
         ("Phase 5", "--run-people-tests", { PeopleBalanceTests.runAllTests() }),

@@ -324,13 +324,19 @@ public struct SplitDraft: Equatable {
         }
         let group = sharingParticipants
         let inputs = group.map { p in
-            SplitCalculator.Participant(isMe: p.isMe, parts: p.parts, enteredMinor: Money.minorUnits(parsing: p.amountText))
+            SplitCalculator.Participant(isMe: p.isMe, parts: p.parts, enteredMinor: Self.enteredMinor(p.amountText))
         }
         let result = SplitCalculator.calculate(totalMinor: totalMinor, method: method, participants: inputs, iPaid: iPaid,
                                                requireMe: !iPaidForOthers)
         return result.map { amounts in
             participants.map { p in group.firstIndex(where: { $0.id == p.id }).map { amounts[$0] } ?? 0 }
         }
+    }
+
+    /// Custom amounts: an empty box is RM 0.00 (what the box shows), never "missing" — e.g. You (empty) + Riyad 100
+    /// of RM100 is a complete split. Text that isn't a number is reported instead of being guessed.
+    static func enteredMinor(_ text: String) -> Int? {
+        text.trimmingCharacters(in: .whitespaces).isEmpty ? 0 : Money.minorUnits(parsing: text)
     }
 
     public func shares(totalMinor: Int) -> [Int]? {
@@ -358,7 +364,7 @@ public struct SplitDraft: Equatable {
             case .tooFewParticipants: return iPaidForOthers ? "Choose who you paid for." : "Add at least one other person."
             case .missingMe, .moreThanOneMe: return "A split must include you exactly once."
             case .invalidParts: return "Parts must be whole numbers from 1 to \(SplitCalculator.maxParts)."
-            case .missingAmount(let index): return "Enter an amount for \(sharingParticipants[index].name)."
+            case .missingAmount(let index): return "Enter a valid amount for \(sharingParticipants[index].isMe ? "You" : sharingParticipants[index].name)."
             case .negativeAmount(let index): return "\(sharingParticipants[index].name)'s amount can't be negative."
             case .amountsDoNotMatchTotal(let difference):
                 return difference > 0 ? "Shares exceed the total by \(money(difference))." : "\(money(difference)) remains unassigned."

@@ -18,7 +18,6 @@ public struct EditExpenseView: View {
     @State private var notes: String = ""
     // Split (Phase 4): loaded from the expense; nil = not shared.
     @State private var splitDraft: SplitDraft?
-    @State private var showingSplitEditor = false
 
     private let commonFundingAccounts = ["Maybank", "CIMB", "RHB", "Public Bank", "Bank Islam", "Wise", "Touch 'n Go", "Cash", "Other"]
 
@@ -175,38 +174,25 @@ public struct EditExpenseView: View {
 
                     // SPLIT (Equal/Parts follow the new amount; Amounts must be corrected before saving).
                     // Edited in place; turning it off makes this a normal expense again when saved.
-                    if let draft = splitDraft, draft.purpose == .paidFor {
-                        Button {
-                            showingSplitEditor = true
-                        } label: {
-                            SplitSummaryRow(draft: draft, totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
-                                .padding()
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("editExpense.split")
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
-                                withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
-                            })) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "person.2.fill").foregroundStyle(.blue)
-                                    Text("Split Transaction").font(.subheadline.weight(.semibold))
-                                }
-                            }
-                            .accessibilityIdentifier("editExpense.splitToggle")
-                            if splitDraft != nil {
-                                Divider()
-                                InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
-                                                   totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: Binding(get: { splitDraft != nil }, set: { on in
+                            withAnimation(.easeInOut(duration: 0.2)) { splitDraft = on ? SplitDraft() : nil }
+                        })) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                                Text("Split Transaction").font(.subheadline.weight(.semibold))
                             }
                         }
-                        .padding()
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier("editExpense.splitToggle")
+                        if splitDraft != nil {
+                            Divider()
+                            InlineSplitSection(draft: Binding(get: { splitDraft ?? SplitDraft() }, set: { splitDraft = $0 }),
+                                               totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency)
+                        }
                     }
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .padding()
             }
@@ -225,12 +211,6 @@ public struct EditExpenseView: View {
                     }
                     .fontWeight(.bold)
                     .disabled(!isValid)
-                }
-            }
-            .sheet(isPresented: $showingSplitEditor) {
-                SplitEditorView(totalMinor: Money.minorUnits(from: parsedAmount), currency: expense.currency, merchant: merchant,
-                                initial: splitDraft, editingExpenseID: expense.id) { result in
-                    splitDraft = result
                 }
             }
             .onAppear {

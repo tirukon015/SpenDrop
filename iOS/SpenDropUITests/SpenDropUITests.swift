@@ -298,8 +298,11 @@ final class SpenDropUITests: XCTestCase {
             let paidFor = app.buttons["addExpense.paidFor"]
             for _ in 0..<3 where !paidFor.isHittable { app.swipeUp() }
             paidFor.tap()
-            XCTAssertTrue(app.navigationBars["Paid for Someone"].waitForExistence(timeout: 5), "opens in Paid for Someone mode")
-            app.buttons["split.addPerson"].tap()
+            // Opens the same inline split section as every other screen, already set to Paid for Someone.
+            let addPerson = app.buttons["split.addPerson"]
+            XCTAssertTrue(addPerson.waitForExistence(timeout: 5), "inline split opens in Paid for Someone mode")
+            for _ in 0..<4 where !addPerson.isHittable { app.swipeUp() }
+            addPerson.tap()
             if round == 0 {
                 XCTAssertTrue(app.buttons["New Person"].waitForExistence(timeout: 5))
                 app.buttons["New Person"].tap()
@@ -314,9 +317,9 @@ final class SpenDropUITests: XCTestCase {
             }
             XCTAssertTrue(app.staticTexts["Bijoy owes you RM 100.00"].waitForExistence(timeout: 5), "preview shows the debt; no share typed")
             if round == 0 { snap("Paid for someone") }
-            app.buttons["split.done"].tap()
-            XCTAssertTrue(app.staticTexts["Paid for Bijoy"].waitForExistence(timeout: 5))
-            app.buttons["Save Expense"].tap()
+            let save = app.buttons["Save Expense"]
+            for _ in 0..<5 where !save.isHittable { app.swipeUp() }
+            save.tap()
         }
 
         tab("PayBook")
@@ -610,6 +613,52 @@ final class SpenDropUITests: XCTestCase {
         for _ in 0..<4 where !autoCalc3.isHittable { app.swipeUp() }
         XCTAssertEqual(autoCalc3.value as? String, "1", "OFF applied only to the previous transaction")
         snap("Next transaction Auto Calculate ON")
+    }
+
+    /// The screenshot case, through the Share Extension review: Paid by Riyad, You left empty, Riyad RM100 → valid,
+    /// saved once; Edit restores Paid by Riyad and the amounts.
+    func test17_ShareReviewPaidByOtherPersonPersistsAndEdits() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--ui-testing-share-review", "100.00"]
+        app.launch()
+        let toggle = app.switches["share.splitToggle"]
+        for _ in 0..<5 where !toggle.isHittable { app.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        addNewPersonToSplit("Riyad")
+        app.segmentedControls["split.method"].buttons["Custom Amount"].tap()
+        let autoCalc = app.switches["split.autoCalculate"]
+        for _ in 0..<4 where !autoCalc.isHittable { app.swipeUp() }
+        if (autoCalc.value as? String) == "1" { autoCalc.switches.firstMatch.exists ? autoCalc.switches.firstMatch.tap() : autoCalc.tap() }
+        let mine = app.textFields["split.amount.me"]
+        for _ in 0..<4 where !mine.isHittable { app.swipeDown() }
+        mine.replaceText("")
+        app.textFields["split.amount.Riyad"].replaceText("100")
+        let paidBy = app.buttons["split.paidBy"]
+        for _ in 0..<4 where !paidBy.isHittable { app.swipeUp() }
+        paidBy.tap()
+        app.buttons["Riyad"].firstMatch.tap()
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Enter an amount'")).firstMatch.exists, "no 'Enter an amount for Me'")
+        XCTAssertFalse(app.descendants(matching: .any)["split.problem"].exists, "split is valid")
+        snap("Share review paid by Riyad")
+        let save = app.buttons["Save Expense"]
+        for _ in 0..<5 where !save.isHittable { app.swipeUp() }
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        tab("Transactions")
+        let row = app.staticTexts["RESTORAN SELERA KAMPUNG"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let edit = app.buttons["Edit"].firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let restoredPayer = app.buttons["split.paidBy"]
+        for _ in 0..<6 where !restoredPayer.isHittable { app.swipeUp() }
+        XCTAssertTrue(restoredPayer.waitForExistence(timeout: 5))
+        XCTAssertTrue(restoredPayer.label.contains("Riyad"), "Edit restores Paid by Riyad, not Me: \(restoredPayer.label)")
+        XCTAssertEqual(app.textFields["split.amount.Riyad"].value as? String, "100.00")
+        snap("Edit restores paid by Riyad")
     }
 }
 

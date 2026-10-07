@@ -1222,3 +1222,154 @@ public enum AutoCalculateTests {
         return results
     }
 }
+
+/// One Split Money everywhere: the same SplitDraft rules for Add, Edit, scan review, Share Extension (screenshots and
+/// PDFs) — payer independent of allocations, empty custom box = RM 0, floating amount reported, exact persistence
+/// through a store re-open. `--run-split-everywhere-tests`
+@MainActor
+public enum SplitEverywhereTests {
+    public static func runAllTests() -> [TestCaseResult] {
+        var results: [TestCaseResult] = []
+        let t = TestKit(suite: "Split everywhere") { results.append($0) }
+        let ctx = TestKit.context()
+        let riyad = DebtSettlementTests.person("Riyad", in: ctx), bijoy = DebtSettlementTests.person("Bijoy", in: ctx)
+        try? ctx.save()
+        func id(_ d: SplitDraft, _ name: String) -> UUID { d.participants.first { name == "Me" ? $0.isMe : $0.name == name }!.id }
+        func custom(_ amounts: [(String, String)], payer: PayBookProfile? = nil, people: [PayBookProfile] = []) -> SplitDraft {
+            var d = SplitDraft()
+            for p in people.isEmpty ? [riyad] : people { d.add(p) }
+            d.payer = payer
+            d.useCustomAmounts(totalMinor: 10000)
+            d.setAutoCalculate(false, totalMinor: 10000)
+            for (who, text) in amounts { d.setAmountText(text, for: id(d, who), totalMinor: 10000) }
+            return d
+        }
+        func save(_ d: SplitDraft?, title: String, in c: ModelContext) -> Expense {
+            let e = Expense(amount: 100, merchant: title, category: .food, paymentChannel: .duitNowQR, fundingAccount: "Touch 'n Go")
+            c.insert(e)
+            d?.apply(to: e, in: c)
+            try? c.save()
+            return e
+        }
+        func shares(_ e: Expense) -> [String: Int] {
+            Dictionary(e.shares.map { ($0.isMe ? "Me" : $0.nameSnapshot, $0.amountMinor) }, uniquingKeysWith: { a, b in a + b })
+        }
+
+        // 1. Split OFF, paid by Me
+        let plain = save(nil, title: "Plain", in: ctx)
+        t.check("1. RM100, split off, paid by Me → normal transaction (no shares, my spending RM100)",
+                !plain.isShared && plain.paidByMe && plain.myShareMinor == 10000, expected: "normal", actual: "\(plain.shares.count) shares")
+
+        // 2. Equal You + Riyad
+        var equal = SplitDraft(); equal.add(riyad)
+        t.check("2. Equal split You + Riyad → 50 / 50", equal.shares(totalMinor: 10000) == [5000, 5000],
+                expected: "[5000, 5000]", actual: "\(String(describing: equal.shares(totalMinor: 10000)))")
+
+        // 3. Custom 40/60
+        let c4060 = custom([("Me", "40"), ("Riyad", "60")])
+        t.check("3. Custom You 40 / Riyad 60 → remaining RM0, valid", c4060.remainingMinor(totalMinor: 10000) == 0 && c4060.isValid(totalMinor: 10000),
+                expected: "0, valid", actual: "\(c4060.remainingMinor(totalMinor: 10000))")
+
+        // 4. Paid by Riyad, You 0 (left empty), Riyad 100 — the screenshot case
+        let screenshot = custom([("Me", ""), ("Riyad", "100")], payer: riyad)
+        let screenshotMe = custom([("Me", ""), ("Riyad", "100")])
+        t.check("4. Paid by Riyad (or Me), You left empty, Riyad RM100 → valid; no 'Enter an amount for Me'",
+                screenshot.problem(totalMinor: 10000) == nil && screenshot.shares(totalMinor: 10000) == [0, 10000] &&
+                screenshotMe.problem(totalMinor: 10000) == nil,
+                expected: "valid", actual: "\(screenshot.problem(totalMinor: 10000) ?? "valid") / \(screenshotMe.problem(totalMinor: 10000) ?? "valid")")
+
+        // 5. Paid by Riyad, You 40, Riyad 60
+        let riyadPaid = custom([("Me", "40"), ("Riyad", "60")], payer: riyad)
+        t.check("5. Paid by Riyad, You 40 / Riyad 60 → valid; I owe Riyad RM40", riyadPaid.isValid(totalMinor: 10000) && riyadPaid.myShareMinor(totalMinor: 10000) == 4000,
+                expected: "valid, mine 4000", actual: "\(String(describing: riyadPaid.myShareMinor(totalMinor: 10000)))")
+
+        // 6. Floating
+        let floating = custom([("Me", "40"), ("Riyad", "50")])
+        let floatingExpense = Expense(amount: 100, merchant: "Floating"); ctx.insert(floatingExpense)
+        let floatingSaved = floating.apply(to: floatingExpense, in: ctx)
+        t.check("6. You 40 / Riyad 50 of RM100 → RM10 remains unassigned; not saved, not given to anyone",
+                floating.remainingMinor(totalMinor: 10000) == 1000 && floating.problem(totalMinor: 10000) == "RM 10.00 remains unassigned." &&
+                !floatingSaved && floatingExpense.shares.isEmpty,
+                expected: "RM10 unassigned, blocked", actual: "\(floating.problem(totalMinor: 10000) ?? "nil")")
+
+        // 7 + 8. Share Extension (screenshots) and PDF use the same view model + SplitDraft + apply
+        let shareVM = ShareExtensionViewModel()
+        let screenshotParsed = TransactionParser.shared.parse(ocrResult: PDFReceiptImporter.ocrResult(from: ClassifierEvaluation.tng("DuitNow QR", "RESTORAN TEST", "100.00")))
+        shareVM.applyParsedTransaction(screenshotParsed)
+        shareVM.splitDraft = riyadPaid
+        let pdfParsed = TransactionParser.shared.parse(ocrResult: PDFReceiptImporter.ocrResult(from: ["Maybank", "DuitNow QR", "Successful", "RM 100.00", "Recipient", "KEDAI PDF", "Reference ID", "QR12345678"]))
+        let pdfVM = ShareExtensionViewModel()
+        pdfVM.applyParsedTransaction(pdfParsed)
+        pdfVM.splitDraft = screenshot
+        t.check("7/8. Share Extension (screenshot) and PDF reviews hold a full SplitDraft (payer, custom amounts) before saving",
+                shareVM.splitDraft?.payer?.id == riyad.id && shareVM.splitDraft?.isValid(totalMinor: Money.minorUnits(from: screenshotParsed.amount ?? 0)) == true &&
+                pdfVM.splitDraft?.isValid(totalMinor: Money.minorUnits(from: pdfParsed.amount ?? 0)) == true,
+                expected: "valid drafts", actual: "\(String(describing: screenshotParsed.amount)) \(String(describing: pdfParsed.amount))")
+
+        // 9–11. Persist an imported expense, re-open the store, edit, change payer
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SplitEverywhere-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("default.store")
+        let schema = ExpenseDataContainer.currentSchema
+        var expenseID = UUID()
+        do {
+            let container = try? ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
+            if let container {
+                let c = ModelContext(container)
+                let r = PayBookProfile(name: "Riyad"); c.insert(r)
+                var d = SplitDraft(); d.add(r); d.payer = r
+                d.useCustomAmounts(totalMinor: 10000); d.setAutoCalculate(false, totalMinor: 10000)
+                d.setAmountText("40", for: d.participants[0].id, totalMinor: 10000); d.setAmountText("60", for: d.participants[1].id, totalMinor: 10000)
+                let e = Expense(amount: 100, merchant: "Imported", sourceType: .shareExtension, paymentChannel: .duitNowQR, fundingAccount: "Touch 'n Go")
+                c.insert(e); d.apply(to: e, in: c); try? c.save()
+                expenseID = e.id
+            }
+        }
+        var reopened = "open failed", restored = false, payerChanged = false, balanceAfter = 0
+        if let container = try? ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)]) {
+            let c = ModelContext(container)
+            if let e = TestKit.fetch(Expense.self, in: c).first(where: { $0.id == expenseID }), let r = e.payer {
+                let draft = SplitDraft(expense: e)
+                reopened = "payer=\(r.name) paidByMe=\(e.paidByMe) shares=\(shares(e)) channel=\(e.paymentChannel.rawValue) funding=\(e.fundingAccount)"
+                restored = !e.paidByMe && r.name == "Riyad" && shares(e) == ["Me": 4000, "Riyad": 6000] && e.paymentChannel == .duitNowQR &&
+                    e.fundingAccount == "Touch 'n Go" && draft?.payer?.id == r.id && draft?.shares(totalMinor: 10000) == [4000, 6000] && draft?.method == .amounts
+                // 11. Change payer Riyad → Me; allocations unchanged
+                if var edit = draft {
+                    edit.payer = nil
+                    edit.apply(to: e, in: c); try? c.save()
+                    payerChanged = e.paidByMe && e.payer == nil && shares(e) == ["Me": 4000, "Riyad": 6000]
+                    balanceAfter = PersonLedger.balances(for: r)["RM"] ?? 0
+                }
+            }
+        }
+        t.check("9. Imported expense (paid by Riyad, You 40 / Riyad 60) is exactly the same after closing and re-opening the store",
+                restored, expected: "Riyad, 4000/6000, DuitNow QR, Touch 'n Go", actual: reopened)
+        t.check("10. Edit restores the same split: payer Riyad, Custom Amount, 40 / 60", restored, expected: "restored", actual: reopened)
+        t.check("11. Changing the payer Riyad → You keeps the allocations; Riyad now owes me RM60",
+                payerChanged && balanceAfter == 6000, expected: "40/60 kept, +6000", actual: "\(payerChanged) \(balanceAfter)")
+
+        // 12. Remove a participant
+        var three = SplitDraft(); three.add(riyad); three.add(bijoy)
+        let before = three.shares(totalMinor: 10000)
+        three.remove(id: id(three, "Bijoy"))
+        t.check("12. Removing Bijoy from an equal split of 3 → the remaining two split it 50 / 50",
+                before == [3334, 3333, 3333] && three.shares(totalMinor: 10000) == [5000, 5000],
+                expected: "[5000, 5000]", actual: "\(String(describing: three.shares(totalMinor: 10000)))")
+
+        // 13. Add a participant (Auto Calculate ON → the new person shares the rest)
+        var adding = SplitDraft(); adding.add(riyad)
+        adding.useCustomAmounts(totalMinor: 10000)
+        adding.add(bijoy)
+        t.check("13. Adding a person to a custom split with Auto Calculate ON → shared equally again (exact sen)",
+                adding.shares(totalMinor: 10000) == [3334, 3333, 3333], expected: "[3334, 3333, 3333]",
+                actual: "\(String(describing: adding.shares(totalMinor: 10000)))")
+
+        // 14. Equal among 3 → exact sen
+        var equal3 = SplitDraft(); equal3.add(riyad); equal3.add(bijoy)
+        let e3 = equal3.shares(totalMinor: 10000) ?? []
+        t.check("14. RM100 equally among You, Riyad, Bijoy → 33.34 / 33.33 / 33.33 = RM100.00 exactly",
+                e3 == [3334, 3333, 3333] && e3.reduce(0, +) == 10000, expected: "[3334, 3333, 3333]", actual: "\(e3)")
+        return results
+    }
+}

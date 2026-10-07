@@ -53,6 +53,7 @@ describe("Common/BusinessRules/split-test-vectors.json", () => {
       if (op.op === "fixed") d = split.setFixed(d, idOf(op.who), op.minor, c.total)!;
       if (op.op === "parts") d = split.setParts(d, idOf(op.who), op.value);
       if (op.op === "autoCalculate") d = split.setAutoCalculate(d, op.value, c.total);
+      if (op.op === "payer") d = split.setPayer(d, op.who === "Me" ? null : { id: `person-${(c.people as string[]).indexOf(op.who)}`, name: op.who });
     }
     if (c.expect.shares) {
       expect(split.shares(d, c.total)).toEqual(c.expect.shares);
