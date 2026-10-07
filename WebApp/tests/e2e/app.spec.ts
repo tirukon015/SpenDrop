@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const PAGES = ["/", "/transactions", "/paybook", "/breakdown", "/more", "/add", "/more/accounts", "/more/reference", "/more/import", "/more/account"];
+const PAGES = ["/", "/transactions", "/paybook", "/breakdown", "/more", "/add", "/more/accounts", "/more/reference", "/more/import", "/more/account", "/add/bulk"];
 
 async function fresh(page: Page) {
   // Each test starts from the same synthetic demo data.
