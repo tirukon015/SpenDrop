@@ -23,6 +23,7 @@ export class SupabaseSource implements DataSource {
     readonly userId: string,
     readonly email: string | null,
     readonly provider: string | null,
+    readonly displayName: string | null = null,
   ) {}
 
   async pull(table: TableName, since: string | null): Promise<PulledRows> {

@@ -92,7 +92,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setError("Your session has ended. Please sign in again.");
         return;
       }
-      setSource(new SupabaseSource(client, data.user.id, data.user.email ?? null, (data.user.app_metadata?.provider as string) ?? null));
+      setSource(new SupabaseSource(client, data.user.id, data.user.email ?? null, (data.user.app_metadata?.provider as string) ?? null,
+        (typeof data.user.user_metadata?.full_name === "string" ? data.user.user_metadata.full_name : typeof data.user.user_metadata?.name === "string" ? data.user.user_metadata.name : null)));
     })();
     return () => {
       cancelled = true;

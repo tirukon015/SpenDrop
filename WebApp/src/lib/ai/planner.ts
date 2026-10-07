@@ -333,6 +333,8 @@ const CAUSE = /\b(what'?s|what is|what) (causing|driving|behind)\b|\bcaus(e|ed|i
 const RELATIVE = /\b(the )?(day|week|month) (before|after)\b|\b(previous|next|following) (day|week|month)\b/;
 const FOLLOW_UP = /^(and|what about|how about|also|then|so|ok(ay)?|but)\b|^(why|those|them)\b|^compare (it |that |this )?(with|to)\b/;
 const WEAK_FOLLOW_UP = /^(which|show|list|that)\b/;
+/** "Show it again", "again?", "repeat that" (Banglish "abar dekhao") — the previous question, unchanged. */
+const REPEAT = /^(please )?((show|tell|give)( me)?( it| that| them| those)? again|again( (show|tell|please))?( it| that| them| me)?|repeat( (it|that))?|once more|one more time)( please)?\??$/;
 const LOCATION = /\bnear\s+(the\s+)?\w+|\bat\s+(the\s+)?(uni|university|campus|office|college|school|mall|home|work)\b/;
 const ORDINALS = ["first", "second", "third", "fourth", "fifth"];
 const SECRETS = /\b(passwords?|passcodes?|pin( number)?|otp|tac code|cvv|cvc|card number|full card|login details|api key|secret key|service role)\b/;
@@ -512,6 +514,12 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   if (gate) return gate;
   if (has(t, HELP)) return { kind: "reply", intent: "GENERAL", status: "answered", text: capabilities, followUps: ["How much did I spend this week?", "Give me my weekly summary"] };
 
+  // "Rukon's transactions", "my wife's spending": someone else's records. Only the user's own records exist here,
+  // so say so instead of searching for a merchant called "Rukon" (a known merchant / account name is fine).
+  const owner = /\b([\p{L}]+)'s\s+(transactions?|expenses?|spending|data|records|receipts?|purchases?|account|money|history)\b/iu.exec(raw);
+  if (owner && !/^(today|yesterday|tomorrow|week|month|year|last|this|next|grab|shopee)$/i.test(owner[1]) && !knownMerchant(owner[1].toLowerCase(), vocabulary) && !extractFundingAccount(owner[1].toLowerCase(), vocabulary))
+    return { kind: "reply", intent: "SECURITY", status: "refused", text: "I can only see your own SpenDrop records — never anyone else's. Ask me anything about your own spending.", followUps: ["Show my recent transactions"] };
+
   // Personal rules and memory ("Grab is transport for me", "what do you remember?", "forget Grab")
   const memory = memoryPlan(raw, t);
   if (memory) return memory;
@@ -560,7 +568,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   const ownIntent = [HOW_MUCH, LIST, COMPARE, INSIGHTS, SUMMARY, ACCOUNT_Q, CHANNEL_Q, CATEGORY_Q, MERCHANT_Q, BIGGEST, SMALLEST, COUNT, AVERAGE, UNUSUAL].some((re) => has(t, re));
   const refersBack = /\b(that|it|this|those)\b/.test(t) && !period;
   const isFollowUp = Boolean(focus) && (has(t, FOLLOW_UP) || has(t, RELATIVE) || has(t, NORMAL_Q) || has(t, CAUSE)
-    || (has(t, FREQ) && !namesFilters) || ((has(t, TREND_UP) || has(t, TREND_DOWN)) && refersBack && !namesFilters)
+    || (has(t, FREQ) && !namesFilters) || ((has(t, TREND_UP) || has(t, TREND_DOWN)) && (refersBack || !has(t, MONEY_WORD)) && !namesFilters)
     || (has(t, WEAK_FOLLOW_UP) && t.split(/\s+/).length <= 4) || (!ownIntent && hasEntities));
   const baseFilters: FocusFilters = isFollowUp && focus && !namesFilters ? stripAmounts(focus.filters) : entityFilters;
   const relative = focus?.span && has(t, RELATIVE) ? shiftSpan(focus.span, t) : null;
@@ -608,6 +616,9 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     ...(f.currency ? { currency: f.currency } : {}),
   });
 
+  // "Show it again" / "abar dekhao": the previous question, unchanged.
+  if (focus && REPEAT.test(t.trim()) && !namesFilters && !period) return replay(focus);
+
   // Payment channels compared ("card or qr?", "apple pay vs card", "do I mostly pay by card?") → channel families.
   const comparesChannels = channelFamilies.length >= 2 || (channelFamilies.length === 1 && /\b(mostly|more|most|usually|prefer|or|vs|versus|compared)\b/.test(t) && !amount);
   if (comparesChannels && !amount) {
@@ -630,7 +641,9 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // Trend: "is my spending increasing?", "barche?", "komche naki?", "food er khoroch barche keno?"
   const trend = has(t, TREND_UP) ? "up" : has(t, TREND_DOWN) ? "down" : null;
   if (trend && !amount) {
-    const s = period?.span ?? (refersBack && focus?.span ? focus.span : null) ?? (isFollowUp && focus?.span ? focus.span : thisMonth(today));
+    const whole = period?.span ?? (refersBack && focus?.span ? focus.span : null) ?? (isFollowUp && focus?.span ? focus.span : thisMonth(today));
+    // A period still in progress is compared "so far": 1–7 Oct vs 1–7 Sep (same days on both sides, same labels).
+    const s = whole.from <= today && whole.to > today ? { from: whole.from, to: today } : whole;
     const b = previousComparable(s, today);
     const f = baseFilters;
     if (has(t, WHY)) return tools("INVESTIGATE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "INVESTIGATE", filters: f, span: s, compareSpan: b }, notes);

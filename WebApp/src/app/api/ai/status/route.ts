@@ -2,8 +2,8 @@
 import { getProvider, serverConfig } from "@/lib/ai/providers";
 import { authenticate, json } from "@/lib/ai/server";
 
-export async function GET() {
-  const auth = await authenticate();
+export async function GET(request: Request) {
+  const auth = await authenticate(request);
   if (!auth.ok) return auth.response;
   const config = serverConfig();
   const provider = getProvider();

@@ -4,6 +4,7 @@
 // you are from your session and answers from your records). In the local demo, the same deterministic engine runs
 // in this browser over the synthetic demo data — nothing is sent anywhere.
 import { ArrowUp, Eye, History, MessageSquarePlus, Sparkles, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Page, PageHeader } from "@/components/app-shell";
 import { useData } from "@/components/providers/data-provider";
@@ -13,6 +14,7 @@ import { proactiveNoticesFor, type Notice } from "@/lib/ai/proactive";
 import { MemoryRepository, MemoryRuleStore } from "@/lib/ai/repository";
 import { localDateOf } from "@/lib/ai/time";
 import type { AskAnswer, Focus } from "@/lib/ai/types";
+import { firstName, useAiSettings } from "@/lib/ai-settings";
 import { isDemoMode } from "@/lib/supabase/config";
 import { AnswerView } from "./answer-view";
 
@@ -40,6 +42,9 @@ const timeZone = () => {
 
 export function AskScreen() {
   const { live, source, dataset, status: dataStatus } = useData();
+  // "Show My Name" is presentation only: it never changes whose data is used (that's the signed-in session).
+  const [aiSettings] = useAiSettings();
+  const greetingName = aiSettings.showMyName ? firstName(source?.displayName, source?.email) : null;
   // Until React is interactive, Enter would submit the form natively and reload the page (losing the question).
   const ready = useSyncExternalStore(noSubscribe, () => true, () => false);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -184,9 +189,9 @@ export function AskScreen() {
         {empty && (
           <Card className="sd-rise flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <span className="inline-flex size-11 items-center justify-center rounded-[14px] text-white" style={{ background: "linear-gradient(135deg, var(--sd-accent-fill), var(--sd-indigo))" }}><Sparkles aria-hidden className="size-5" /></span>
+              <Image src="/ai/spendrop-robot.webp" alt="" width={254} height={288} className="size-14 shrink-0 object-contain" />
               <div>
-                <h2 className="font-semibold">Ask anything about your money</h2>
+                <h2 className="font-semibold">{greetingName ? `Hi ${greetingName}! Ask anything about your money` : "Ask anything about your money"}</h2>
                 <p className="text-sm text-label-2">Answers come from your own SpenDrop records — with the transactions to prove it.</p>
               </div>
             </div>

@@ -280,7 +280,8 @@ test("Ask SpenDrop understands Banglish, remembers a personal rule, and declines
 
   await ask("Ei week e koto taka khoroch korchi?");
   await expect(answers.nth(1)).toContainText("I read this as “this week how much spent?”");
-  await expect(answers.nth(1)).toContainText(/You spent RM [\d,]+\.\d\d this week/);
+  // A Banglish question gets a Banglish answer with the same verified figure.
+  await expect(answers.nth(1)).toContainText(/Ei week e \(.+\) tomar RM [\d,]+\.\d\d khoroch hoise/);
 
   await ask("Grab is transport for me");
   await expect(answers.nth(3)).toContainText("Got it — I'll treat Grab as Transport for you.");

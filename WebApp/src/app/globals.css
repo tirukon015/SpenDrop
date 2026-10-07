@@ -407,6 +407,49 @@ body {
 .sd-tip[data-tip-side="right"]::after { left: calc(100% + 8px); top: 50%; transform: translate(-2px, -50%); }
 .sd-tip:hover::after, .sd-tip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 350ms; }
 .sd-tip[data-tip-side="right"]:hover::after, .sd-tip[data-tip-side="right"]:focus-visible::after { transform: translate(0, -50%); }
+.sd-tip[data-tip-side="left"]::after { left: auto; right: calc(100% + 8px); top: 50%; transform: translate(2px, -50%); }
+.sd-tip[data-tip-side="left"]:hover::after, .sd-tip[data-tip-side="left"]:focus-visible::after { transform: translate(0, -50%); }
+
+/* ───────────── Floating SpenDrop AI (a shortcut to /ask) ─────────────
+   Phone: stacked above the floating Add button, clear of the tab bar and the home indicator. Tablet / desktop:
+   bottom-right corner. The whole image is always visible (object-fit: contain, never cropped). Hidden while a
+   modal sheet is open. Float: 3px over 3.6s; none with reduced motion. */
+.sd-tip.sd-robot {
+  position: fixed;
+  z-index: 30;
+  right: 12px;
+  bottom: calc(142px + env(safe-area-inset-bottom));
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+@media (min-width: 400px) { .sd-tip.sd-robot { width: 64px; height: 64px; } }
+@media (min-width: 768px) { .sd-tip.sd-robot { right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); width: 72px; height: 72px; } }
+@media (min-width: 1024px) { .sd-tip.sd-robot { right: 24px; bottom: calc(24px + env(safe-area-inset-bottom)); width: 88px; height: 88px; } }
+.sd-robot:focus-visible { box-shadow: 0 0 0 3px var(--sd-accent-fill); }
+.sd-robot-float { display: block; width: 100%; height: 100%; animation: sd-robot-float 3.6s ease-in-out infinite; }
+.sd-robot-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 180ms ease;
+  filter: drop-shadow(0 6px 14px rgba(13, 115, 217, 0.22));
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.sd-robot:hover .sd-robot-img, .sd-robot:focus-visible .sd-robot-img { transform: scale(1.06); }
+.sd-robot:active .sd-robot-img { transform: scale(0.96); }
+@keyframes sd-robot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+body:has(dialog[open]) .sd-robot, body:has([aria-modal="true"]) .sd-robot { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sd-robot-float { animation: none; }
+  .sd-robot-img { transition: none; }
+}
 
 /* ───────────── Motion system ─────────────
    Short, ease-out, small distances. Disabled by the reduced-motion rule. Elements animate when they mount

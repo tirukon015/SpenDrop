@@ -199,7 +199,7 @@ export function composeCalculate(d: CalculateData, hints: ComposeHints): Compose
     followUps.push(d.groupBy === "category" ? "Why did I spend more this month?" : "Show the transactions", "Compare with last month");
   } else if (d.operation === "count") {
     const r0 = d.results[0];
-    const localized = !multi ? say.count(lang, { count: r0.transactionCount, days: h.frequency ? r0.distinctDays : undefined, subject: parts0, period: periodL }) : null;
+    const localized = !multi ? say.count(lang, { count: r0.transactionCount, days: h.frequency && r0.distinctDays !== r0.transactionCount ? r0.distinctDays : undefined, subject: parts0, period: periodL }) : null;
     text = localized ?? (h.frequency && !multi && r0.distinctDays !== undefined
       ? `You had ${plural(r0.transactionCount, "transaction")}${subject} ${period}${r0.distinctDays !== r0.transactionCount ? `, on ${plural(r0.distinctDays, "different day")}` : ""}.`
       : `You made ${d.results.map((r) => `${plural(r.transactionCount, "transaction")}${multi ? ` in ${r.currency}` : ""}`).join(" and ")}${subject} ${period}.`);

@@ -16,7 +16,7 @@ import { DEFAULT_TIME_ZONE, isValidTimeZone, localDateOf } from "./time";
 import type { AiContext, AskAnswer } from "./types";
 
 export interface ChatDeps {
-  authenticate: () => Promise<AuthResult>;
+  authenticate: (request: Request) => Promise<AuthResult>;
   repository: (auth: Extract<AuthResult, { ok: true }>) => FinanceRepository;
   store: (auth: Extract<AuthResult, { ok: true }>) => Pick<ConversationStore, "exists" | "create" | "rename" | "append" | "messages" | "questionsSince">;
   /** The user's own personal memory (rules). Bound to the authenticated user like everything else. */
@@ -47,7 +47,7 @@ export async function handleChat(request: Request, deps: ChatDeps): Promise<Resp
   const parsed = chatRequestSchema.safeParse(body);
   if (!parsed.success) return error(400, `Invalid request: ${describeIssues(parsed.error)}`, "invalid_request");
 
-  const auth = await deps.authenticate();
+  const auth = await deps.authenticate(request);
   if (!auth.ok) return auth.response;
 
   const timeZone = parsed.data.timeZone && isValidTimeZone(parsed.data.timeZone) ? parsed.data.timeZone : DEFAULT_TIME_ZONE;

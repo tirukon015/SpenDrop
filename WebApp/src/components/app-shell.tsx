@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand";
+import { FloatingSpenDropAI } from "@/components/floating-ai";
 import { useData } from "@/components/providers/data-provider";
 import { cx } from "@/components/ui/primitives";
 import { isDemoMode } from "@/lib/supabase/config";
@@ -189,6 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Plus aria-hidden className="size-7" />
         </Link>
       )}
+      <FloatingSpenDropAI />
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-20 border-t border-separator bg-card/85 pb-safe backdrop-blur-xl md:hidden">
         <ul className="grid grid-cols-5">
           {NAV.map(({ href, label, icon: Icon }) => {

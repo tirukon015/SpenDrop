@@ -70,7 +70,7 @@ const WORDS: Record<string, [string, Understanding["languages"][number]]> = {
   korchi: ["", "bn-latn"], korsi: ["", "bn-latn"], hoise: ["", "bn-latn"], hoyeche: ["", "bn-latn"], korlam: ["", "bn-latn"],
   khabar: ["food", "bn-latn"], khawa: ["food", "bn-latn"], khaoa: ["food", "bn-latn"], khana: ["food", "bn-latn"], bazar: ["groceries", "bn-latn"],
   aaj: ["today", "bn-latn"], ajke: ["today", "bn-latn"], gotokal: ["yesterday", "bn-latn"], kalke: ["yesterday", "bn-latn"],
-  keno: ["why", "bn-latn"], kon: ["which", "bn-latn"], konta: ["which", "bn-latn"], kothay: ["where", "bn-latn"], dekhao: ["show", "bn-latn"], dekhaw: ["show", "bn-latn"],
+  keno: ["why", "bn-latn"], kon: ["which", "bn-latn"], konta: ["which", "bn-latn"], kothay: ["where", "bn-latn"], dekhao: ["show", "bn-latn"], abar: ["again", "bn-latn"], abaro: ["again", "bn-latn"], lagi: ["again", "ms"], dekhaw: ["show", "bn-latn"],
   beshi: ["more", "bn-latn"], kom: ["less", "bn-latn"], ami: ["i", "bn-latn"], amar: ["my", "bn-latn"], shob: ["all", "bn-latn"], sob: ["all", "bn-latn"],
   e: ["", "bn-latn"], te: ["", "bn-latn"], er: ["", "bn-latn"], ki: ["", "bn-latn"], to: ["to", "en"],
   // Malay
@@ -119,7 +119,7 @@ const SHORT: Record<string, string> = {
 // Bengali script (a few common words).
 const BENGALI: [RegExp, string][] = [
   [/কত\s*টাকা|কত/g, " how much "], [/খরচ/g, " spent "], [/এই\s*সপ্তাহে|এই\s*সপ্তাহ/g, " this week "], [/গত\s*সপ্তাহে|গত\s*সপ্তাহ/g, " last week "],
-  [/এই\s*মাসে|এই\s*মাস/g, " this month "], [/গত\s*মাসে|গত\s*মাস/g, " last month "], [/আজ/g, " today "], [/গতকাল/g, " yesterday "],
+  [/এই\s*মাসে|এই\s*মাস/g, " this month "], [/গত\s*মাসে|গত\s*মাস/g, " last month "], [/আজ/g, " today "], [/গতকাল/g, " yesterday "], [/আগামীকাল/g, " tomorrow "], [/কাল/g, " yesterday "],
   [/খাবার/g, " food "], [/কেন/g, " why "], [/আমি|আমার|করেছি|হয়েছে|হলো/g, " "],
 ];
 

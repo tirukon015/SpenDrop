@@ -6,10 +6,10 @@ import { authenticate, error, json, sameOrigin } from "@/lib/ai/server";
 
 const id = z.string().uuid();
 
-export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const parsed = id.safeParse((await ctx.params).id);
   if (!parsed.success) return error(404, "That conversation wasn't found.", "conversation_not_found");
-  const auth = await authenticate();
+  const auth = await authenticate(request);
   if (!auth.ok) return auth.response;
   try {
     const store = new ConversationStore(auth.client, auth.userId);
@@ -24,7 +24,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   if (!sameOrigin(request)) return error(403, "Cross-site requests aren't allowed.", "forbidden_origin");
   const parsed = id.safeParse((await ctx.params).id);
   if (!parsed.success) return error(404, "That conversation wasn't found.", "conversation_not_found");
-  const auth = await authenticate();
+  const auth = await authenticate(request);
   if (!auth.ok) return auth.response;
   try {
     const removed = await new ConversationStore(auth.client, auth.userId).remove(parsed.data);

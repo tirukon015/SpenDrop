@@ -2,8 +2,8 @@
 import { AiSetupError, ConversationStore } from "@/lib/ai/conversations";
 import { authenticate, error, json } from "@/lib/ai/server";
 
-export async function GET() {
-  const auth = await authenticate();
+export async function GET(request: Request) {
+  const auth = await authenticate(request);
   if (!auth.ok) return auth.response;
   try {
     return json({ conversations: await new ConversationStore(auth.client, auth.userId).list() });

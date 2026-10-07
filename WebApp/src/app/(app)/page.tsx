@@ -139,7 +139,7 @@ export default function HomePage() {
               </div>
             )}
 
-            <div className="sd-rise grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" style={rise(4)}>
+            <div className="sd-rise grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" style={rise(4)}>
               <div className="flex flex-col gap-5">
                 <section aria-labelledby="today-heading">
                   <SectionHeader id="today-heading" action={<span className="text-xs text-label-2">{view.todayExpenses.length} transactions</span>}>Today&apos;s Expenses</SectionHeader>
