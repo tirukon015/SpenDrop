@@ -8,6 +8,8 @@ public final class UserDataBackupService {
 
     public static let defaultAccountName = "Touhidul Islam Rukon"
     public static let defaultAccountEmail = "tirukon015@gmail.com"
+    /// Written to `accountName` in exported backups (Android writes the same).
+    public static let exportAccountName = "SpenDrop user"
     private static let autoBackupFileName = "SpenDrop_AutoBackup.json"
 
     // MARK: - Codable DTOs for Persistent Backup
@@ -45,7 +47,7 @@ public final class UserDataBackupService {
         public init(
             version: Int = 1,
             appName: String = "SpenDrop",
-            accountName: String = "Touhidul Islam Rukon",
+            accountName: String = exportAccountName,
             exportDate: Date = Date(),
             expenses: [ExpenseDTO],
             paybookProfiles: [PayBookProfileDTO]
@@ -1142,7 +1144,8 @@ public final class UserDataBackupService {
         var payload = BackupPayload(
             version: BackupPayload.currentVersion,
             appName: "SpenDrop",
-            accountName: defaultAccountName,
+            // Never the developer's name in a user's backup (same as Android).
+            accountName: exportAccountName,
             exportDate: Date(),
             expenses: expenses.map { ExpenseDTO(from: $0) },
             paybookProfiles: profiles.map { PayBookProfileDTO(from: $0) }

@@ -62,7 +62,7 @@ public struct AccountsView: View {
                 }
             }
         }
-        .navigationTitle("Accounts")
+        .navigationTitle("Bank Accounts")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
