@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Financial data and the auth session never leave the device through Android backup. SpenDrop has its own
+     opt-in Cloud Backup to the user's private Supabase storage. -->
+<data-extraction-rules>
+    <cloud-backup><exclude domain="root" /><exclude domain="database" /><exclude domain="sharedpref" /><exclude domain="file" /></cloud-backup>
+    <device-transfer><exclude domain="sharedpref" path="spendrop_secure.xml" /></device-transfer>
+</data-extraction-rules>
