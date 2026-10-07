@@ -2,6 +2,7 @@
 
 // Small, dependency-free SVG charts. Each chart has a text alternative (aria-label / visually hidden table).
 import { formatMoney } from "@/lib/domain/money";
+import { AnimatedMoney } from "@/components/motion";
 import { cx, tintVar } from "@/components/ui/primitives";
 import type { Tint } from "@/lib/domain/constants";
 
@@ -19,8 +20,8 @@ export function BarChart({ data, tint = "blue", secondaryTint = "gray", height =
       <div className="flex items-end gap-[3px]" style={{ height }} role="img" aria-label={`${title}. ${data.map((d) => `${d.label}: ${formatMoney(d.valueMinor, currency)}`).join(", ")}`}>
         {data.map((d, i) => (
           <div key={i} className="group relative flex h-full flex-1 items-end justify-center gap-[2px]" title={`${d.label}: ${formatMoney(d.valueMinor, currency)}${dual ? ` / ${formatMoney(d.secondaryMinor ?? 0, currency)}` : ""}`}>
-            <div className="w-full max-w-[28px] rounded-t-[4px] transition-[height]" style={{ height: `${(d.valueMinor / max) * 100}%`, minHeight: d.valueMinor > 0 ? 2 : 0, background: tintVar(tint) }} />
-            {dual && <div className="w-full max-w-[28px] rounded-t-[4px]" style={{ height: `${((d.secondaryMinor ?? 0) / max) * 100}%`, minHeight: (d.secondaryMinor ?? 0) > 0 ? 2 : 0, background: tintVar(secondaryTint), opacity: 0.55 }} />}
+            <div className="sd-bar w-full max-w-[28px] rounded-t-[4px]" style={{ ["--i" as string]: i, height: `${(d.valueMinor / max) * 100}%`, minHeight: d.valueMinor > 0 ? 2 : 0, background: tintVar(tint) }} />
+            {dual && <div className="sd-bar w-full max-w-[28px] rounded-t-[4px]" style={{ ["--i" as string]: i, height: `${((d.secondaryMinor ?? 0) / max) * 100}%`, minHeight: (d.secondaryMinor ?? 0) > 0 ? 2 : 0, background: tintVar(secondaryTint), opacity: 0.55 }} />}
           </div>
         ))}
       </div>
@@ -44,7 +45,7 @@ export function Donut({ data, title, currency = "RM", size = 148 }: { data: Shar
         <circle cx="50" cy="50" r={r} fill="none" stroke="var(--sd-card-2)" strokeWidth="13" />
         {total > 0 && data.map((d) => {
           const length = (d.valueMinor / total) * c;
-          const el = <circle key={d.key} cx="50" cy="50" r={r} fill="none" stroke={tintVar(d.tint)} strokeWidth="13" strokeDasharray={`${Math.max(length - 0.8, 0.01)} ${c}`} strokeDashoffset={-offset} />;
+          const el = <circle key={d.key} className="sd-arc" cx="50" cy="50" r={r} fill="none" stroke={tintVar(d.tint)} strokeWidth="13" strokeDasharray={`${Math.max(length - 0.8, 0.01)} ${c}`} strokeDashoffset={-offset} />;
           offset += length;
           return el;
         })}
@@ -69,10 +70,10 @@ export function ShareList({ data, currency = "RM", total, limit }: { data: Share
                 <span className="truncate">{d.label}</span>
                 {d.count !== undefined && <span className="text-xs text-label-2">· {d.count}</span>}
               </span>
-              <span className="tabular shrink-0 font-semibold">{formatMoney(d.valueMinor, currency)} <span className="text-xs font-normal text-label-2">{pct}%</span></span>
+              <span className="tabular shrink-0 font-semibold"><AnimatedMoney minor={d.valueMinor} currency={currency} /> <span className="text-xs font-normal text-label-2">{pct}%</span></span>
             </div>
             <div aria-hidden className="h-1.5 overflow-hidden rounded-full bg-card-2">
-              <div className={cx("h-full rounded-full")} style={{ width: `${pct}%`, background: tintVar(d.tint) }} />
+              <div className={cx("sd-fill h-full rounded-full")} style={{ width: `${pct}%`, background: tintVar(d.tint) }} />
             </div>
           </li>
         );

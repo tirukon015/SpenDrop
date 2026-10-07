@@ -15,12 +15,13 @@ import { channelInfo, kindInfo, type Tint } from "@/lib/domain/constants";
 import { QUICK_DATES, dateRange, dayCount, inRange, type QuickDate } from "@/lib/domain/dates";
 import { summary } from "@/lib/domain/ledger";
 import { formatMoney } from "@/lib/domain/money";
+import { AnimatedMoney, rise } from "@/components/motion";
 
 const CURRENCY = "RM";
 
-function Metric({ title, value, subtitle, tint }: { title: string; value: string; subtitle: string; tint?: Tint }) {
+function Metric({ title, value, subtitle, tint, index = 0 }: { title: string; value: React.ReactNode; subtitle: string; tint?: Tint; index?: number }) {
   return (
-    <Card className="flex flex-col gap-1">
+    <Card className="sd-rise flex flex-col gap-1" style={rise(index)}>
       <span className="section-header">{title}</span>
       <span className="tabular text-[22px] font-bold" style={tint ? { color: tintText(tint) } : undefined}>{value}</span>
       <span className="text-xs text-label-2">{subtitle}</span>
@@ -93,8 +94,8 @@ export default function BreakdownPage() {
         ) : view === "spending" ? (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Metric title="Total spent" value={formatMoney(data.spent)} subtitle={`${data.expenses.length} transaction${data.expenses.length === 1 ? "" : "s"}`} />
-              <Metric title="Average / day" value={formatMoney(data.average)} subtitle={`over ${data.days} day${data.days === 1 ? "" : "s"}`} tint="blue" />
+              <Metric index={0} title="Total spent" value={<AnimatedMoney minor={data.spent} />} subtitle={`${data.expenses.length} transaction${data.expenses.length === 1 ? "" : "s"}`} />
+              <Metric index={1} title="Average / day" value={<AnimatedMoney minor={data.average} />} subtitle={`over ${data.days} day${data.days === 1 ? "" : "s"}`} tint="blue" />
               <Card className="col-span-2 flex flex-col gap-1">
                 <span className="section-header">{label} comparison</span>
                 {change === null ? <span className="text-sm text-label-2">{data.range ? "No spending in the previous period to compare." : "Choose a period to compare with the one before."}</span> : (
@@ -143,10 +144,10 @@ export default function BreakdownPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-              <Metric title="Money In" value={formatMoney(data.flow.moneyInMinor)} subtitle={label} tint="green" />
-              <Metric title="Money Out" value={formatMoney(data.flow.moneyOutMinor)} subtitle="expenses paid + other out" />
+              <Metric index={0} title="Money In" value={<AnimatedMoney minor={data.flow.moneyInMinor} />} subtitle={label} tint="green" />
+              <Metric index={1} title="Money Out" value={<AnimatedMoney minor={data.flow.moneyOutMinor} />} subtitle="expenses paid + other out" />
               <div className="col-span-2 lg:col-span-1">
-                <Metric title="Net Cash Flow" value={(data.flow.netCashFlowMinor >= 0 ? "+" : "") + formatMoney(data.flow.netCashFlowMinor)}
+                <Metric index={2} title="Net Cash Flow" value={<AnimatedMoney minor={data.flow.netCashFlowMinor} sign />}
                   subtitle={`Money In − Money Out · spending is shown separately (${formatMoney(data.flow.spendingMinor)})`} tint={data.flow.netCashFlowMinor >= 0 ? "green" : "orange"} />
               </div>
             </div>

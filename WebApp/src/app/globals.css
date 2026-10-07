@@ -350,3 +350,119 @@ body {
   to { opacity: 1; transform: none; }
 }
 .auth-swap { animation: auth-swap 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* ───────────── Collapsible sidebar (desktop / tablet) ─────────────
+   One sidebar. html[data-sidebar="hidden"] collapses it to 0 and the main column takes the space.
+   The inner content keeps its width so nothing re-flows inside the sidebar while it animates. */
+.sd-sidebar {
+  transition: width 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease, border-color 300ms ease;
+}
+:root[data-sidebar="hidden"] .sd-sidebar {
+  width: 0 !important;
+  opacity: 0;
+  border-right-color: transparent;
+}
+:root:not([data-sidebar-ready]) .sd-sidebar,
+:root:not([data-sidebar-ready]) .sd-sidebar-reopen {
+  transition: none !important;
+}
+.sd-sidebar-reopen {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity 200ms ease 80ms, transform 260ms cubic-bezier(0.32, 0.72, 0, 1) 80ms;
+}
+:root[data-sidebar="hidden"] .sd-sidebar-reopen {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+/* Keep page titles clear of the reopen button where the content isn't centred away from it */
+@media (min-width: 768px) and (max-width: 1399px) {
+  :root[data-sidebar="hidden"] .sd-page-header { padding-left: 4.25rem; transition: padding-left 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+}
+.sd-page-header { transition: padding-left 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+
+/* Small tooltip for icon buttons (hover + keyboard focus) */
+.sd-tip { position: relative; }
+.sd-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translate(-50%, -2px);
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(28, 28, 30, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 60;
+}
+.sd-tip[data-tip-side="right"]::after { left: calc(100% + 8px); top: 50%; transform: translate(-2px, -50%); }
+.sd-tip:hover::after, .sd-tip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 350ms; }
+.sd-tip[data-tip-side="right"]:hover::after, .sd-tip[data-tip-side="right"]:focus-visible::after { transform: translate(0, -50%); }
+
+/* ───────────── Motion system ─────────────
+   Short, ease-out, small distances. Disabled by the reduced-motion rule. Elements animate when they mount
+   (first load, new rows, new results) — never on unrelated re-renders or sidebar toggles. */
+@keyframes sd-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.sd-rise { animation: sd-rise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.sd-row { animation: sd-rise 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 28ms); }
+
+@keyframes sd-grow-y { from { transform: scaleY(0); } }
+.sd-bar { transform-origin: bottom; animation: sd-grow-y 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 12ms + 120ms); transition: height 500ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes sd-grow-x { from { transform: scaleX(0); } }
+.sd-fill { transform-origin: left; animation: sd-grow-x 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: 150ms; transition: width 500ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes sd-draw { from { stroke-dasharray: 0 264; } }
+.sd-arc { animation: sd-draw 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: 150ms; transition: stroke-dasharray 500ms ease, stroke-dashoffset 500ms ease; }
+
+/* Clickable cards: a barely-there lift */
+.sd-lift { transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+.sd-lift:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07); }
+:root[data-theme="dark"] .sd-lift:hover { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5); }
+
+/* Sliding active highlight in the sidebar */
+.sd-nav-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sd-accent) 12%, transparent);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1), height 320ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease;
+  pointer-events: none;
+}
+
+/* Sheets / dialogs: open and close smoothly (incl. the backdrop) */
+dialog.sd-sheet {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 200ms ease, transform 260ms cubic-bezier(0.32, 0.72, 0, 1), overlay 260ms allow-discrete, display 260ms allow-discrete;
+}
+@media (min-width: 640px) {
+  dialog.sd-sheet { transform: translateY(4px) scale(0.97); }
+}
+dialog.sd-sheet[open] { opacity: 1; transform: none; }
+@starting-style {
+  dialog.sd-sheet[open] { opacity: 0; transform: translateY(16px); }
+}
+@media (min-width: 640px) {
+  @starting-style { dialog.sd-sheet[open] { opacity: 0; transform: translateY(4px) scale(0.97); } }
+}
+dialog.sd-sheet::backdrop {
+  background: rgba(0, 0, 0, 0);
+  transition: background-color 220ms ease, overlay 260ms allow-discrete, display 260ms allow-discrete;
+}
+dialog.sd-sheet[open]::backdrop { background: rgba(0, 0, 0, 0.4); }
+@starting-style { dialog.sd-sheet[open]::backdrop { background: rgba(0, 0, 0, 0); } }
+
+.sd-nav-indicator:not([data-ready]) { transition: none; }

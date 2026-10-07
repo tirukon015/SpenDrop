@@ -5,6 +5,10 @@ export const APPEARANCE_KEY = "spendrop-appearance";
 /** Inline script: resolves the stored choice (or the system setting) into html[data-theme] before paint. */
 export const themeScript = `(function(){try{var a=(localStorage.getItem('${APPEARANCE_KEY}')||'system').replace(/"/g,'');var d=a==='dark'||(a==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='light';}})();`;
 
+/** Sidebar preference (desktop/tablet): applied before paint so a hidden sidebar never flashes open on load. */
+export const SIDEBAR_KEY = "spendrop-sidebar";
+export const sidebarScript = `(function(){try{if((localStorage.getItem('${SIDEBAR_KEY}')||'').indexOf('hidden')>-1)document.documentElement.dataset.sidebar='hidden';}catch(e){}})();`;
+
 export function applyAppearance(appearance: Appearance) {
   const dark = appearance === "dark" || (appearance === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";

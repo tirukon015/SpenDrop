@@ -2,7 +2,7 @@
 
 import { LoaderCircle, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
-import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import type { Tint } from "@/lib/domain/constants";
 
 export const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(" ");
@@ -61,7 +61,7 @@ export function ButtonLink({ href, children, variant = "primary", className }: {
   );
 }
 
-export function Card({ children, className, as: As = "section", ...rest }: { children: ReactNode; className?: string; as?: "section" | "div" | "article"; "aria-label"?: string; id?: string }) {
+export function Card({ children, className, as: As = "section", ...rest }: { children: ReactNode; className?: string; as?: "section" | "div" | "article"; "aria-label"?: string; id?: string; style?: React.CSSProperties }) {
   return <As className={cx("rounded-card bg-card p-4 shadow-card", className)} {...rest}>{children}</As>;
 }
 
@@ -243,17 +243,29 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
  */
 export function Sheet({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Content stays rendered during the close animation, then unmounts.
+  const [lingering, setLingering] = useState(false);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-    // Also close when this screen is hidden or unmounted (e.g. navigating away): a modal dialog left open on a
-    // hidden screen would make the whole page inert. It reopens if the screen comes back with the sheet open.
-    return () => {
-      if (dialog.open) dialog.close();
-    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (open) {
+      if (!dialog.open) dialog.showModal();
+      timer = setTimeout(() => setLingering(true), 0);
+    } else if (dialog.open) {
+      // Close right away so the page behind is usable immediately; CSS animates the exit (display/overlay
+      // allow-discrete) while the content stays rendered for the length of that animation.
+      dialog.close();
+      timer = setTimeout(() => setLingering(false), 260);
+    }
+    return () => clearTimeout(timer);
   }, [open]);
+  // Close immediately when this screen is hidden or unmounted (e.g. navigating away): a modal dialog left open on a
+  // hidden screen would make the whole page inert. It reopens if the screen comes back with the sheet open.
+  useEffect(() => () => {
+    const dialog = ref.current;
+    if (dialog?.open) dialog.close();
+  }, []);
   return (
     <dialog
       ref={ref}
@@ -263,13 +275,13 @@ export function Sheet({ open, onClose, title, children, footer, wide }: { open: 
       onClick={(e) => { if (e.target === ref.current) onClose(); }}
       aria-label={title}
       className={cx(
-        "m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-hidden rounded-t-[20px] bg-bg p-0 text-label backdrop:bg-black/40 backdrop:backdrop-blur-[1px]",
+        "sd-sheet m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-hidden rounded-t-[20px] bg-bg p-0 text-label",
         "sm:m-auto sm:max-h-[86dvh] sm:rounded-[20px]",
         wide ? "sm:max-w-2xl" : "sm:max-w-lg",
       )}
     >
-      {open && (
-        <div className="animate-sheet flex max-h-[92dvh] flex-col sm:max-h-[86dvh]">
+      {(open || lingering) && (
+        <div className="flex max-h-[92dvh] flex-col sm:max-h-[86dvh]">
           <header className="flex items-center justify-between gap-3 border-b border-separator bg-bg px-4 py-3">
             <h2 className="text-[17px] font-semibold">{title}</h2>
             <button type="button" onClick={onClose} aria-label="Close" className="inline-flex size-9 items-center justify-center rounded-full bg-card-2 text-label-2 hover:text-label">

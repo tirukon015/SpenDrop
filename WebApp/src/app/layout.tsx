@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { InlineScript } from "@/components/inline-script";
 import { ServiceWorker } from "@/components/service-worker";
-import { themeScript } from "@/lib/theme";
+import { sidebarScript, themeScript } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <head>
         <InlineScript html={themeScript} />
+        <InlineScript html={sidebarScript} />
       </head>
       <body className="min-h-dvh antialiased">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-card focus:px-3 focus:py-2">

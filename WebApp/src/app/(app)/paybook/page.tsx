@@ -10,6 +10,7 @@ import { Avatar, Button, Card, Divider, EmptyState, ErrorBanner, Input, ListSkel
 import { balancesForPerson, outstandingPeople, type BalanceFilter, type LedgerInput } from "@/lib/domain/ledger";
 import { formatDate } from "@/lib/domain/dates";
 import { formatMoney } from "@/lib/domain/money";
+import { AnimatedMoney, rise } from "@/components/motion";
 
 export default function PayBookPage() {
   const { live, status, error, refresh } = useData();
@@ -54,8 +55,8 @@ export default function PayBookPage() {
       <Page className="flex flex-col gap-4">
         {error && <ErrorBanner message={error} onRetry={refresh} />}
         <div className="grid grid-cols-2 gap-3">
-          <Card><p className="section-header">They owe me</p><p className="tabular mt-1 text-[22px] font-bold text-green">{formatMoney(totals.owed)}</p></Card>
-          <Card><p className="section-header">I owe them</p><p className="tabular mt-1 text-[22px] font-bold text-orange">{formatMoney(totals.owe)}</p></Card>
+          <Card className="sd-rise" style={rise(0)}><p className="section-header">They owe me</p><AnimatedMoney minor={totals.owed} className="tabular mt-1 block text-[22px] font-bold text-green" /></Card>
+          <Card className="sd-rise" style={rise(1)}><p className="section-header">I owe them</p><AnimatedMoney minor={totals.owe} className="tabular mt-1 block text-[22px] font-bold text-orange" /></Card>
         </div>
         <Segmented label="Show" value={filter} onChange={setFilter}
           options={[{ id: "all", label: "All" }, { id: "theyOweMe", label: "They Owe Me" }, { id: "iOweThem", label: "I Owe Them" }]} />
@@ -75,7 +76,7 @@ export default function PayBookPage() {
             <Card className="overflow-hidden p-0">
               <ul>
                 {rows.map((r, i) => (
-                  <li key={r.person.id}>{i > 0 && <Divider inset={68} />}
+                  <li key={r.person.id} className="sd-row" style={rise(i)}>{i > 0 && <Divider inset={68} />}
                     <Link href={`/paybook/${r.person.id}`} className="flex min-h-16 items-center gap-3 px-4 py-2.5 hover:bg-card-2">
                       <Avatar name={r.person.name} />
                       <div className="min-w-0 flex-1">

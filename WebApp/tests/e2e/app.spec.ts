@@ -176,3 +176,70 @@ test("sign out", async ({ page }) => {
   await page.getByRole("button", { name: "Sign Out" }).click();
   await expect(page).toHaveURL(/\/login/);
 });
+
+test.describe("collapsible sidebar", () => {
+  test("hide / show, persists across pages and reload, Ctrl+B, nothing replays", async ({ page, isMobile }) => {
+    test.skip(isMobile, "phones keep the bottom tab bar");
+    await page.goto("/");
+    const nav = page.locator("nav.sd-sidebar");
+    const main = page.locator("main#main");
+    await expect(page.getByText("This Month").first()).toBeVisible();
+    await page.waitForTimeout(900); // let the entrance + count-up finish
+    const card = page.locator(".sd-rise").first();
+    await card.evaluate((el) => el.setAttribute("data-probe", "same-element"));
+    const valueBefore = await card.locator("[data-value^='RM']").first().getAttribute("data-value");
+    const widthBefore = (await main.boundingBox())!.width;
+
+    await page.getByRole("button", { name: "Hide sidebar" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "hidden");
+    await expect.poll(async () => (await nav.boundingBox())?.width ?? 0).toBeLessThan(2);
+    await expect.poll(async () => (await main.boundingBox())!.width).toBeGreaterThan(widthBefore + 50);
+    // Same DOM element, same value: the dashboard did not re-mount or restart.
+    await expect(page.locator("[data-probe='same-element']")).toHaveCount(1);
+    expect(await card.locator("[data-value^='RM']").first().getAttribute("data-value")).toBe(valueBefore);
+
+    await page.locator("nav.sd-sidebar").page().goto("/transactions");
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "hidden");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "hidden");
+
+    const reopen = page.getByRole("button", { name: "Show sidebar" });
+    await expect(reopen).toBeVisible();
+    await reopen.click();
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "open");
+    await expect.poll(async () => (await nav.boundingBox())?.width ?? 0).toBeGreaterThan(60);
+
+    // Keyboard shortcut toggles, but not while typing in a field
+    await page.locator("body").press("ControlOrMeta+b");
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "hidden");
+    await page.locator("body").press("ControlOrMeta+b");
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "open");
+    await page.getByLabel("Search transactions").focus();
+    await page.keyboard.press("ControlOrMeta+b");
+    await expect(page.locator("html")).toHaveAttribute("data-sidebar", "open");
+  });
+
+  test("phones keep the bottom tab bar (no desktop sidebar toggle)", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "phone/tablet-touch only");
+    await page.goto("/");
+    const width = page.viewportSize()!.width;
+    test.skip(width >= 768, "tablet uses the rail");
+    await expect(page.getByRole("button", { name: "Show sidebar" })).toBeHidden();
+    await expect(page.locator("nav").filter({ has: page.getByRole("link", { name: "PayBook" }) }).last()).toBeVisible();
+  });
+
+  test("numbers count to their exact final value and sheets open/close smoothly", async ({ page }) => {
+    await page.goto("/breakdown");
+    const total = page.locator("[data-value^='RM']").first();
+    const label = await total.getAttribute("data-value");
+    await expect.poll(async () => (await total.locator("[aria-hidden]").innerText()).trim(), { timeout: 3000 }).toBe(label);
+    await page.goto("/transactions");
+    const filters = page.getByRole("button", { name: /Filters/ });
+    if (await filters.isVisible()) {
+      await filters.click();
+      await expect(page.getByRole("dialog", { name: "Filters" })).toBeVisible();
+      await page.getByRole("button", { name: "Close" }).click();
+      await expect(page.getByRole("dialog", { name: "Filters" })).toBeHidden();
+    }
+  });
+});

@@ -14,6 +14,7 @@ import { ACTIVITY_TYPES, activeFilterCount, buildActivity, defaultFilters, type 
 import { categoryTint, kindInfo } from "@/lib/domain/constants";
 import { formatDate, dayKey, QUICK_DATES } from "@/lib/domain/dates";
 import { formatMoney } from "@/lib/domain/money";
+import { rise } from "@/components/motion";
 
 const PAGE_SIZE = 60;
 const STORAGE_KEY = "spendrop-tx-filters";
@@ -90,7 +91,7 @@ export default function TransactionsPage() {
                   <section key={g.key} aria-label={g.key === "results" ? "Results" : dayTitle(g.key)}>
                     {g.key !== "results" && <h2 className="section-header mb-1.5 px-1">{dayTitle(g.key)}</h2>}
                     <Card className="overflow-hidden p-0">
-                      {g.items.map((item, i) => <div key={item.id}>{i > 0 && <Divider inset={72} />}<ActivityRow item={item} people={people} accounts={accounts} /></div>)}
+                      {g.items.map((item, i) => <div key={item.id} className="sd-row" style={rise(i)}>{i > 0 && <Divider inset={72} />}<ActivityRow item={item} people={people} accounts={accounts} /></div>)}
                     </Card>
                   </section>
                 ))}
@@ -110,12 +111,13 @@ export default function TransactionsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shown.map((item) => {
+                    {shown.map((item, rowIndex) => {
+                      const rowStyle = rise(rowIndex, 14);
                       if (item.type === "expense") {
                         const e = item.expense;
                         const shared = item.shares.length > 0;
                         return (
-                          <tr key={item.id} className="group relative border-b border-separator last:border-0 hover:bg-card-2">
+                          <tr key={item.id} className="sd-row group relative border-b border-separator last:border-0 hover:bg-card-2" style={rowStyle}>
                             <td className="whitespace-nowrap py-2.5 pl-4 text-label-2">{formatDate(e.date, { day: "numeric", month: "short", year: "numeric" })}</td>
                             <td className="max-w-[280px] py-2.5">
                               <Link href={`/transactions/${e.id}`} className="flex items-center gap-2.5 font-semibold after:absolute after:inset-0">
@@ -138,7 +140,7 @@ export default function TransactionsPage() {
                       const info = kindInfo(m.kind);
                       const Icon = movementIcon(m.kind);
                       return (
-                        <tr key={item.id} className="relative border-b border-separator last:border-0 hover:bg-card-2">
+                        <tr key={item.id} className="sd-row relative border-b border-separator last:border-0 hover:bg-card-2" style={rowStyle}>
                           <td className="whitespace-nowrap py-2.5 pl-4 text-label-2">{formatDate(m.date, { day: "numeric", month: "short", year: "numeric" })}</td>
                           <td className="max-w-[280px] py-2.5">
                             <Link href={`/transactions/m/${m.id}`} className="flex items-center gap-2.5 font-semibold after:absolute after:inset-0">

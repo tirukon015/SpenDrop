@@ -13,31 +13,31 @@ import { byCategory, byFundingAccount, categoryTintOf, paletteTint } from "@/lib
 import { buildActivity, defaultFilters } from "@/lib/domain/activity";
 import { dateRange, inRange } from "@/lib/domain/dates";
 import { personBalances, spendingMinor, summary } from "@/lib/domain/ledger";
-import { formatMoney } from "@/lib/domain/money";
+import { AnimatedMoney, rise } from "@/components/motion";
 import type { Tint } from "@/lib/domain/constants";
 
 const CURRENCY = "RM";
 
-function SummaryCard({ title, amountMinor, icon: Icon, tint, hero, caption }: {
-  title: string; amountMinor: number; icon: React.ComponentType<{ className?: string }>; tint: Tint; hero?: boolean; caption?: string;
+function SummaryCard({ title, amountMinor, icon: Icon, tint, hero, caption, index }: {
+  title: string; amountMinor: number; icon: React.ComponentType<{ className?: string }>; tint: Tint; hero?: boolean; caption?: string; index: number;
 }) {
   return (
-    <Card className={cx("flex flex-col gap-2", hero && "md:col-span-2")}>
+    <Card className={cx("sd-rise flex h-full flex-col gap-2", hero && "md:col-span-2")} style={rise(index)}>
       <div className="flex items-center justify-between">
         <span className="section-header">{title}</span>
         <span aria-hidden style={{ color: tintVar(tint) }}><Icon className="size-4" /></span>
       </div>
-      <p className={cx("tabular font-bold tracking-tight", hero ? "text-[34px]" : "text-[22px]")}>{formatMoney(amountMinor, CURRENCY)}</p>
+      <AnimatedMoney minor={amountMinor} currency={CURRENCY} className={cx("tabular block font-bold tracking-tight", hero ? "text-[34px]" : "text-[22px]")} />
       {caption && <p className="text-xs text-label-2">{caption}</p>}
     </Card>
   );
 }
 
-function Metric({ label, value, tint }: { label: string; value: string; tint?: Tint }) {
+function Metric({ label, minor, sign, tint }: { label: string; minor: number; sign?: boolean; tint?: Tint }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <span className="text-xs text-label-2">{label}</span>
-      <span className="tabular break-words text-[14px] font-bold leading-tight sm:text-[15px]" style={tint ? { color: tintText(tint) } : undefined}>{value}</span>
+      <AnimatedMoney minor={minor} sign={sign} className="tabular break-words text-[14px] font-bold leading-tight sm:text-[15px]" style={tint ? { color: tintText(tint) } : undefined} />
     </div>
   );
 }
@@ -102,31 +102,31 @@ export default function HomePage() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div className="col-span-2"><SummaryCard hero title="Today" amountMinor={view.today} icon={SunMedium} tint="orange"
+              <div className="col-span-2"><SummaryCard hero index={0} title="Today" amountMinor={view.today} icon={SunMedium} tint="orange"
                 caption={`${view.todayExpenses.length} transaction${view.todayExpenses.length === 1 ? "" : "s"}`} /></div>
-              <SummaryCard title="This Week" amountMinor={view.week} icon={CalendarClock} tint="blue" />
-              <SummaryCard title="This Month" amountMinor={view.month} icon={ChartColumn} tint="green" />
+              <SummaryCard index={1} title="This Week" amountMinor={view.week} icon={CalendarClock} tint="blue" />
+              <SummaryCard index={2} title="This Month" amountMinor={view.month} icon={ChartColumn} tint="green" />
             </div>
 
             {(view.flow || view.owed !== 0 || view.owe !== 0) && (
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="sd-rise grid gap-3 md:grid-cols-2" style={rise(3)}>
                 {view.flow && (
                   <Card aria-label="Cash flow this month">
                     <div className="mb-2 flex items-center justify-between"><span className="section-header">Cash Flow · This Month</span><ArrowLeftRight aria-hidden className="size-4 text-teal" /></div>
                     <div className="flex gap-3">
-                      <Metric label="Money In" value={formatMoney(view.flow.moneyInMinor)} tint="green" />
-                      <Metric label="Money Out" value={formatMoney(view.flow.moneyOutMinor)} />
-                      <Metric label="Net" value={(view.flow.netCashFlowMinor >= 0 ? "+" : "") + formatMoney(view.flow.netCashFlowMinor)} tint={view.flow.netCashFlowMinor >= 0 ? "green" : "orange"} />
+                      <Metric label="Money In" minor={view.flow.moneyInMinor} tint="green" />
+                      <Metric label="Money Out" minor={view.flow.moneyOutMinor} />
+                      <Metric label="Net" minor={view.flow.netCashFlowMinor} sign tint={view.flow.netCashFlowMinor >= 0 ? "green" : "orange"} />
                     </div>
                   </Card>
                 )}
                 {(view.owed !== 0 || view.owe !== 0) && (
                   <Link href="/paybook" className="block rounded-card focus-visible:outline-2">
-                    <Card aria-label="PayBook balances" className="h-full hover:bg-card-2">
+                    <Card aria-label="PayBook balances" className="sd-lift h-full hover:bg-card-2">
                       <div className="mb-2 flex items-center justify-between"><span className="section-header">Balances</span><Users aria-hidden className="size-4 text-purple" /></div>
                       <div className="flex gap-3">
-                        {view.owed !== 0 && <Metric label="Owed to you" value={formatMoney(view.owed)} tint="green" />}
-                        {view.owe !== 0 && <Metric label="You owe" value={formatMoney(view.owe)} tint="orange" />}
+                        {view.owed !== 0 && <Metric label="Owed to you" minor={view.owed} tint="green" />}
+                        {view.owe !== 0 && <Metric label="You owe" minor={view.owe} tint="orange" />}
                       </div>
                     </Card>
                   </Link>
@@ -134,7 +134,7 @@ export default function HomePage() {
               </div>
             )}
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="sd-rise grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" style={rise(4)}>
               <div className="flex flex-col gap-5">
                 <section aria-labelledby="today-heading">
                   <SectionHeader id="today-heading" action={<span className="text-xs text-label-2">{view.todayExpenses.length} transactions</span>}>Today&apos;s Expenses</SectionHeader>
@@ -143,7 +143,7 @@ export default function HomePage() {
                       <EmptyState icon={ReceiptText} title="No expenses recorded today" message="Add a cash expense or scan a payment screenshot."
                         action={<ButtonLink href="/add" variant="tinted"><Plus aria-hidden className="size-4" /> Add Expense</ButtonLink>} />
                     ) : view.todayExpenses.map((e, i) => (
-                      <div key={e.id}>{i > 0 && <Divider inset={72} />}<ExpenseRow expense={e} shares={live.shares.get(e.id) ?? []} people={people} compact /></div>
+                      <div key={e.id} className="sd-row" style={rise(i + 4)}>{i > 0 && <Divider inset={72} />}<ExpenseRow expense={e} shares={live.shares.get(e.id) ?? []} people={people} compact /></div>
                     ))}
                   </Card>
                 </section>
@@ -151,7 +151,7 @@ export default function HomePage() {
                   <SectionHeader id="recent-heading" action={<Link href="/transactions" className="text-sm font-medium text-[var(--sd-accent-text)]">See All</Link>}>Recent Activity</SectionHeader>
                   <Card className="overflow-hidden p-0">
                     {status === "loading" ? <ListSkeleton rows={4} /> : view.recent.map((item, i) => (
-                      <div key={item.id}>{i > 0 && <Divider inset={72} />}<ActivityRow item={item} people={people} accounts={accounts} /></div>
+                      <div key={item.id} className="sd-row" style={rise(i + 5)}>{i > 0 && <Divider inset={72} />}<ActivityRow item={item} people={people} accounts={accounts} /></div>
                     ))}
                   </Card>
                 </section>
