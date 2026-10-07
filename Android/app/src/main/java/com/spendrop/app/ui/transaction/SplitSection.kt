@@ -1,5 +1,10 @@
 package com.spendrop.app.ui.transaction
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -84,7 +89,6 @@ fun SplitSection(
         }
         Segmented(listOf(SplitDraft.Purpose.SHARED, SplitDraft.Purpose.PAID_FOR), draft.purpose,
             { if (it == SplitDraft.Purpose.SHARED) "Shared Expense" else "Paid for Someone" }, { onChange(draft.setPurpose(it)) })
-        if (draft.purpose == SplitDraft.Purpose.SHARED) HybridToggle(draft, onChange)
         if (draft.purpose == SplitDraft.Purpose.SHARED && !draft.isHybrid) {
             Segmented(listOf(SplitMethod.EQUAL, SplitMethod.PARTS, SplitMethod.AMOUNTS), draft.method, {
                 when (it) { SplitMethod.EQUAL -> "Equally"; SplitMethod.AMOUNTS -> "Amounts"; SplitMethod.PARTS -> "Parts" }
@@ -108,13 +112,11 @@ fun SplitSection(
             quick.forEach { p -> FilterChip(false, { onChange(draft.add(p)) }, { Text(p.name) }, leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) }) }
             AssistChip(onClick = { onPickPerson(false) }, label = { Text("Add Person") }, leadingIcon = { Icon(Icons.Filled.PersonAdd, null) })
         }
-
+        // Hybrid Split comes after the people: add who's in the split, then choose how the money is allocated.
+        if (draft.purpose == SplitDraft.Purpose.SHARED) HybridToggle(draft, onChange)
         if (draft.isHybrid) HybridLayers(draft, totalMinor, currency, onChange)
 
-        if (draft.isHybrid) Text("FINAL CALCULATION", style = MaterialTheme.typography.labelMedium, color = SD.colors.secondaryLabel,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        draft.participants.forEachIndexed { index, p ->
-            if (draft.isHybrid) { HybridResultRow(draft, p, totalMinor, currency, onChange); RowDivider(); return@forEachIndexed }
+        if (!draft.isHybrid) draft.participants.forEachIndexed { index, p ->
             val inGroup = draft.sharingParticipants.any { it.id == p.id }
             if (!inGroup && !p.isMe) return@forEachIndexed
             ParticipantRow(draft, p, totalMinor, currency, index, onChange, onFixed = { fixedFor = p })
@@ -122,9 +124,7 @@ fun SplitSection(
         }
 
         if (draft.isHybrid) {
-            SummaryLine("Total allocated", f(draft.assignedMinor(totalMinor)))
-            val remaining = totalMinor - draft.assignedMinor(totalMinor)
-            SummaryLine("Remaining", f(remaining), if (remaining != 0L) SD.colors.orange else null)
+            // Totals are inside the Final Calculation card.
         } else if (draft.method == SplitMethod.AMOUNTS && !draft.paidForMe && draft.purpose == SplitDraft.Purpose.SHARED) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -194,91 +194,131 @@ private fun MoneyField(value: String, label: String, tag: String, currency: Stri
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = modifier.testTag(tag),
     )
 
-/** Group fixed amounts, individual fixed amounts, then the remaining amount. Everything recalculates on every change. */
+/** One layer of a Hybrid Split: a soft card with a numbered header and the layer's allocation on the right. */
+@Composable
+private fun LayerCard(step: String, title: String, amount: String?, amountColor: androidx.compose.ui.graphics.Color = SD.colors.label, content: @Composable () -> Unit) {
+    Column(
+        Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(SD.colors.groupedBackground).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(SD.colors.blue), contentAlignment = Alignment.Center) {
+                Text(step, color = androidx.compose.ui.graphics.Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp).weight(1f))
+            amount?.let { Text(it, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = amountColor) }
+        }
+        content()
+    }
+}
+
+@Composable
+private fun PeopleChips(draft: SplitDraft, selected: Set<String>, tagPrefix: String, onToggle: (String, Boolean) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        draft.participants.forEach { p ->
+            val name = if (p.isMe) "You" else p.name
+            val on = p.id in selected
+            FilterChip(on, { onToggle(p.id, !on) }, { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                modifier = Modifier.testTag("$tagPrefix-$name"), leadingIcon = if (on) ({ Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) }) else null)
+        }
+    }
+}
+
+@Composable
+private fun Caption(text: String) = Text(text, style = MaterialTheme.typography.labelMedium, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+
+/** Group fixed amounts, individual fixed amounts, the remaining amount and the final calculation. All live. */
 @Composable
 private fun HybridLayers(draft: SplitDraft, totalMinor: Long, currency: String, onChange: (SplitDraft) -> Unit) {
     val h = draft.hybrid ?: return
     fun f(m: Long) = Money.format(m, currency)
     fun label(p: SplitDraft.Participant) = if (p.isMe) "You" else p.name
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        // 1. Group fixed amounts — a TOTAL divided between the selected people
+
+    // ① Group fixed amounts — a TOTAL divided between the selected people
+    LayerCard("1", if (h.groups.size > 1) "Group Fixed Amounts" else "Group Fixed Amount", f(draft.groupAllocationMinor)) {
         h.groups.forEachIndexed { index, g ->
+            if (index > 0) HorizontalDivider(Modifier.padding(vertical = 12.dp), color = SD.colors.separator.copy(alpha = 0.4f))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { LayerTitle(if (h.groups.size > 1) "GROUP FIXED AMOUNT ${index + 1}" else "GROUP FIXED AMOUNT") }
-                if (h.groups.size > 1) TextButton(onClick = { onChange(draft.removeGroup(g.id)) }) { Text("Remove", color = SD.colors.red) }
-            }
-            MoneyField(g.amountText, "Amount (total for the group)", "groupAmount-$index", currency, Modifier.fillMaxWidth()) { onChange(draft.setGroupAmountText(g.id, it)) }
-            Text("Divide this amount between", style = MaterialTheme.typography.labelMedium, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                draft.participants.forEach { p ->
-                    val on = p.id in g.memberIds
-                    FilterChip(on, { onChange(draft.setGroupMember(g.id, p.id, !on)) }, { Text(label(p)) },
-                        modifier = Modifier.testTag("group$index-${label(p)}"), leadingIcon = if (on) ({ Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) }) else null)
+                MoneyField(g.amountText, if (h.groups.size > 1) "Group ${index + 1} total" else "Total for the group", "groupAmount-$index", currency, Modifier.weight(1f)) {
+                    onChange(draft.setGroupAmountText(g.id, it))
                 }
+                if (h.groups.size > 1) IconButton(onClick = { onChange(draft.removeGroup(g.id)) }) { Icon(Icons.Filled.Close, "Remove group ${index + 1}", tint = SD.colors.secondaryLabel) }
             }
+            Caption("Divide this amount between")
+            PeopleChips(draft, g.memberIds, "group$index") { id, on -> onChange(draft.setGroupMember(g.id, id, on)) }
             val preview = draft.groupPreview(g.id)
-            draft.participants.filter { it.id in preview }.forEach { p ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                    Text(label(p), color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f))
-                    Text(f(preview.getValue(p.id)), color = SD.colors.secondaryLabel)
+            if (preview.isNotEmpty()) Column(Modifier.padding(top = 6.dp)) {
+                draft.participants.filter { it.id in preview }.forEach { p ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                        Text(label(p), style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f))
+                        Text(f(preview.getValue(p.id)), style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
+                    }
                 }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                Text("Group allocation", modifier = Modifier.weight(1f))
-                Text(f(g.amountMinor ?: 0L), fontWeight = FontWeight.SemiBold)
             }
         }
-        TextButton(onClick = { onChange(draft.addGroup()) }) { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Add Another Group") }
+        TextButton(onClick = { onChange(draft.addGroup()) }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Add Another Group")
+        }
+    }
 
-        // 2. Individual fixed amounts — one person each, never divided
-        LayerTitle("INDIVIDUAL FIXED AMOUNTS")
+    // ② Individual fixed amounts — one person each, never divided
+    LayerCard("2", "Individual Fixed Amounts", f(draft.individualAllocationMinor)) {
+        if (h.individuals.isEmpty()) Text("An extra amount for one person only, on top of any group amount.", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
         h.individuals.forEachIndexed { index, ind ->
             var open by remember { mutableStateOf(false) }
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     val who = draft.participants.firstOrNull { it.id == ind.participantId }
                     OutlinedButton(
-                        onClick = { open = true }, contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
+                        onClick = { open = true }, contentPadding = PaddingValues(start = 12.dp, end = 4.dp), shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().height(56.dp).testTag("individualPerson-$index")
                             .semantics { contentDescription = "Person for individual fixed amount ${index + 1}" },
                     ) {
                         Text(who?.let(::label) ?: "Person", maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                             color = if (who == null) SD.colors.secondaryLabel else SD.colors.label)
-                        Icon(Icons.Filled.ArrowDropDown, null)
+                        Icon(Icons.Filled.ArrowDropDown, null, tint = SD.colors.secondaryLabel)
                     }
                     DropdownMenu(open, { open = false }) {
-                        draft.participants.forEach { p ->
-                            DropdownMenuItem({ Text(label(p)) }, { onChange(draft.setIndividualPerson(ind.id, p.id)); open = false })
-                        }
+                        draft.participants.forEach { p -> DropdownMenuItem({ Text(label(p)) }, { onChange(draft.setIndividualPerson(ind.id, p.id)); open = false }) }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                MoneyField(ind.amountText, "Amount", "individualAmount-$index", currency, Modifier.width(120.dp)) { onChange(draft.setIndividualAmountText(ind.id, it)) }
-                IconButton(onClick = { onChange(draft.removeIndividual(ind.id)) }) { Icon(Icons.Filled.Close, "Remove individual fixed amount", tint = SD.colors.secondaryLabel) }
+                MoneyField(ind.amountText, "Amount", "individualAmount-$index", currency, Modifier.width(118.dp)) { onChange(draft.setIndividualAmountText(ind.id, it)) }
+                IconButton(onClick = { onChange(draft.removeIndividual(ind.id)) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Close, "Remove individual fixed amount", tint = SD.colors.secondaryLabel)
+                }
             }
         }
-        TextButton(onClick = { onChange(draft.addIndividual()) }) { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Add Individual Fixed Amount") }
-        Row(Modifier.fillMaxWidth()) {
-            Text("Individual allocation", modifier = Modifier.weight(1f))
-            Text(f(draft.individualAllocationMinor), fontWeight = FontWeight.SemiBold)
+        TextButton(onClick = { onChange(draft.addIndividual()) }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Add Individual Fixed Amount")
         }
+    }
 
-        // 3. Remaining amount — split equally between the selected people
-        LayerTitle("REMAINING AMOUNT")
-        val remaining = draft.hybridRemainingMinor(totalMinor)
-        Row(Modifier.fillMaxWidth()) {
-            Text("Total − fixed allocations", color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f))
-            Text(f(remaining), fontWeight = FontWeight.SemiBold, color = if (remaining < 0) SD.colors.orange else SD.colors.label, modifier = Modifier.testTag("hybridRemaining"))
+    // ③ Remaining amount — split equally between the selected people
+    val remaining = draft.hybridRemainingMinor(totalMinor)
+    LayerCard("3", "Remaining Amount", f(remaining), if (remaining < 0) SD.colors.orange else SD.colors.label) {
+        Text("${f(totalMinor)} total − ${f(draft.groupAllocationMinor + draft.individualAllocationMinor)} fixed", style = MaterialTheme.typography.bodySmall,
+            color = SD.colors.secondaryLabel, modifier = Modifier.testTag("hybridRemaining").semantics { contentDescription = f(remaining) })
+        Caption("Split remaining between")
+        PeopleChips(draft, h.remainderIds, "rest") { id, on -> onChange(draft.setInRemainder(id, on)) }
+        Text("Auto Calculate: ON · split equally", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 6.dp))
+    }
+
+    // Final calculation — one row per person, then the totals
+    val allocated = draft.assignedMinor(totalMinor)
+    LayerCard("✓", "Final Calculation", null) {
+        draft.participants.forEachIndexed { i, p ->
+            if (i > 0) HorizontalDivider(color = SD.colors.separator.copy(alpha = 0.35f))
+            HybridResultRow(draft, p, totalMinor, currency, onChange)
         }
-        Text("Split remaining between", style = MaterialTheme.typography.labelMedium, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            draft.participants.forEach { p ->
-                val on = p.id in h.remainderIds
-                FilterChip(on, { onChange(draft.setInRemainder(p.id, !on)) }, { Text(label(p)) },
-                    modifier = Modifier.testTag("rest-${label(p)}"), leadingIcon = if (on) ({ Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) }) else null)
-            }
+        HorizontalDivider(Modifier.padding(top = 4.dp), color = SD.colors.separator.copy(alpha = 0.6f))
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Text("Total allocated", modifier = Modifier.weight(1f)); Text(f(allocated), fontWeight = FontWeight.SemiBold)
         }
-        Text("Auto Calculate: ON · split equally", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+            Text("Remaining", color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f))
+            Text(f(totalMinor - allocated), fontWeight = FontWeight.SemiBold, color = if (totalMinor - allocated != 0L) SD.colors.orange else SD.colors.green)
+        }
     }
 }
 
@@ -288,7 +328,7 @@ private fun HybridResultRow(draft: SplitDraft, p: SplitDraft.Participant, totalM
     val name = if (p.isMe) "You" else p.name
     val line = draft.hybridLines(totalMinor).valueOrNull()?.firstOrNull { it.participantId == p.id }
     fun f(m: Long) = Money.format(m, currency)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(name, fontWeight = FontWeight.Medium)
             val parts = line?.let {
@@ -298,7 +338,8 @@ private fun HybridResultRow(draft: SplitDraft, p: SplitDraft.Participant, totalM
                     it.remainingMinor.takeIf { v -> v > 0 }?.let { v -> "${f(v)} remaining" },
                 )
             }
-            if (!parts.isNullOrEmpty()) Text(parts.joinToString(" + "), style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel)
+            // Non-breaking spaces keep each "RM 15.00 remaining" together when the line wraps.
+            if (!parts.isNullOrEmpty()) Text(parts.joinToString(" + ") { it.replace(' ', '\u00A0') }, style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel)
             if (draft.payer?.id == p.person?.id && p.person != null || (p.isMe && draft.payer == null)) Text("paid", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel)
         }
         Text(line?.let { f(it.totalMinor) } ?: "—", fontWeight = FontWeight.SemiBold, modifier = Modifier.testTag("share-$name"))

@@ -74,11 +74,12 @@ class HybridSplitFlowTest {
         rule.onNode(hasText("Bijoy") and hasAnyAncestor(isPopup())).performClick()
         rule.onNodeWithTag("individualAmount-0").performScrollTo().performTextInput("20")
 
-        rule.onNodeWithTag("hybridRemaining").performScrollTo().assertTextEquals("RM 80.00")
+        rule.onNodeWithTag("hybridRemaining").performScrollTo().assertTextEquals("RM 200.00 total − RM 120.00 fixed")
+        rule.onNodeWithText("RM 80.00").performScrollTo()
         share("You").assertTextEquals("RM 26.67")
         share("Riad").assertTextEquals("RM 76.67")
         share("Bijoy").assertTextEquals("RM 96.66")
-        rule.onNodeWithText("RM 50.00 group + RM 20.00 individual + RM 26.66 remaining").performScrollTo()
+        rule.onNodeWithText("RM 50.00 group + RM 20.00 individual + RM 26.66 remaining".replace(" group", "\u00A0group").replace(" individual", "\u00A0individual").replace(" remaining", "\u00A0remaining").replace("RM ", "RM\u00A0")).performScrollTo()
         rule.onNodeWithText("✓ Balanced · Your share RM 26.67").performScrollTo()
 
         // Live: the group amount changes
