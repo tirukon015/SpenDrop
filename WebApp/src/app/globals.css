@@ -185,3 +185,168 @@ body {
   animation: sd-shimmer 1.2s linear infinite;
   border-radius: 8px;
 }
+
+/* ───────────── Sign-in experience: SpenDrop glass ─────────────
+   Colours come from the SpenDrop app icon (deep teal, emerald light) and the SpenDrop accent blue.
+   Light and dark variants; motion is disabled by the reduced-motion rule above. */
+.auth-shell {
+  --auth-bg-1: #e8f6f1;
+  --auth-bg-2: #eaf1fb;
+  --auth-light-1: rgba(46, 204, 140, 0.32);
+  --auth-light-2: rgba(13, 115, 217, 0.22);
+  --auth-light-3: rgba(1, 47, 38, 0.1);
+  --auth-glass: rgba(255, 255, 255, 0.62);
+  --auth-glass-strong: rgba(255, 255, 255, 0.78);
+  --auth-glass-border: rgba(255, 255, 255, 0.85);
+  --auth-glass-shadow: 0 30px 80px -24px rgba(1, 47, 38, 0.28), 0 2px 6px rgba(1, 47, 38, 0.06);
+  --auth-panel: linear-gradient(150deg, #04463a 0%, #02302a 48%, #0b1f33 100%);
+  --auth-field: rgba(255, 255, 255, 0.72);
+  --auth-field-hover: rgba(255, 255, 255, 0.9);
+  --auth-field-border: rgba(1, 47, 38, 0.14);
+  --auth-text: #0b1d18;
+  --auth-text-2: rgba(11, 29, 24, 0.68);
+  --auth-error: #c4291d;
+  position: relative;
+  min-height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 0% 0%, var(--auth-bg-1) 0%, transparent 60%),
+    radial-gradient(120% 90% at 100% 100%, var(--auth-bg-2) 0%, transparent 60%), var(--sd-bg);
+  color: var(--auth-text);
+}
+:root[data-theme="dark"] .auth-shell {
+  --auth-bg-1: #03231d;
+  --auth-bg-2: #071526;
+  --auth-light-1: rgba(46, 229, 157, 0.22);
+  --auth-light-2: rgba(51, 153, 242, 0.18);
+  --auth-light-3: rgba(46, 229, 157, 0.08);
+  --auth-glass: rgba(18, 28, 30, 0.55);
+  --auth-glass-strong: rgba(22, 34, 36, 0.72);
+  --auth-glass-border: rgba(255, 255, 255, 0.1);
+  --auth-glass-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  --auth-panel: linear-gradient(150deg, #065443 0%, #033329 50%, #0a1a2c 100%);
+  --auth-field: rgba(255, 255, 255, 0.06);
+  --auth-field-hover: rgba(255, 255, 255, 0.1);
+  --auth-field-border: rgba(255, 255, 255, 0.14);
+  --auth-text: #f2f7f5;
+  --auth-text-2: rgba(226, 238, 234, 0.72);
+  --auth-error: #ff8a80;
+  background: radial-gradient(110% 80% at 0% 0%, var(--auth-bg-1) 0%, transparent 62%),
+    radial-gradient(110% 80% at 100% 100%, var(--auth-bg-2) 0%, transparent 62%), #020807;
+}
+
+/* Soft light sources behind the glass (very slow drift, no flashing). */
+.auth-light {
+  position: absolute;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(70px);
+  pointer-events: none;
+  animation: auth-drift 26s ease-in-out infinite alternate;
+}
+.auth-light--1 { width: 46vmax; height: 46vmax; left: -12vmax; top: -14vmax; background: var(--auth-light-1); }
+.auth-light--2 { width: 40vmax; height: 40vmax; right: -14vmax; bottom: -16vmax; background: var(--auth-light-2); animation-duration: 32s; }
+.auth-light--3 { width: 28vmax; height: 28vmax; left: 38%; top: 46%; background: var(--auth-light-3); animation-duration: 38s; }
+@keyframes auth-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(4vmax, 3vmax, 0) scale(1.06); }
+}
+/* Fine grid lines: a quiet "ledger" texture, masked to fade out. */
+.auth-texture {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(var(--auth-field-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--auth-field-border) 1px, transparent 1px);
+  background-size: 56px 56px;
+  opacity: 0.35;
+  mask-image: radial-gradient(70% 60% at 50% 45%, black 0%, transparent 75%);
+}
+
+.glass {
+  background: var(--auth-glass);
+  border: 1px solid var(--auth-glass-border);
+  box-shadow: var(--auth-glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+/* Top highlight: a thin reflected edge, like light on glass. */
+.glass-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 22%);
+  mix-blend-mode: soft-light;
+}
+
+.auth-panel {
+  background: var(--auth-panel);
+  color: #f2f7f5;
+}
+
+.auth-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--auth-field);
+  border: 1px solid var(--auth-field-border);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.auth-field:hover { background: var(--auth-field-hover); }
+.auth-field:focus-within {
+  border-color: var(--sd-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sd-accent) 18%, transparent);
+  background: var(--auth-field-hover);
+}
+.auth-field[data-invalid="true"] {
+  border-color: var(--auth-error);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--auth-error) 14%, transparent);
+}
+.auth-field[data-disabled="true"] { opacity: 0.6; }
+.auth-field input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  background: transparent;
+  color: var(--auth-text);
+  font-size: 16px;
+  outline: none;
+}
+.auth-field input::placeholder { color: var(--auth-text-2); opacity: 0.75; }
+
+.auth-primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sd-accent-fill) 88%, white) 0%, var(--sd-accent-fill) 100%);
+  color: white;
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--sd-accent-fill) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: transform 140ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+.auth-primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--sd-accent-fill) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.auth-primary:active:not(:disabled) { transform: translateY(1px) scale(0.995); }
+
+.auth-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background-color 160ms ease, transform 140ms ease;
+}
+.auth-ghost:hover { background: rgba(255, 255, 255, 0.16); }
+.auth-ghost:active { transform: scale(0.98); }
+
+@keyframes auth-enter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.auth-enter { animation: auth-enter 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes auth-swap {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.auth-swap { animation: auth-swap 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
