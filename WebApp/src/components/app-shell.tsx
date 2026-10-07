@@ -205,10 +205,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Large iOS-style page title with optional subtitle and actions. */
+/**
+ * Large iOS-style page title with optional subtitle and actions. Top spacing includes the safe area in one value: the
+ * unlayered `.pt-safe` helper used to override `pt-5`/`md:pt-8`, leaving titles flush against the top edge.
+ */
 export function PageHeader({ title, subtitle, actions, back }: { title: string; subtitle?: ReactNode; actions?: ReactNode; back?: { href: string; label: string } }) {
   return (
-    <header className="sd-page-header mx-auto flex w-full max-w-6xl items-end justify-between gap-3 px-4 pb-3 pt-5 pt-safe md:px-8 md:pt-8">
+    <header className="sd-page-header mx-auto flex w-full max-w-6xl items-end justify-between gap-3 px-4 pb-3 pt-[calc(1.5rem+env(safe-area-inset-top))] md:px-8 md:pt-[calc(2.25rem+env(safe-area-inset-top))]">
       <div className="min-w-0">
         {back && (
           <Link href={back.href} className="mb-1 inline-flex items-center gap-1 text-[15px] font-medium text-[var(--sd-accent-text)]">
