@@ -620,7 +620,7 @@ public struct CloudBackupTests {
                     expected: "uploaded, upToDate", actual: "ok=\(ok) path=\(path) status=\(cloud.status)")
             t.check("Backup metadata: device, app/schema/backup version, counts (user id assigned by the server)",
                     row["device_id"] as? String == "device-A" && row["backup_version"] as? Int == UserDataBackupService.BackupPayload.currentVersion &&
-                    row["schema_version"] as? String == "\(SpenDropSchemaV5.versionIdentifier)" &&
+                    row["schema_version"] as? String == "\(SpenDropSchemaV6.versionIdentifier)" &&
                     row["expenses_count"] as? Int == 1 && row["people_count"] as? Int == 1 && row["accounts_count"] as? Int == 1 &&
                     row["movements_count"] as? Int == 1 && row["user_id"] == nil && cloud.lastBackupDate != nil,
                     expected: "complete metadata", actual: "\(row.keys.sorted())")

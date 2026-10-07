@@ -207,15 +207,25 @@ public struct Phase7Tests {
             let storeURL = dir.appendingPathComponent("default.store")
             var ids: (expense: UUID, movement: UUID, account: UUID, person: UUID) = (UUID(), UUID(), UUID(), UUID())
             do {
+                // Written with the frozen V2 model types (the shapes V2 shipped with).
+                typealias V2 = SpenDropSchemaV2
                 let v2 = Schema(versionedSchema: SpenDropSchemaV2.self)
                 if let container = try? ModelContainer(for: v2, configurations: [ModelConfiguration(schema: v2, url: storeURL)]) {
                     let ctx = ModelContext(container)
-                    let account = Account(name: "Maybank", type: .bank); ctx.insert(account)
-                    let person = PayBookProfile(name: "Bijoy"); ctx.insert(person)
-                    let expense = Expense(amount: 30, merchant: "Dinner", fundingAccount: "Maybank"); ctx.insert(expense)
+                    let account = V2.Account(name: "Maybank", typeRaw: AccountType.bank.rawValue, currency: "RM", sortIndex: 0); ctx.insert(account)
+                    let person = V2.PayBookProfile(name: "Bijoy"); ctx.insert(person)
+                    let expense = V2.Expense(amount: 30, merchant: "Dinner", fundingAccount: "Maybank"); ctx.insert(expense)
                     expense.account = account
-                    var d = SplitDraft(); d.add(person); d.payer = person; d.apply(to: expense, in: ctx)
-                    let movement = MoneyMovement(kind: .loanGiven, amountMinor: 15000, person: person, account: account); ctx.insert(movement)
+                    // Me + Bijoy equally, Bijoy paid (what SplitDraft stored in V2).
+                    expense.splitMethodRaw = SplitMethod.equal.rawValue
+                    expense.payer = person; expense.paidByMe = false; expense.payerNameSnapshot = person.name
+                    for (index, p) in [nil, person].enumerated() {
+                        let share = V2.ExpenseShare(isMe: p == nil, nameSnapshot: p?.name ?? "Me", amountMinor: 1500, sortIndex: index)
+                        ctx.insert(share); share.expense = expense; share.person = p
+                    }
+                    let movement = V2.MoneyMovement(directionRaw: MoneyMovementKind.loanGiven.direction.rawValue, kindRaw: MoneyMovementKind.loanGiven.rawValue,
+                                                    amountMinor: 15000); ctx.insert(movement)
+                    movement.person = person; movement.personNameSnapshot = person.name; movement.account = account
                     try? ctx.save()
                     ids = (expense.id, movement.id, account.id, person.id)
                 }
@@ -396,19 +406,41 @@ public enum ClassifierTests {
             var before: [String: Int] = [:]
             var snapshot: [UUID: String] = [:]
             do {
+                // Expected balances: the same records built with the live types in memory.
+                do {
+                    let c = TestKit.context()
+                    let bijoy = PayBookProfile(name: "Bijoy"); c.insert(bijoy)
+                    let qr = Expense(amount: 15, merchant: "TEALIVE KLCC", category: .food, paymentChannel: .qrPayment, fundingAccount: "Maybank"); c.insert(qr)
+                    var d = SplitDraft(); d.add(bijoy); d.apply(to: qr, in: c)
+                    c.insert(MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: bijoy))
+                    try? c.save()
+                    before = ["Bijoy": PersonLedger.balances(for: bijoy)["RM"] ?? 0]
+                }
+                // The V4 store is written with the frozen V2 model types (the shapes V4 shipped with).
+                typealias V2 = SpenDropSchemaV2
                 let v4 = Schema(versionedSchema: SpenDropSchemaV4.self)
                 if let container = try? ModelContainer(for: v4, configurations: [ModelConfiguration(schema: v4, url: storeURL)]) {
                     let c = ModelContext(container)
-                    let bijoy = PayBookProfile(name: "Bijoy"); c.insert(bijoy)
+                    let bijoy = V2.PayBookProfile(name: "Bijoy"); c.insert(bijoy)
                     // Saved with the old classifier's guesses: these must survive exactly as they are.
-                    let qr = Expense(amount: 15, merchant: "TEALIVE KLCC", category: .food, paymentChannel: .qrPayment, fundingAccount: "Maybank"); c.insert(qr)
-                    let transfer = Expense(amount: 42.5, merchant: "KEDAI MAKAN", category: .other, paymentChannel: .bankTransfer, fundingAccount: "Maybank"); c.insert(transfer)
-                    var d = SplitDraft(); d.add(bijoy); d.apply(to: qr, in: c)
-                    c.insert(MoneyMovement(kind: .loanGiven, amountMinor: 5000, person: bijoy))
+                    func expense(_ amount: Double, _ merchant: String, _ category: ExpenseCategory, _ channel: PaymentChannel) -> V2.Expense {
+                        let e = V2.Expense(amount: amount, merchant: merchant, fundingAccount: "Maybank"); c.insert(e)
+                        e.categoryRaw = category.rawValue; e.paymentChannelRaw = channel.rawValue
+                        return e
+                    }
+                    let qr = expense(15, "TEALIVE KLCC", .food, .qrPayment)
+                    _ = expense(42.5, "KEDAI MAKAN", .other, .bankTransfer)
+                    qr.splitMethodRaw = SplitMethod.equal.rawValue
+                    for (index, p) in [nil, bijoy].enumerated() {
+                        let share = V2.ExpenseShare(isMe: p == nil, nameSnapshot: p?.name ?? "Me", amountMinor: 750, sortIndex: index)
+                        c.insert(share); share.expense = qr; share.person = p
+                    }
+                    let loan = V2.MoneyMovement(directionRaw: MoneyMovementKind.loanGiven.direction.rawValue, kindRaw: MoneyMovementKind.loanGiven.rawValue,
+                                                amountMinor: 5000); c.insert(loan)
+                    loan.person = bijoy; loan.personNameSnapshot = bijoy.name
                     TransactionClassifier.learn(merchant: "KEDAI MAKAN", category: .food, in: c)
                     try? c.save()
-                    before = ["Bijoy": PersonLedger.balances(for: bijoy)["RM"] ?? 0]
-                    snapshot = Dictionary(uniqueKeysWithValues: TestKit.fetch(Expense.self, in: c).map { ($0.id, "\($0.categoryRaw)|\($0.paymentChannelRaw)|\($0.amount)|\($0.fundingAccount)") })
+                    snapshot = Dictionary(uniqueKeysWithValues: ((try? c.fetch(FetchDescriptor<V2.Expense>())) ?? []).map { ($0.id, "\($0.categoryRaw)|\($0.paymentChannelRaw)|\($0.amount)|\($0.fundingAccount)") })
                 }
             }
             var actual = "open failed"
