@@ -26,6 +26,8 @@ class AppContainer(
     val http: SupabaseHttp? by lazy { supabaseConfig?.let { SupabaseHttp(it) } }
     val auth: AuthService by lazy { AuthService(http, secureStore ?: KeystoreSecureStore(context)) }
     val links = LinkEvents()
+    /** SpenDrop AI ("Ask SpenDrop"): the shared server, authorised with this account's Supabase session. */
+    val askApi: com.spendrop.app.ai.AskApi by lazy { com.spendrop.app.ai.AskApi(BuildConfig.SPENDROP_API_URL, { auth.validAccessToken() }) }
     val sync: com.spendrop.app.cloud.SyncService by lazy { com.spendrop.app.cloud.SyncService(http, auth, repository, preferences) }
     val localBackup: com.spendrop.app.data.LocalBackup by lazy { com.spendrop.app.data.LocalBackup(context, repository) { auth.currentUser?.email ?: com.spendrop.core.backup.BackupCodec.DEFAULT_ACCOUNT_NAME } }
     /** The backup chosen for restore (cloud or file), handed to the restore-range screen. */

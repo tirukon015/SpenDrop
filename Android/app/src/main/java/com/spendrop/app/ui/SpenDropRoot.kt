@@ -69,6 +69,16 @@ import com.spendrop.app.ui.transactions.TransactionsNav
 import com.spendrop.app.ui.transactions.TransactionsScreen
 import kotlin.reflect.KClass
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.spendrop.app.ui.ask.AskScreen
+import com.spendrop.app.ui.ask.FloatingRobot
 
 private data class Tab(val route: Any, val cls: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -105,6 +115,7 @@ fun SpenDropRoot(container: AppContainer) {
     val pickers = ImportPickers(basePickers.photos, basePickers.files, camera = { cameraGate.run { nav.navigate(ReceiptCameraRoute) } }, bulk = basePickers.bulk)
     val link by container.links.latest.collectAsState()
     val awaitingPassword by container.auth.awaitingNewPassword.collectAsState()
+    val robotEnabled by container.preferences.aiFloatingAssistant.collectAsState(com.spendrop.app.data.AiDefaults.FLOATING_ASSISTANT)
 
     Scaffold(bottomBar = {
         if (onTab) NavigationBar(containerColor = com.spendrop.app.ui.theme.SD.colors.card) {
@@ -130,6 +141,7 @@ fun SpenDropRoot(container: AppContainer) {
             }
         }
     }) { outer ->
+      androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(bottom = outer.calculateBottomPadding()).consumeWindowInsets(outer)) {
             val openExpense: (String) -> Unit = { nav.navigate(ExpenseDetailRoute(it)) }
             val openMovement: (String) -> Unit = { nav.navigate(MovementEditRoute(it)) }
@@ -139,7 +151,7 @@ fun SpenDropRoot(container: AppContainer) {
             composable<TransactionsRoute> { TransactionsScreen(container, TransactionsNav({ nav.navigate(AddTransactionRoute()) }, openExpense, openMovement)) }
             composable<PayBookRoute> { PayBookScreen(container, { nav.navigate(PersonDetailRoute(it)) }, { nav.navigate(PersonEditRoute()) }) }
             composable<BreakdownRoute> { BreakdownScreen(container) }
-            composable<MoreRoute> { MoreScreen({ nav.navigate(AccountRoute) }, { nav.navigate(AccountsRoute) }, { nav.navigate(SettingsRoute) }) }
+            composable<MoreRoute> { MoreScreen({ nav.navigate(AccountRoute) }, { nav.navigate(AccountsRoute) }, { nav.navigate(SettingsRoute) }, openAsk = { nav.navigate(AskRoute) { launchSingleTop = true } }) }
 
             composable<AddTransactionRoute> { e ->
                 val r = e.toRoute<AddTransactionRoute>()
@@ -202,7 +214,20 @@ fun SpenDropRoot(container: AppContainer) {
                 )
             }
             composable<PermissionsRoute> { PermissionsScreen(onBack = { nav.popBackStack() }, openCamera = { nav.navigate(ReceiptCameraRoute) }) }
+            composable<AskRoute> { AskScreen(container, onBack = { nav.popBackStack() }, openSignIn = { nav.navigate(AccountRoute) { launchSingleTop = true } }) }
         }
+        // SpenDrop AI robot: only over the main tabs (never on Ask, sign-in, editors or the camera), above the
+        // bottom bar, and lifted clear of PayBook's "Add Person" button.
+        if (robotEnabled && onTab) {
+            val clearFab = if (dest?.hasRoute(PayBookRoute::class) == true) 72.dp else 0.dp
+            FloatingRobot(
+                onClick = { if (nav.currentDestination?.hasRoute(AskRoute::class) != true) nav.navigate(AskRoute) { launchSingleTop = true } },
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.End))
+                    .padding(end = 12.dp, bottom = outer.calculateBottomPadding() + 12.dp + clearFab),
+            )
+        }
+      }
     }
 
     androidx.compose.runtime.LaunchedEffect(awaitingPassword) {

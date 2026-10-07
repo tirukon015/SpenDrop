@@ -34,3 +34,5 @@ import kotlinx.serialization.Serializable
 @Serializable object BulkImportRoute
 @Serializable object ReceiptCameraRoute
 @Serializable object PermissionsRoute
+/** SpenDrop AI chat ("Ask SpenDrop"), reached from More and from the floating robot. Not a tab. */
+@Serializable object AskRoute
