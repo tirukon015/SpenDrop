@@ -52,7 +52,7 @@ export const searchInputSchema = z.strictObject({
 export const calculateInputSchema = z.strictObject({
   ...filterShape,
   operation: z.enum(["sum", "count", "average", "min", "max"]).describe("Calculation done by SpenDrop, never by the model"),
-  groupBy: z.enum(["none", "category", "merchant", "funding_account", "payment_channel", "day"]).optional(),
+  groupBy: z.enum(["none", "category", "merchant", "funding_account", "payment_channel", "channel_family", "day"]).optional(),
 });
 
 export const compareInputSchema = z.strictObject({

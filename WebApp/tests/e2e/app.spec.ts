@@ -292,3 +292,28 @@ test("Ask SpenDrop understands Banglish, remembers a personal rule, and declines
   await noHorizontalScroll(page);
   expect(errors).toEqual([]);
 });
+
+test("Ask SpenDrop: casual messages get light replies; follow-ups keep the subject (bug report 2026-10-08)", async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.goto("/ask");
+  const box = page.getByRole("textbox", { name: "Ask anything about your money" });
+  const turns = page.getByRole("list", { name: "Conversation" }).locator(":scope > li");
+  let asked = 0;
+  const ask = async (q: string) => { await box.fill(q); await box.press("Enter"); asked += 2; await expect(turns).toHaveCount(asked); return turns.nth(asked - 1); };
+
+  for (const [q, reply] of [["kemon aso", /Bhalo achi|Ekdom bhalo/], ["valo ?", /Bhalo achi|Ekdom bhalo/], ["How are you doing?", /doing great|All good|Doing well/], ["thanks bro", /bro|😄|😊/]] as const) {
+    const answer = await ask(q);
+    await expect(answer.locator('[data-kind="small-talk"]')).toContainText(reply);
+    await expect(answer).not.toContainText("I'm not sure what you mean");
+    await expect(answer).not.toContainText("Based on");
+  }
+
+  const food = await ask("How much did I spend on food this week?");
+  await expect(food).toContainText(/You spent RM [\d,]+\.\d\d on Food this week/);
+  await expect(await ask("Why?")).toContainText(/Your spending on Food/);
+  const yesterday = await ask("Yesterday?");
+  await expect(yesterday).toContainText(/on Food yesterday|no spending on Food yesterday/);
+
+  await noHorizontalScroll(page);
+  expect(errors).toEqual([]);
+});

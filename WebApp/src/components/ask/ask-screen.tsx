@@ -4,7 +4,7 @@
 // you are from your session and answers from your records). In the local demo, the same deterministic engine runs
 // in this browser over the synthetic demo data — nothing is sent anywhere.
 import { ArrowUp, Eye, History, MessageSquarePlus, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Page, PageHeader } from "@/components/app-shell";
 import { useData } from "@/components/providers/data-provider";
 import { Button, Card, ErrorBanner, Sheet, Skeleton, cx } from "@/components/ui/primitives";
@@ -30,6 +30,8 @@ const SUGGESTIONS = [
   "Why am I spending so much lately?",
 ];
 
+const noSubscribe = () => () => {};
+
 const ACTIVITY = ["Checking your transactions…", "Calculating…", "Comparing periods…", "Putting the answer together…"];
 
 const timeZone = () => {
@@ -37,7 +39,9 @@ const timeZone = () => {
 };
 
 export function AskScreen() {
-  const { live, source, dataset } = useData();
+  const { live, source, dataset, status: dataStatus } = useData();
+  // Until React is interactive, Enter would submit the form natively and reload the page (losing the question).
+  const ready = useSyncExternalStore(noSubscribe, () => true, () => false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -155,7 +159,7 @@ export function AskScreen() {
   };
 
   const empty = turns.length === 0;
-  const noData = dataset.expenses.length === 0 && isDemoMode;
+  const noData = dataset.expenses.length === 0 && isDemoMode && dataStatus !== "loading" && dataStatus !== "syncing";
 
   return (
     <>
@@ -213,6 +217,18 @@ export function AskScreen() {
             <li key={t.id} className={cx("sd-rise flex", t.role === "user" ? "justify-end" : "justify-start")}>
               {t.role === "user" ? (
                 <p className="max-w-[85%] whitespace-pre-line rounded-[18px] rounded-br-[6px] bg-[var(--sd-accent-fill)] px-4 py-2.5 text-[15px] text-white">{t.text}</p>
+              ) : t.answer?.meta.intent === "SMALL_TALK" ? (
+                // Casual replies stay light: a chat bubble, no answer card or evidence.
+                <div className="flex max-w-[85%] flex-col items-start gap-2" data-kind="small-talk">
+                  <p className="whitespace-pre-line rounded-[18px] rounded-bl-[6px] bg-card px-4 py-2.5 text-[15px] shadow-card">{t.text}</p>
+                  {t.answer.followUps.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {t.answer.followUps.map((q) => (
+                        <button key={q} type="button" onClick={() => send(q)} className="rounded-full border border-separator px-3 py-1.5 text-[13px] font-medium text-[var(--sd-accent-text)] hover:bg-card-2">{q}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <Card className="w-full max-w-full">
                   {t.answer ? <AnswerView answer={t.answer} onFollowUp={send} debug={status?.debug} /> : <p className="whitespace-pre-line text-[15px]">{t.text}</p>}
@@ -243,12 +259,12 @@ export function AskScreen() {
         <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-[22px] border border-separator bg-card/90 p-2 shadow-card backdrop-blur-xl">
           <label htmlFor="ask-input" className="sr-only">Ask anything about your money</label>
           <textarea
-            id="ask-input" ref={inputRef} rows={1} value={input} maxLength={500} placeholder="Ask anything about your money…"
+            id="ask-input" ref={inputRef} rows={1} value={input} maxLength={500} placeholder={ready ? "Ask anything about your money…" : "Loading…"} disabled={!ready}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(input); } }}
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-3 py-2 text-[16px] text-label placeholder:text-label-3 focus:outline-none"
           />
-          <button type="submit" disabled={!input.trim() || pending} aria-label="Ask"
+          <button type="submit" disabled={!ready || !input.trim() || pending} aria-label="Ask"
             className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--sd-accent-fill)] text-white transition-opacity disabled:opacity-40">
             <ArrowUp aria-hidden className="size-5" />
           </button>

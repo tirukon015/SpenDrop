@@ -20,13 +20,16 @@ export const focusSchema = z.object({
   filters: z.object({
     category: categorySchema.optional(), merchant: z.string().max(80).optional(), fundingAccount: z.string().max(80).optional(),
     paymentChannel: channelSchema.optional(), paymentChannels: z.array(channelSchema).max(11).optional(), currency: z.string().max(8).optional(),
-    amountMin: z.number().min(0).optional(), amountMax: z.number().min(0).optional(), keyword: z.string().max(80).optional(),
+    amountMin: z.number().min(0).optional(), amountMax: z.number().min(0).optional(), targetAmount: z.number().min(0).optional(), keyword: z.string().max(80).optional(),
   }),
   span,
   compareSpan: span.optional(),
   transactionIds: z.array(z.string().uuid()).max(10).optional(),
   operation: z.enum(["sum", "count", "average"]).optional(),
   groupBy: z.enum(["category", "merchant", "funding_account", "payment_channel"]).optional(),
+  base: z.object({ intent: z.string().max(40), operation: z.enum(["sum", "count", "average"]).optional(), groupBy: z.enum(["category", "merchant", "funding_account", "payment_channel"]).optional() }).optional(),
+  // Offered tool arguments are only a hint: they are validated again by the tool's strict schema when used.
+  offer: z.object({ args: z.record(z.string(), z.unknown()), label: z.string().max(120) }).optional(),
 });
 
 export interface StoredMessage { id: string; role: "user" | "assistant"; content: string; createdAt: string; answer?: Partial<AskAnswer> }

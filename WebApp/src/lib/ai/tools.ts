@@ -6,6 +6,7 @@ import { channelInfo } from "@/lib/domain/constants";
 import { sharesByExpense, spendingMinor } from "@/lib/domain/ledger";
 import { formatMoney } from "@/lib/domain/money";
 import type { CategoryId, Expense, ExpenseShare, PaymentChannelId } from "@/lib/domain/types";
+import { averageMinor, maxBy, medianMinor, minBy, percentChange, roundHalfAway, scaleMinor, sharePercent, totalMinor } from "./calc";
 import { AI_LIMITS, UNUSUAL } from "./config";
 import { TooMuchDataError, type FinanceRepository, type PersonalRule } from "./repository";
 import type { FiltersInput, PeriodInput } from "./schemas";
@@ -22,9 +23,11 @@ import type { AiContext, Confidence, Evidence, PeriodInfo, ToolResult, TxnCard }
 export const normalizeText = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 /** "MYR" and "RM" are the same currency in SpenDrop (stored as "RM"). */
 export const currencyKey = (c: string) => { const u = c.trim().toUpperCase(); return u === "MYR" ? "RM" : u; };
-export const toMinor = (major: number) => Math.round(major * 100);
+/** Major units → minor units without float drift (1.005 → 101, 10.5 → 1050). */
+export const toMinor = (major: number) => roundHalfAway(Number((major * 100).toPrecision(12)));
 /** Percentage change rounded to one decimal, or null when there is nothing to compare with. */
-export const pctChange = (current: number, previous: number) => (previous === 0 ? null : Math.round(((current - previous) * 1000) / previous) / 10);
+/** Percentage change — defined once, in calc.ts. */
+export const pctChange = percentChange;
 
 export class ToolInputError extends Error {}
 
@@ -93,6 +96,8 @@ export interface Row { expense: Expense; shares: ExpenseShare[] | undefined; spe
 /** Personal rules that changed a category in this result (always disclosed in the answer). */
 export interface AppliedRule { merchant: string; category: CategoryId; count: number }
 
+export const merchantNames = (rows: Row[]) => [...new Map(rows.map((r) => [normalizeText(r.expense.merchant), r.expense.merchant.trim()])).values()].sort();
+
 export function appliedRules(rows: Row[]): AppliedRule[] {
   const map = new Map<string, AppliedRule>();
   for (const r of rows) {
@@ -154,7 +159,8 @@ export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accou
     if (minMinor !== null && e.amountMinor < minMinor) return false;
     if (maxMinor !== null && e.amountMinor > maxMinor) return false;
     if (f.hasReceipt !== undefined && Boolean(e.receiptPath) !== f.hasReceipt) return false;
-    if (merchant && !normalizeText(e.merchant).includes(merchant)) return false;
+    // Whole words: "Shopee" matches "Shopee" and "Shopee Food", never "ShopeePay" (answers list which names matched).
+    if (merchant && !` ${normalizeText(e.merchant)} `.includes(` ${merchant} `)) return false;
     if (keyword && ![e.merchant, e.notes ?? "", e.transactionReference ?? ""].some((t) => normalizeText(t).includes(keyword))) return false;
     if (f.fundingAccount && !accountMatches(e, f.fundingAccount, accountNames)) return false;
     return true;
@@ -175,9 +181,16 @@ export function byCurrency(rows: Row[]) {
   return [...map.entries()].sort((a, b) => sum(b[1]) - sum(a[1]) || (a[0] === "RM" ? -1 : 1));
 }
 
-export const sum = (rows: Row[]) => rows.reduce((t, r) => t + r.spend, 0);
+/** Spending total of rows (exact, integer sen) — via calc.ts. */
+export const sum = (rows: Row[]) => totalMinor(rows.map((r) => r.spend));
 
-export type GroupKey = "category" | "merchant" | "funding_account" | "payment_channel" | "day";
+export type GroupKey = "category" | "merchant" | "funding_account" | "payment_channel" | "channel_family" | "day";
+
+/** Payment channels grouped the way people talk about them ("QR" = QR Payment, DuitNow QR, Touch 'n Go QR). */
+export const CHANNEL_FAMILY: Record<PaymentChannelId, string> = {
+  CARD: "Card", APPLE_PAY: "Apple Pay", QR_PAYMENT: "QR", DUITNOW_QR: "QR", TNG_QR: "QR", BANK_TRANSFER: "Bank transfer",
+  ONLINE_BANKING: "Bank transfer", E_WALLET: "E-wallet", CASH: "Cash", OTHER: "Other", UNKNOWN: "Not recorded",
+};
 export interface GroupRow { key: string; label: string; valueMinor: number; count: number; sharePct: number }
 
 function groupKeyOf(r: Row, by: GroupKey, accountNames: Map<string, string>): [string, string] {
@@ -186,10 +199,11 @@ function groupKeyOf(r: Row, by: GroupKey, accountNames: Map<string, string>): [s
     case "category": return [r.category, r.category];
     case "merchant": return [normalizeText(e.merchant) || "unknown", e.merchant.trim() || "Unknown"];
     case "funding_account": {
-      const name = (e.fundingAccount && e.fundingAccount !== "Unknown" ? e.fundingAccount : e.accountId ? accountNames.get(e.accountId) : null) ?? "Unknown";
-      return [normalizeText(name) || "unknown", name];
+      const name = (e.fundingAccount && e.fundingAccount !== "Unknown" ? e.fundingAccount : e.accountId ? accountNames.get(e.accountId) : null) ?? null;
+      return name ? [normalizeText(name), name] : ["unknown", "Account not recorded"];
     }
     case "payment_channel": return [e.paymentChannel, channelInfo(e.paymentChannel).label];
+    case "channel_family": return [CHANNEL_FAMILY[e.paymentChannel], CHANNEL_FAMILY[e.paymentChannel]];
     case "day": return [r.localDate, formatSpan({ from: r.localDate, to: r.localDate })];
   }
 }
@@ -205,7 +219,7 @@ export function groupRows(rows: Row[], by: GroupKey, accountNames: Map<string, s
     map.set(key, g);
   }
   return [...map.values()]
-    .map((g) => ({ ...g, sharePct: total > 0 ? Math.round((g.valueMinor * 1000) / total) / 10 : 0 }))
+    .map((g) => ({ ...g, sharePct: sharePercent(g.valueMinor, total) }))
     .sort((a, b) => (by === "day" ? a.key.localeCompare(b.key) : b.valueMinor - a.valueMinor || b.count - a.count));
 }
 
@@ -237,6 +251,8 @@ export interface SearchData {
   transactions: (TxnCard & { matchReason?: string })[];
   confidence: Confidence | null;
   personalRules: AppliedRule[];
+  /** Distinct merchant names a merchant filter matched (disclosed when more than one). */
+  merchantsMatched: string[];
 }
 
 export async function searchTransactions(input: SearchInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<SearchData>> {
@@ -274,7 +290,7 @@ export async function searchTransactions(input: SearchInput, ctx: AiContext, rep
     const filters = describeFilters(input);
     const data: SearchData = {
       period: periodInfo(span), filters, subject: searchSubject(input, target), target: { amountMinor: target, date: input.targetDate ?? null },
-      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows),
+      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows), merchantsMatched: input.merchant ? merchantNames(rows) : [],
     };
     return { ok: true, data, evidence: evidence("search_transactions", rows.length, span, filters) };
   });
@@ -284,7 +300,19 @@ export async function searchTransactions(input: SearchInput, ctx: AiContext, rep
 // calculate_spending
 // ---------------------------------------------------------------------------------------------------------------
 export interface CalculateInput extends FiltersInput { operation: "sum" | "count" | "average" | "min" | "max"; groupBy?: GroupKey | "none" }
-export interface CurrencyCalc { currency: string; transactionCount: number; valueMinor: number | null; transaction?: TxnCard; groups?: GroupRow[] }
+export interface CurrencyCalc {
+  currency: string; transactionCount: number; valueMinor: number | null; transaction?: TxnCard;
+  groups?: GroupRow[];
+  /** True when `groups` lists every group (nothing cut off), so they must add up to the total. */
+  groupsComplete?: boolean;
+  /** For counts: on how many different days those transactions happened (frequency answers). */
+  distinctDays?: number;
+  /** The transactions behind the figure (most recent first, up to EVIDENCE_ROWS) — the evidence the user can open. */
+  transactions?: TxnCard[];
+}
+
+/** How many transactions an answer carries as evidence. */
+export const EVIDENCE_ROWS = 100;
 export interface CalculateData {
   operation: CalculateInput["operation"];
   groupBy: GroupKey | "none";
@@ -294,6 +322,7 @@ export interface CalculateData {
   results: CurrencyCalc[];
   refunds: { currency: string; totalMinor: number; count: number }[];
   personalRules: AppliedRule[];
+  merchantsMatched: string[];
 }
 
 export async function calculateSpending(input: CalculateInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<CalculateData>> {
@@ -307,22 +336,29 @@ export async function calculateSpending(input: CalculateInput, ctx: AiContext, r
       const base: CurrencyCalc = { currency, transactionCount: list.length, valueMinor: null };
       switch (input.operation) {
         case "sum": base.valueMinor = total; break;
-        case "count": base.valueMinor = null; break;
-        case "average": base.valueMinor = list.length ? Math.round(total / list.length) : 0; break;
+        case "count": base.valueMinor = null; base.distinctDays = new Set(list.map((r) => r.localDate)).size; break;
+        case "average": base.valueMinor = averageMinor(list.map((r) => r.spend)) ?? 0; break;
         case "min": case "max": {
-          const pick = [...list].sort((a, b) => (input.operation === "max" ? b.spend - a.spend : a.spend - b.spend) || b.expense.date.localeCompare(a.expense.date))[0];
+          // MAX / MIN over the exact filtered rows (ties: the most recent one first).
+          const byDate = [...list].sort((a, b) => b.expense.date.localeCompare(a.expense.date));
+          const pick = (input.operation === "max" ? maxBy(byDate, (r) => r.spend) : minBy(byDate, (r) => r.spend))!;
           base.valueMinor = pick.spend;
           base.transaction = toCard(pick, ctx);
         }
       }
-      if (groupBy !== "none") base.groups = groupRows(list, groupBy, names).slice(0, groupBy === "day" ? 400 : 12);
+      if (groupBy !== "none") {
+        const all = groupRows(list, groupBy, names);
+        base.groups = all.slice(0, groupBy === "day" ? 400 : 12);
+        base.groupsComplete = base.groups.length === all.length;
+      }
+      base.transactions = [...list].sort((a, b) => b.expense.date.localeCompare(a.expense.date)).slice(0, EVIDENCE_ROWS).map((r) => toCard(r, ctx));
       return base;
     });
     // Refunds are reported next to spending (never silently netted), only when no row-level filter would make them misleading.
     const plain = !input.category && !input.merchant && !input.paymentChannel && !input.paymentChannels && !input.fundingAccount && !input.keyword && input.amountMin === undefined && input.amountMax === undefined;
     const refunds = plain ? refundTotals(await repo.refunds(span ? spanInstants(span, ctx.timeZone) : { start: null, end: null }), input.currency) : [];
     const filters = describeFilters(input);
-    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows) }, evidence: evidence("calculate_spending", rows.length, span, filters) };
+    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows), merchantsMatched: input.merchant ? merchantNames(rows) : [] }, evidence: evidence("calculate_spending", rows.length, span, filters) };
   });
 }
 
@@ -385,7 +421,8 @@ export async function comparePeriods(input: CompareInput, ctx: AiContext, repo: 
     return {
       ok: true,
       data: { a: periodInfo(a)!, b: periodInfo(b)!, filters: label, subject: describeSubject(filters), breakdownBy, results, personalRules: appliedRules([...rowsA, ...rowsB]) },
-      evidence: evidence("compare_periods", rowsA.length + rowsB.length, a, `${label} · vs ${formatSpan(b)}`),
+      // Both periods' transactions, and both periods named, so "Based on N" matches what is compared.
+      evidence: { ...evidence("compare_periods", rowsA.length + rowsB.length, a, label), period: `${formatSpan(a)} vs ${formatSpan(b)}` },
     };
   });
 }
@@ -441,6 +478,8 @@ export interface WeeklySummaryData {
   fourWeekAverage: { weeksWithData: number; averageMinor: number | null; diffMinor: number | null; pctChange: number | null };
   categories: GroupRow[];
   largestTransaction: TxnCard | null;
+  /** The week's transactions behind the total (most recent first, up to EVIDENCE_ROWS). */
+  transactions: TxnCard[];
   byDay: { date: LocalDate; label: string; valueMinor: number }[];
   topMerchants: GroupRow[];
   topAccounts: GroupRow[];
@@ -474,12 +513,12 @@ export async function getWeeklySummary(input: { weekOf?: LocalDate }, ctx: AiCon
     const history = [1, 2, 3, 4].map(sameDays);
     const withData = history.filter((h) => h.length > 0);
     const weeksKnown = history.reduce((k, h, i) => (h.length > 0 ? i + 1 : k), 0);
-    const average = weeksKnown >= 2 ? Math.round(history.slice(0, weeksKnown).reduce((t, h) => t + sum(h), 0) / weeksKnown) : null;
+    const average = weeksKnown >= 2 ? averageMinor(history.slice(0, weeksKnown).map(sum)) : null;
     const byDay: WeeklySummaryData["byDay"] = [];
     for (let d = elapsed.from; d <= elapsed.to; d = addDays(d, 1)) {
       byDay.push({ date: d, label: formatSpan({ from: d, to: d }), valueMinor: sum(rows.filter((r) => r.localDate === d)) });
     }
-    const largest = [...rows].sort((a, b) => b.spend - a.spend)[0];
+    const largest = maxBy([...rows].sort((a, b) => b.expense.date.localeCompare(a.expense.date)), (r) => r.spend);
     const data: WeeklySummaryData = {
       week: periodInfo(week)!, elapsed: periodInfo(elapsed)!, currency, totalMinor, count: rows.length,
       otherCurrencies: groups.slice(1).map(([c, list]) => ({ currency: c, totalMinor: sum(list), count: list.length })),
@@ -487,6 +526,7 @@ export async function getWeeklySummary(input: { weekOf?: LocalDate }, ctx: AiCon
       fourWeekAverage: { weeksWithData: withData.length, averageMinor: average, diffMinor: average === null ? null : totalMinor - average, pctChange: average === null ? null : pctChange(totalMinor, average) },
       categories: groupRows(rows, "category", names),
       largestTransaction: largest ? toCard(largest, ctx) : null,
+      transactions: [...rows].sort((a, b) => b.expense.date.localeCompare(a.expense.date)).slice(0, EVIDENCE_ROWS).map((r) => toCard(r, ctx)),
       byDay,
       topMerchants: groupRows(rows, "merchant", names).slice(0, 5),
       topAccounts: groupRows(rows, "funding_account", names).slice(0, 5),
@@ -517,10 +557,7 @@ export interface UnusualData {
   findings: UnusualFinding[];
 }
 
-export const median = (values: number[]) => {
-  const s = [...values].sort((a, b) => a - b);
-  return s.length === 0 ? 0 : s.length % 2 ? s[(s.length - 1) / 2] : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
-};
+export const median = medianMinor;
 
 export async function findUnusualSpending(input: { period?: PeriodInput }, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<UnusualData>> {
   return run(async () => {
@@ -544,7 +581,7 @@ export async function findUnusualSpending(input: { period?: PeriodInput }, ctx: 
     const firstHistoryDay = history.reduce((m, r) => (r.localDate < m ? r.localDate : m), baseline.to);
     const baselineDays = Math.max(1, daysBetween(startOfWeek(firstHistoryDay), baseline.to) + 1);
     const periodDays = spanDays(period);
-    const expected = (rows: Row[]) => Math.round((sum(rows) / baselineDays) * periodDays);
+    const expected = (rows: Row[]) => scaleMinor(sum(rows), baselineDays, periodDays);
     const findings: UnusualFinding[] = [];
 
     const expectedTotal = expected(history);

@@ -10,6 +10,8 @@ import type {
   AppliedRule, CalculateData, CompareData, SearchData, TransactionDetail, UnusualData, UnusualFinding, WeeklySummaryData,
 } from "./tools";
 import { weekdayName } from "./tools";
+import type { Lang } from "./conversation";
+import { periodText, say, type SubjectParts } from "./i18n";
 import type { AnswerBlock, AnswerStatus, Confidence, Intent, PeriodInfo, ToolResult, TxnCard } from "./types";
 
 export interface Composed {
@@ -34,6 +36,16 @@ export interface ComposeHints {
   judgement?: boolean;
   /** How the user named the main period ("this week"), shown before the exact dates. */
   periodWords?: string;
+  /** The language the user wrote in (the figures are identical in every language). */
+  lang?: Lang;
+  /** The question's subject (category / merchant / account / channel names exactly as stored), for other languages. */
+  subjectParts?: SubjectParts;
+  /** "How often…": a count of transactions on distinct days — never "visits". */
+  frequency?: boolean;
+  /** "Card or QR?": the families compared. */
+  channelFamilies?: string[];
+  /** "Is it increasing?" = up, "is it going down?" = down: yes / no follows the question asked. */
+  askedDirection?: "up" | "down";
 }
 
 const money = formatMoney;
@@ -61,6 +73,10 @@ export function failure(result: ToolResult & { ok: false }): Composed {
 const withNotes = (c: Composed, notes: string[] | undefined): Composed => (notes?.length ? { ...c, text: `${c.text}\n\n${notes.join(" ")}` } : c);
 
 /** Personal rules are always disclosed: the user should see when their own rule changed an answer. */
+/** A merchant name that matched several merchants is disclosed ("Shopee" → Shopee, Shopee Food). */
+export const merchantNote = (names: string[] | undefined): string[] =>
+  names && names.length > 1 ? [`This includes ${names.length} merchant names: ${names.slice(0, 5).join(", ")}${names.length > 5 ? "…" : ""}.`] : [];
+
 export function ruleNote(rules: AppliedRule[] | undefined): string[] {
   if (!rules?.length) return [];
   return [`Using your personal rule${rules.length > 1 ? "s" : ""}: ${rules.map((r) => `${r.merchant} counts as ${r.category} (${plural(r.count, "transaction")})`).join("; ")}. Your records themselves aren't changed.`];
@@ -69,7 +85,7 @@ export function ruleNote(rules: AppliedRule[] | undefined): string[] {
 // ---------------------------------------------------------------------------------------------------------------
 
 export function composeSearch(d: SearchData, hints: ComposeHints, detail?: TransactionDetail): Composed {
-  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules)] };
+  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...merchantNote(d.merchantsMatched)] };
   const cards = d.transactions;
   const ids = cards.map((c) => c.id);
   const target = d.target.amountMinor !== null ? ` close to ${money(d.target.amountMinor, d.transactions[0]?.currency ?? "RM")}` : "";
@@ -77,7 +93,7 @@ export function composeSearch(d: SearchData, hints: ComposeHints, detail?: Trans
   if (d.total === 0)
     return withNotes({
       status: "no_match", confidence: "NO_MATCH",
-      text: `I couldn't find a transaction matching that${scope}.`,
+      text: target ? `I couldn't find a transaction${d.subject}${target} ${d.period ? (h.periodWords ? when(d.period, h.periodWords) : `in that period (${d.period.label})`) : "in any of your records"}.` : `I couldn't find a transaction matching that${scope}.`,
       blocks: [], followUps: d.period ? ["Search all my records", "Show my recent transactions"] : ["Show my recent transactions"],
     }, h.notes);
 
@@ -129,15 +145,19 @@ const DIMENSION: Record<string, { noun: string; block: "category" | "merchant" |
   merchant: { noun: "merchant", block: "merchant" },
   funding_account: { noun: "funding account", block: "account" },
   payment_channel: { noun: "payment channel", block: "channel" },
+  channel_family: { noun: "payment channel", block: "channel" },
   day: { noun: "day", block: "day" },
 };
 
 export function composeCalculate(d: CalculateData, hints: ComposeHints): Composed {
-  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules)] };
+  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...merchantNote(d.merchantsMatched)] };
   const subject = d.subject;
   const period = when(d.period, h.periodWords);
+  const lang = h.lang ?? "en";
+  const periodL = periodText(lang, d.period, h.periodWords);
+  const parts0 = h.subjectParts ?? {};
   if (d.results.length === 0)
-    return withNotes({ status: "no_match", text: `Your records show no spending${subject} ${period}.`, blocks: [], followUps: ["Show my recent transactions"] }, h.notes);
+    return withNotes({ status: "no_match", text: say.nothing(lang, { subject: parts0, period: periodL }) ?? `Your records show no spending${subject} ${period}.`, blocks: [], followUps: ["Show my recent transactions"] }, h.notes);
 
   const blocks: AnswerBlock[] = [];
   const multi = d.results.length > 1;
@@ -157,14 +177,33 @@ export function composeCalculate(d: CalculateData, hints: ComposeHints): Compose
       let line = h.restaurants
         ? `Your Food spending ${period} was at ${groups.slice(0, 3).map((g) => `${g.label} (${money(g.valueMinor, r.currency)})`).join(", ")}${groups.length > 3 ? ` and ${groups.length - 3} more` : ""}.`
         : `${h.intent === "CATEGORY_ANALYSIS" && d.groupBy === "category" ? "Most of your money" : `Your top ${dim.noun}`}${subject} ${period} ${h.intent === "CATEGORY_ANALYSIS" && d.groupBy === "category" ? "went to" : "is"} ${top.label}: ${money(top.valueMinor, r.currency)} (${top.sharePct}% of ${money(r.valueMinor ?? 0, r.currency)}, ${plural(top.count, "transaction")}).${others.length ? ` Then ${others.join(" and ")}.` : ""}`;
-      if (!h.restaurants && mostUsed && mostUsed.key !== top.key && (d.groupBy === "funding_account" || d.groupBy === "payment_channel"))
+      if (!h.restaurants && mostUsed && mostUsed.key !== top.key && (d.groupBy === "funding_account" || d.groupBy === "payment_channel" || d.groupBy === "channel_family"))
         line += ` By number of payments it's ${mostUsed.label} (${mostUsed.count}).`;
-      return line;
+      // "Card or QR?": answer the comparison that was asked, from the same verified groups.
+      if (h.channelFamilies?.length && d.groupBy === "channel_family") {
+        const asked = h.channelFamilies.length >= 2 ? groups.filter((g) => h.channelFamilies!.includes(g.label)) : groups;
+        const rest = asked.filter((g) => g.key !== asked[0]?.key);
+        const missing = h.channelFamilies.filter((f) => !groups.some((g) => g.label === f));
+        const w = asked[0];
+        if (w) {
+          const localized = say.channels(lang, { winner: w.label, wAmount: money(w.valueMinor, r.currency), wCount: w.count, rest: rest.map((g) => ({ label: g.label, amount: money(g.valueMinor, r.currency), count: g.count })), period: periodL });
+          line = localized ?? `You paid more by ${w.label}${subject} ${period}: ${money(w.valueMinor, r.currency)} across ${plural(w.count, "transaction")}${rest.length ? `, vs ${rest.map((g) => `${g.label} ${money(g.valueMinor, r.currency)} (${plural(g.count, "transaction")})`).join(", ")}` : ""}.${missing.length ? ` No ${missing.join(" or ")} payments were recorded.` : ""}`;
+          const byCount = [...asked].sort((a, b) => b.count - a.count)[0];
+          if (!localized && byCount && byCount.key !== w.key) line += ` By number of payments it's ${byCount.label} (${byCount.count}).`;
+          return line;
+        }
+      }
+      return say.top(lang, { label: top.label, amount: money(top.valueMinor, r.currency), pct: top.sharePct, count: top.count, period: periodL, others }) ?? line;
     }).filter(Boolean);
     text = lines.join(" ");
     followUps.push(d.groupBy === "category" ? "Why did I spend more this month?" : "Show the transactions", "Compare with last month");
   } else if (d.operation === "count") {
-    text = `You made ${d.results.map((r) => `${plural(r.transactionCount, "transaction")}${multi ? ` in ${r.currency}` : ""}`).join(" and ")}${subject} ${period}.`;
+    const r0 = d.results[0];
+    const localized = !multi ? say.count(lang, { count: r0.transactionCount, days: h.frequency ? r0.distinctDays : undefined, subject: parts0, period: periodL }) : null;
+    text = localized ?? (h.frequency && !multi && r0.distinctDays !== undefined
+      ? `You had ${plural(r0.transactionCount, "transaction")}${subject} ${period}${r0.distinctDays !== r0.transactionCount ? `, on ${plural(r0.distinctDays, "different day")}` : ""}.`
+      : `You made ${d.results.map((r) => `${plural(r.transactionCount, "transaction")}${multi ? ` in ${r.currency}` : ""}`).join(" and ")}${subject} ${period}.`);
+    for (const r of d.results) if (r.transactions?.length) blocks.push({ type: "transactions", title: "Transactions", items: r.transactions, more: Math.max(0, r.transactionCount - r.transactions.length) });
     followUps.push("How much was that in total?");
   } else if (d.operation === "average") {
     text = `Your average transaction${subject} ${period} was ${d.results.map((r) => `${money(r.valueMinor ?? 0, r.currency)} (over ${plural(r.transactionCount, "transaction")})`).join(" and ")}.`;
@@ -177,7 +216,10 @@ export function composeCalculate(d: CalculateData, hints: ComposeHints): Compose
       ? `You spent ${parts.join(" and ")}${subject} ${period}. I keep currencies separate and don't convert between them.`
       : `You spent ${parts[0]}${subject} ${period}.`;
     text += ` Based on ${plural(count, "transaction")}.`;
+    text = say.spent(lang, { amounts: parts.join(" + "), count, subject: parts0, period: periodL, multiCurrency: multi }) ?? text;
     for (const r of d.results) blocks.push({ type: "metric", label: `${d.filters === "All spending" ? "Spending" : d.filters}${multi ? ` · ${r.currency}` : ""}`, valueMinor: r.valueMinor ?? 0, currency: r.currency, caption: `${d.period?.label ?? "All time"} · ${plural(r.transactionCount, "transaction")}` });
+    // Evidence: the transactions that make up each total.
+    for (const r of d.results) if (r.transactions?.length) blocks.push({ type: "transactions", title: `The ${plural(r.transactionCount, "transaction")}${multi ? ` · ${r.currency}` : ""}`, items: r.transactions, more: Math.max(0, r.transactionCount - r.transactions.length) });
     followUps.push("Why?", "Show the transactions", "Compare with last month");
   }
   if (d.refunds.length)
@@ -204,16 +246,23 @@ export function composeCompare(d: CompareData, hints: ComposeHints): Composed {
       else if (r.diffMinor === 0) s += `, the same as ${d.b.label}.`;
       else s += `, ${money(Math.abs(r.diffMinor), c)} ${r.diffMinor > 0 ? "more" : "less"} than ${d.b.label} (${money(r.bMinor, c)}).`;
       const drivers = r.diffMinor >= 0 ? up : down;
+      // "Biggest contributors" (verified per-group differences) — never "because of".
       if (drivers.length && r.diffMinor !== 0)
-        s += ` That's mainly ${drivers.slice(0, 3).map((x) => `${x.label} (${signed(x.diffMinor, c)})`).join(", ")}.`;
+        s += ` The biggest contributor${drivers.length > 1 ? "s were" : " was"} ${drivers.slice(0, 3).map((x) => `${x.label} (${signed(x.diffMinor, c)})`).join(", ")}.`;
       const offset = r.diffMinor >= 0 ? down : up;
       if (offset.length && r.diffMinor !== 0) s += ` Partly offset by ${offset.slice(0, 2).map((x) => `${x.label} (${signed(x.diffMinor, c)})`).join(", ")}.`;
       if (r.largestInA[0]) s += ` Your largest was ${cardLine(r.largestInA[0])}.`;
       sentences.push(s);
     } else {
       let s: string;
-      if (r.bMinor === 0 && r.bCount === 0) s = `You spent ${money(r.aMinor, c)} in ${d.a.label}; nothing was recorded in ${d.b.label}.`;
+      if (r.bMinor === 0 && r.bCount === 0) s = `You spent ${money(r.aMinor, c)}${d.subject} in ${d.a.label}; nothing was recorded in ${d.b.label}.`;
       else if (r.diffMinor === 0) s = `You spent the same in ${d.a.label} as in ${d.b.label}: ${money(r.aMinor, c)}.`;
+      else if (h.askedDirection || (h.lang && h.lang !== "en")) {
+        const more = r.diffMinor > 0;
+        const yes = h.askedDirection ? (h.askedDirection === "up") === more : more;
+        s = say.compared(h.lang ?? "en", { yes, more, diff: money(Math.abs(r.diffMinor), c), a: money(r.aMinor, c), aLabel: d.a.label, b: money(r.bMinor, c), bLabel: d.b.label, pct: r.pctChange, subject: h.subjectParts ?? {} })
+          ?? `${yes ? "Yes" : "No"} — your spending${d.subject} ${more ? "went up" : "went down"}: ${money(r.aMinor, c)} in ${d.a.label} vs ${money(r.bMinor, c)} in ${d.b.label} (${signed(r.diffMinor, c)}${r.pctChange === null ? "" : `, ${more ? "up" : "down"} ${Math.abs(r.pctChange)}%`}).`;
+      }
       else s = `${r.diffMinor > 0 ? "Yes — you" : "No — you"} spent ${money(Math.abs(r.diffMinor), c)} ${r.diffMinor > 0 ? "more" : "less"}${d.subject} in ${d.a.label} (${money(r.aMinor, c)}) than in ${d.b.label} (${money(r.bMinor, c)})${r.pctChange === null ? "" : `, ${r.pctChange >= 0 ? "up" : "down"} ${Math.abs(r.pctChange)}%`}.`;
       sentences.push(s);
     }
@@ -244,13 +293,15 @@ export function composeWeekly(d: WeeklySummaryData, h: ComposeHints): Composed {
     s.push(d.previousWeek.diffMinor === 0 ? `That's the same as the same days last week.`
       : `That's ${money(Math.abs(d.previousWeek.diffMinor), c)} ${d.previousWeek.diffMinor > 0 ? "more" : "less"} than the same days last week (${money(d.previousWeek.totalMinor, c)}).`);
   }
+  // The direct answer stays short; the rest is context (insight), each figure straight from the summary.
+  const more: string[] = [];
   if (d.fourWeekAverage.averageMinor !== null && d.fourWeekAverage.pctChange !== null)
-    s.push(`Compared with your 4-week average for those days (${money(d.fourWeekAverage.averageMinor, c)}) it's ${d.fourWeekAverage.pctChange >= 0 ? "higher" : "lower"} by ${Math.abs(d.fourWeekAverage.pctChange)}%.`);
-  else s.push("I don't have enough history yet for a 4-week average.");
-  if (d.categories[0]) s.push(`Your biggest category was ${d.categories[0].label} (${money(d.categories[0].valueMinor, c)}).`);
-  if (d.largestTransaction) s.push(`Largest transaction: ${cardLine(d.largestTransaction)}.`);
+    more.push(`Your 4-week average for the same days is ${money(d.fourWeekAverage.averageMinor, c)}, so this week is ${Math.abs(d.fourWeekAverage.pctChange)}% ${d.fourWeekAverage.pctChange >= 0 ? "higher" : "lower"}.`);
+  else more.push("I don't have enough history yet for a 4-week average.");
+  if (d.categories[0]) more.push(`Biggest category: ${d.categories[0].label} (${money(d.categories[0].valueMinor, c)}).`);
+  if (d.largestTransaction) more.push(`Largest transaction: ${money(d.largestTransaction.amountMinor, d.largestTransaction.currency)} at ${d.largestTransaction.merchant}.`);
   const topDay = [...d.byDay].sort((a, b) => b.valueMinor - a.valueMinor)[0];
-  if (topDay && topDay.valueMinor > 0 && d.byDay.length > 1) s.push(`Your most expensive day was ${weekdayName(topDay.date)} (${money(topDay.valueMinor, c)}).`);
+  if (topDay && topDay.valueMinor > 0 && d.byDay.length > 1) more.push(`Most expensive day: ${weekdayName(topDay.date)} (${money(topDay.valueMinor, c)}).`);
   if (d.refunds.length) s.push(`Refunds received: ${d.refunds.map((r) => money(r.totalMinor, r.currency)).join(", ")} (not deducted).`);
   if (d.otherCurrencies.length) s.push(`You also spent ${d.otherCurrencies.map((o) => money(o.totalMinor, o.currency)).join(" and ")} in other currencies (kept separate).`);
   const blocks: AnswerBlock[] = [
@@ -260,8 +311,9 @@ export function composeWeekly(d: WeeklySummaryData, h: ComposeHints): Composed {
   ];
   if (d.topAccounts.length) blocks.push({ type: "breakdown", title: "By funding account", currency: c, kind: "account", items: d.topAccounts.map((g) => ({ key: g.key, label: g.label, valueMinor: g.valueMinor, count: g.count })) });
   if (d.topChannels.length) blocks.push({ type: "breakdown", title: "By payment channel", currency: c, kind: "channel", items: d.topChannels.map((g) => ({ key: g.key, label: g.label, valueMinor: g.valueMinor, count: g.count })) });
-  if (d.largestTransaction) blocks.push({ type: "transactions", title: "Largest transaction", items: [d.largestTransaction] });
-  return withNotes({ status: "answered", text: s.join(" "), blocks, followUps: ["What unusual spending happened this week?", "Compare with last week", "Which merchants?"], transactionIds: d.largestTransaction ? [d.largestTransaction.id] : [] }, h.notes);
+  // Evidence: every transaction behind the total (so "N transactions" opens exactly N that add up to the figure).
+  if (d.transactions.length) blocks.push({ type: "transactions", title: d.transactions.length === d.count ? "This week's transactions" : `Latest ${d.transactions.length} of ${d.count} transactions`, items: d.transactions, more: Math.max(0, d.count - d.transactions.length) });
+  return withNotes({ status: "answered", text: s.join(" "), insight: more.join(" "), blocks, followUps: ["What unusual spending happened this week?", "Compare with last week", "Which merchants?"], transactionIds: d.largestTransaction ? [d.largestTransaction.id] : [] }, h.notes);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -300,7 +352,8 @@ export function composeUnusual(d: UnusualData, h: ComposeHints): Composed {
 
 export function composeTransaction(d: TransactionDetail, h: ComposeHints): Composed {
   const t = d.transaction;
-  const s = [`${money(t.amountMinor, t.currency)} at ${t.merchant} on ${onDay(t)}. Category: ${t.category}. Paid ${how(t)}.`];
+  const category = t.recordedCategory ? `${t.recordedCategory} (your rule counts it as ${t.category})` : t.category;
+  const s = [`${money(t.amountMinor, t.currency)} at ${t.merchant} on ${onDay(t)}. Category: ${category}. Funding account: ${t.fundingAccount}. Payment channel: ${channelInfo(t.paymentChannel).label}.`];
   if (d.split.isShared) s.push(`It was split between ${d.split.people} people; your share was ${money(d.split.myShareMinor, t.currency)}${d.split.paidByMe ? "" : `, and ${d.split.payer ?? "someone else"} paid`}.`);
   else if (!d.split.paidByMe) s.push(`${d.split.payer ?? "Someone else"} paid for it.`);
   if (d.reference) s.push(`Reference: ${d.reference}.`);
@@ -319,10 +372,12 @@ export function composeInsights(d: InsightsData, hints: ComposeHints): Composed 
   const c = d.currency;
   const so = `this ${unitWord(d)} so far (${d.period.label})`;
   const subject = d.filters !== "All spending" ? ` (${d.filters})` : "";
+  const lang = h.lang ?? "en";
+  const soL = periodText(lang, d.period, `this ${unitWord(d)}`);
   if (!d.enoughHistory || d.normalMinor === null || d.diffMinor === null)
     return withNotes({
       status: "answered",
-      text: `I don't have enough history yet to know your normal ${unitWord(d)} — I need records from at least two earlier ${unitWord(d)}s. So far ${so} you've spent ${money(d.currentMinor, c)}${subject} across ${plural(d.currentCount, "transaction")}.`,
+      text: say.insight(lang, { kind: "unknown", current: money(d.currentMinor, c), period: soL, count: d.currentCount }) ?? `I don't have enough history yet to know your normal ${unitWord(d)} — I need records from at least two earlier ${unitWord(d)}s. So far this ${unitWord(d)} (${d.period.label}) you've spent ${money(d.currentMinor, c)}${subject} across ${plural(d.currentCount, "transaction")}.`,
       blocks: [], followUps: ["Give me my weekly summary"],
     }, h.notes);
 
@@ -344,6 +399,11 @@ export function composeInsights(d: InsightsData, hints: ComposeHints): Composed 
   } else {
     text = `Your spending${subject} ${so} is ${money(d.currentMinor, c)} — in line with your normal for the same days (${money(d.normalMinor, c)}, ${d.normalLabel}).`;
   }
+
+  text = say.insight(lang, {
+    kind: !d.significant ? "same" : d.diffMinor > 0 ? "more" : "less", diff: money(Math.abs(d.diffMinor), c), current: money(d.currentMinor, c),
+    normal: money(d.normalMinor, c), period: soL, count: d.currentCount, pct: d.pctChange,
+  }) ?? text;
 
   const extra: string[] = [];
   if (!(d.significant && d.diffMinor > 0) && ups.length) extra.push(`${ups[0].label} is higher than usual (${signed(ups[0].diffMinor, c)}).`);

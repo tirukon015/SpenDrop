@@ -53,7 +53,7 @@ describe("the six MVP questions, as one conversation", () => {
   it("4. Why? → investigates the same comparison and names the biggest driver", async () => {
     const a = await ask(store, "Why?", focus);
     expect(a.meta.intent).toBe("INVESTIGATE");
-    expect(a.text).toContain("mainly Shopping (+RM 899.00");
+    expect(a.text).toContain("The biggest contributors were Shopping (+RM 899.00");
     expect(a.text).toContain("Your largest was RM 899.00 at Harvey Norman");
     focus = a.focus;
   });
@@ -124,8 +124,9 @@ describe("no guessing", () => {
     const a = await ask(historyStore(), "Where did my RM9999 go?");
     expect(a.status).toBe("no_match");
     expect(a.confidence).toBe("NO_MATCH");
-    expect(a.text).toMatch(/^I couldn't find a transaction matching that/);
+    expect(a.text).toBe("I couldn't find a transaction close to RM 9,999.00 in that period (8 Sep – 7 Oct 2026). Want me to search all your transactions for an amount around RM 9,999.00?");
     expect(a.blocks).toEqual([]);
+    expect(a.followUps[0]).toBe("Yes, search all my transactions");
   });
 
   it("three RM15 transactions → asks which one (§109)", async () => {

@@ -5,8 +5,14 @@ import { composeTool, failure, totalInsight, type Composed } from "./compose";
 import type { InsightsData } from "./insights";
 import { CAPABILITIES_TEXT, periodWordsOf, plan, type Plan } from "./planner";
 import { executeTool, type ExecutedTool } from "./registry";
-import { MemoryNotSetUpError, type FinanceRepository, type MemoryStore, type Vocabulary } from "./repository";
+import { MemoryNotSetUpError, merchantKey, type FinanceRepository, type MemoryStore, type Vocabulary } from "./repository";
+import { channelInfo } from "@/lib/domain/constants";
+import { formatMoney } from "@/lib/domain/money";
+import type { PaymentChannelId } from "@/lib/domain/types";
+import { detectLanguage } from "./conversation";
+import { say } from "./i18n";
 import { presetSpan } from "./time";
+import { toMinor } from "./tools";
 import type { TransactionDetail } from "./tools";
 import type { AiContext, AskAnswer, Evidence, Focus, Intent } from "./types";
 
@@ -39,10 +45,12 @@ const unavailable = (ctx: AiContext, started: number): AskAnswer => answerFrom(
 /** Answers the question with deterministic tools, or reports that it needs a model (`unknown`). */
 export async function answerDeterministic(message: string, ctx: AiContext, repo: FinanceRepository, focus: Focus | null, memory: MemoryStore | null = null): Promise<DeterministicOutcome> {
   const outcome = await answerInner(message, ctx, repo, focus, memory);
-  return outcome.kind === "answer" && outcome.understoodAs ? { kind: "answer", answer: { ...outcome.answer, understoodAs: outcome.understoodAs } } : outcome;
+  if (outcome.kind !== "answer") return outcome;
+  const extra = { ...(outcome.understoodAs ? { understoodAs: outcome.understoodAs } : {}), ...(outcome.preface ? { preface: outcome.preface } : {}) };
+  return { kind: "answer", answer: { ...outcome.answer, ...extra } };
 }
 
-async function answerInner(message: string, ctx: AiContext, repo: FinanceRepository, focus: Focus | null, memory: MemoryStore | null): Promise<DeterministicOutcome & { understoodAs?: string }> {
+async function answerInner(message: string, ctx: AiContext, repo: FinanceRepository, focus: Focus | null, memory: MemoryStore | null): Promise<DeterministicOutcome & { understoodAs?: string; preface?: string }> {
   const started = Date.now();
   let vocabulary: Vocabulary;
   try {
@@ -52,8 +60,9 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   }
   const p: Plan = plan({ message, today: ctx.today, vocabulary, focus });
   if (p.kind === "unknown") return { kind: "unknown", general: p.general, vocabulary };
-  if (p.kind === "reply") return { kind: "answer", understoodAs: p.understoodAs, answer: answerFrom({ status: p.status, text: p.text, blocks: [], followUps: p.followUps }, ctx, p.intent, focus, [], [], started) };
+  if (p.kind === "reply") return { kind: "answer", understoodAs: p.understoodAs, preface: p.preface, answer: answerFrom({ status: p.status, text: p.text, blocks: [], followUps: p.followUps }, ctx, p.intent, p.focus !== undefined ? p.focus : focus, [], [], started) };
   if (p.kind === "memory") return { kind: "answer", answer: await memoryAnswer(p, memory, vocabulary, ctx, focus, started) };
+  const preface = p.preface;
 
   // First-time user: say so instead of "no match".
   if (vocabulary.expenseCount === 0)
@@ -90,7 +99,21 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
     }
   }
 
-  const hints = { intent: p.intent, notes, topN: p.style?.topN, smallest: p.style?.smallest, restaurants: p.style?.restaurants, judgement: p.style?.judgement, periodWords };
+  // Still nothing for a remembered amount: don't end the conversation — offer the all-records search ("yes" runs it).
+  const searchData = main.result.ok && main.name === "search_transactions" ? (main.result.data as { total: number; period: unknown }) : null;
+  const offer = searchData && searchData.total === 0 && searchData.period && p.offer ? p.offer : undefined;
+
+  // The answer is worded in the user's language; the verified figures and stored names are the same in every language.
+  const lang = detectLanguage(message);
+  const a0 = (p.steps[0]?.args ?? {}) as { category?: string; merchant?: string; fundingAccount?: string; paymentChannel?: PaymentChannelId; paymentChannels?: PaymentChannelId[] };
+  const subjectParts = {
+    category: a0.category, merchant: a0.merchant, fundingAccount: a0.fundingAccount,
+    channels: a0.paymentChannel ? channelInfo(a0.paymentChannel).label : a0.paymentChannels?.length ? [...new Set(a0.paymentChannels.map((c) => channelInfo(c).label))].join(" / ") : undefined,
+  };
+  const hints = {
+    intent: p.intent, notes, topN: p.style?.topN, smallest: p.style?.smallest, restaurants: p.style?.restaurants, judgement: p.style?.judgement, periodWords,
+    lang, subjectParts, frequency: p.style?.frequency, channelFamilies: p.style?.channelFamilies, askedDirection: p.style?.askedDirection,
+  };
   const composed = main.result.ok
     ? composeTool(main.name, main.result, hints, detail?.result.ok ? (detail.result.data as TransactionDetail) : undefined)
     : failure(main.result);
@@ -111,7 +134,14 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
       if (line && extra.result.ok) { composed.insight = line; evidence.push(extra.result.evidence); }
     }
   }
-  return { kind: "answer", understoodAs: p.understoodAs, answer: answerFrom(composed, ctx, p.intent, p.focus, evidence, executed, started) };
+  if (offer) {
+    const target = (offer.args.targetAmount as number | undefined) ?? null;
+    const amount = target !== null ? formatMoney(toMinor(target), (offer.args.currency as string | undefined) ?? "RM") : null;
+    composed.text += " " + ((amount && say.lookupOffer(lang, { target: amount })) ?? `Want me to search all your transactions for ${amount ? `an amount around ${amount}` : "it"}?`);
+    composed.followUps = [offer.label, ...composed.followUps.filter((f) => !/search all/i.test(f))];
+  }
+  const nextFocus = p.focus ? { ...p.focus, offer } : p.focus;
+  return { kind: "answer", understoodAs: p.understoodAs, preface, answer: answerFrom(composed, ctx, p.intent, nextFocus, evidence, executed, started) };
 }
 
 export const capabilitiesAnswer = (ctx: AiContext, general: boolean): AskAnswer =>
@@ -128,6 +158,13 @@ async function memoryAnswer(p: Extract<Plan, { kind: "memory" }>, memory: Memory
   const reply = (status: AskAnswer["status"], text: string, followUps: string[] = []) => answerFrom({ status, text, blocks: [], followUps }, ctx, p.action === "set" ? "PERSONAL_RULE" : "MEMORY", focus, [], [], started);
   if (!memory) return reply("clarify", "I can't save personal preferences here yet.");
   try {
+    if (p.action === "lookup") {
+      // Personal interpretation vs stored truth: the rule (if any) is reported separately from what the records say.
+      const rule = (await memory.list()).find((r) => r.merchantKey === merchantKey(p.subject) || ` ${merchantKey(p.subject)} `.includes(` ${r.merchantKey} `));
+      return rule
+        ? reply("answered", `You told me to treat ${rule.merchant} as ${rule.category}. That's only how I group your spending — each transaction still keeps the category it was saved with.`, [`How much did I spend on ${rule.category} this month?`, `Forget ${rule.merchant}`])
+        : reply("answered", `You haven't given me a rule for ${p.subject}, so I use the category saved on each transaction. Say “${p.subject} is Transport for me” (or another category) to set one.`, [`Show my ${p.subject} transactions`]);
+    }
     if (p.action === "list") {
       const rules = await memory.list();
       return rules.length

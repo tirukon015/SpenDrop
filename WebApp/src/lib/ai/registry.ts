@@ -4,6 +4,7 @@
 // The user scope is the AiContext argument — it is never part of the tool input.
 import { z } from "zod";
 import { AI_LIMITS } from "./config";
+import { invariantViolations } from "./invariants";
 import { DataUnavailableError, type FinanceRepository } from "./repository";
 import {
   calculateInputSchema, compareInputSchema, describeIssues, getTransactionInputSchema, insightsInputSchema, searchInputSchema, unusualInputSchema,
@@ -103,7 +104,14 @@ export async function executeTool(name: string, rawArgs: unknown, ctx: AiContext
   const parsed = tool.schema.safeParse(rawArgs ?? {});
   if (!parsed.success) return done({ ok: false, error: { kind: "validation", message: `Invalid arguments: ${describeIssues(parsed.error)}` } });
   try {
-    return done(await timeout(tool.handler(parsed.data as never, ctx, repo), tool.timeoutMs));
+    const result = await timeout(tool.handler(parsed.data as never, ctx, repo), tool.timeoutMs);
+    // A result whose figures don't match its own dataset is never shown.
+    const problems = result.ok ? invariantViolations(tool.name, result.data) : [];
+    if (problems.length) {
+      console.error(`[ai][invariant] ${tool.name} (request ${ctx.requestId}): ${problems.slice(0, 3).join("; ")}`);
+      return done({ ok: false, error: { kind: "unavailable", message: "I couldn't verify that calculation, so I'm not showing it." } });
+    }
+    return done(result);
   } catch (error) {
     if (error instanceof Error && error.message === "tool timeout") return done({ ok: false, error: { kind: "timeout", message: "Checking your transactions took too long." } });
     // Never leak database/stack details: log the category server-side, return a plain message.

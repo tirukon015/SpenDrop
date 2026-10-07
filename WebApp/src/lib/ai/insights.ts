@@ -3,6 +3,7 @@
 // in-progress month is never compared with whole months. Everything is calculated here, deterministically; the
 // composer only reports changes that pass the thresholds in config.ts (no insight is invented to sound smart).
 import type { CategoryId } from "@/lib/domain/types";
+import { averageMinor, perDayMinor } from "./calc";
 import { INSIGHTS, UNUSUAL } from "./config";
 import type { FinanceRepository } from "./repository";
 import {
@@ -76,7 +77,7 @@ export async function getSpendingInsights(input: InsightsInput, ctx: AiContext, 
     const used = perWindow.slice(0, known);
     const enoughHistory = known >= INSIGHTS.minBaselinePeriods;
     const minDiff = unit === "week" ? INSIGHTS.minDiffMinorWeek : INSIGHTS.minDiffMinorMonth;
-    const avg = (f: (list: Row[]) => number) => (known ? Math.round(used.reduce((t, l) => t + f(l), 0) / known) : 0);
+    const avg = (f: (list: Row[]) => number) => averageMinor(used.map(f)) ?? 0;
 
     const currentMinor = sum(now);
     const normalMinor = enoughHistory ? avg(sum) : null;
@@ -116,8 +117,8 @@ export async function getSpendingInsights(input: InsightsInput, ctx: AiContext, 
     let weekend: InsightsData["weekend"] = null;
     if (weeksWithData >= 4) {
       const weeks = 8;
-      const weekendDayMinor = Math.round(sum(recent.filter((r) => weekdayIndex(r.localDate) >= 5)) / (weeks * 2));
-      const weekdayDayMinor = Math.round(sum(recent.filter((r) => weekdayIndex(r.localDate) < 5)) / (weeks * 5));
+      const weekendDayMinor = perDayMinor(sum(recent.filter((r) => weekdayIndex(r.localDate) >= 5)), weeks * 2);
+      const weekdayDayMinor = perDayMinor(sum(recent.filter((r) => weekdayIndex(r.localDate) < 5)), weeks * 5);
       if (weekendDayMinor >= weekdayDayMinor * INSIGHTS.weekendRatio && weekendDayMinor - weekdayDayMinor >= 1_000) weekend = { weekendDayMinor, weekdayDayMinor, weeks };
     }
 
@@ -132,7 +133,8 @@ export async function getSpendingInsights(input: InsightsInput, ctx: AiContext, 
       largePurchases, smallAddUps, weekend: input.category || input.merchant ? null : weekend,
       personalRules: appliedRules(now),
     };
-    return { ok: true, data, evidence: evidence("get_spending_insights", now.length + history.length, current, `${filters} vs ${data.normalLabel}`) };
+    // Evidence = this period's own transactions (the figure shown); the history used for "normal" is described, not counted.
+    return { ok: true, data, evidence: evidence("get_spending_insights", now.length, current, `${filters} vs ${data.normalLabel} (${history.length} earlier transactions)`) };
   });
 }
 

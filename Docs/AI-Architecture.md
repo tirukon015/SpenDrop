@@ -194,7 +194,50 @@ question ─▶ normalise (normalize.ts) ─▶ gates ─▶ planner ─▶ tool
 
 Conclusion: the deterministic understanding layer is the production path; a small local model is a fallback for questions it doesn't recognise, guarded by validation and grounding. `qwen2.5vl:7b` (installed) can't call tools. Before fine-tuning, benchmark a 7–8B tool-calling model (e.g. `qwen2.5:7b`, `qwen3:8b`, `llama3.1:8b`) with `OLLAMA_BENCH=1 AI_MODELS=… npx vitest run tests/ai/model-benchmark.test.ts`; collect anonymised, consented misunderstandings for a LoRA set only after that.
 
-## 9. Not implemented yet (deliberately)
+## 9. Quality pass (2026-10-08): conversation, calculations, evidence
+
+**Conversation layer** (`conversation.ts`) — social vs financial is decided by meaning, not phrase lists:
+1. Safety gates first (other users, SQL/injection, secrets, balance, off-topic).
+2. *Financial?* Strong signals (money words, amounts, categories, merchants, accounts, channels) always; weak ones
+   (periods, intent words) unless the message is addressed to SpenDrop socially; follow-ups when there is context.
+3. *Social?* Classified by structure — thanks / goodbye / greeting word families; anything addressed to SpenDrop
+   ("you", "tumi", "awak", "তুমি") by what it asks (well-being, activity, identity, abilities, compliment); short chit-chat.
+   Replies mirror the user's language (English, Banglish, Bengali, Malay) with natural variation and no tools.
+4. Mixed messages ("kemon aso bro, food e koto khoroch hoise?") → short greeting (`preface`) + the verified financial answer.
+
+**Context** — a follow-up is recognised by meaning (explicit marker, a bare period/subject, something relative to the
+last answer like "the day before" or "is that normal?"); a message with its own intent is a new question and
+inherits nothing. Drill-downs remember the main question (`focus.base`); lookups keep the remembered amount;
+offers ("search all my transactions?") are accepted only by an immediate yes.
+
+**Calculation layer** (`calc.ts`) — the only place money formulas exist: exact integer-sen totals (corrupt amounts
+throw), averages and shares rounded once (half away from zero), percentage change ((C − P) / P × 100, null when P = 0),
+max/min, median, per-day and scaling. Major→minor conversion is float-safe.
+
+**Invariants** (`invariants.ts`) — every tool result is checked before it can be shown: total = Σ listed transactions
+= Σ groups = Σ days; count = rows; largest = max; difference = current − previous; percentage = formula. A violation
+withholds the answer. Totals and weekly summaries carry the transactions behind them as evidence ("View N
+transactions" opens exactly N that add up); "Based on N" always describes the answer's own dataset.
+
+**Dates** — spans are inclusive local days converted to `[start, end)` instants in the user's zone (Malaysia: UTC+8),
+weeks Monday–Sunday. Tests cover midnight, 23:59:59.999, month/year boundaries, week edges and the UTC→MYT day shift.
+
+**Understanding fixes** — typo correction only for words of 5+ letters (it had turned "who"→"why", "junk"→"june",
+"jay"→"Jaya"); short typos via an explicit table; Banglish/Malay verb stems; whole-word merchant matching with
+disclosure when a name matches several merchants; an unrecognised name in a money question is searched as a merchant
+(answering "no spending at X" instead of silently answering a different question).
+
+**Evaluation (honest)**
+
+| Set | Result |
+|---|---|
+| Regression set (`nlu-dataset.ts`, written with the rules) | 101/101 |
+| Hold-out v1 (30) | 30/30 (partly tuned earlier) |
+| Hold-out v2 (37, frozen before this pass) | 13/37 before → 37/37 after (failures were seen while implementing — partly tuned) |
+| **Hold-out v3 (40, written after, never tuned)** | **34/40 (85%)** — all casual and all safety cases right; misses: idioms ("eating up my money", "getting out of hand", "throw away"), "how often", "do I pay more by card or qr", Banglish "barche" |
+| Property tests (3 random datasets × filters × periods vs an independent oracle) | all pass |
+
+## 10. Not implemented yet (deliberately)
 
 - **Memory beyond merchant → category** (terminology like "when I say food include cafes", goals, report preferences) and an in-app memory settings screen (today: list/forget by chat).
 - **Write actions** (re-categorise, edit): none. Future write tools need explicit confirmation, ownership check, audit log with before/after values.

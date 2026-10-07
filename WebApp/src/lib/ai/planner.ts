@@ -3,9 +3,10 @@
 // so simple questions never need an LLM; anything it can't confidently understand is returned as `unknown` and
 // goes to the configured model (if any). The planner only chooses tool ARGUMENTS — it never touches data, and the
 // user scope is added later by executeTool() from the authenticated context.
-import { COMMON_FUNDING_ACCOUNTS } from "@/lib/domain/constants";
+import { COMMON_FUNDING_ACCOUNTS, channelInfo } from "@/lib/domain/constants";
 import type { CategoryId, PaymentChannelId } from "@/lib/domain/types";
 import { AMOUNT_TOLERANCE } from "./config";
+import { isNo, isYes, openerPreface, readSocial, socialFollowUps, socialReply, splitOpener, type Lang, type SocialReading } from "./conversation";
 import { understand, understoodAs, type Understanding } from "./normalize";
 import type { Vocabulary } from "./repository";
 import {
@@ -27,15 +28,28 @@ export type Plan = (
       notes: string[];
       /** For lookups: wider searches to try, in order, if nothing matches (each is mentioned in the answer). */
       expansions?: { args: Record<string, unknown>; note: string }[];
+      /** For lookups: if still nothing matches, offer this all-records search ("yes" runs it). */
+      offer?: { args: Record<string, unknown>; label: string };
       /** Shape hints for the composer. */
-      style?: { topN?: number; smallest?: boolean; restaurants?: boolean; detailIfSingle?: boolean; judgement?: boolean };
+      style?: {
+        topN?: number; smallest?: boolean; restaurants?: boolean; detailIfSingle?: boolean; judgement?: boolean;
+        /** A "how often" question: answer with the count of transactions (and distinct days), never "visits". */
+        frequency?: boolean;
+        /** Payment-channel families the user compared ("card or qr" → Card, QR). */
+        channelFamilies?: string[];
+        /** The direction a trend question asked about ("barche?" = up, "komche?" = down), so yes/no is right. */
+        askedDirection?: "up" | "down";
+      };
+      /** The language the user wrote in; the verified answer is worded in it. */
+      lang?: Lang;
     }
-  | { kind: "reply"; intent: Intent; status: AnswerStatus; text: string; followUps: string[] }
+  | { kind: "reply"; intent: Intent; status: AnswerStatus; text: string; followUps: string[]; /** Replaces the conversation focus (default: keep it). */ focus?: Focus | null; /** Language of a social reply. */ lang?: Lang }
   | { kind: "memory"; action: "set"; merchant: string; category: CategoryId }
   | { kind: "memory"; action: "list" }
   | { kind: "memory"; action: "forget"; subject: string | null }
+  | { kind: "memory"; action: "lookup"; subject: string }
   | { kind: "unknown"; general: boolean }
-) & { understoodAs?: string };
+) & { understoodAs?: string; /** A short greeting before a financial answer ("kemon aso bro, food e koto…" → "Bhalo achi 😄"). */ preface?: string };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Entities
@@ -189,6 +203,20 @@ const CHANNEL_WORDS: [PaymentChannelId, RegExp][] = [
 /** All QR payment channels: a plain "QR" question covers every one of them. */
 const QR_CHANNELS: PaymentChannelId[] = ["QR_PAYMENT", "DUITNOW_QR", "TNG_QR"];
 
+/** Every payment channel named in the text, as families ("card or qr" → [Card, QR]). */
+export function extractChannels(text: string): { family: string; channels: PaymentChannelId[] }[] {
+  const t = text.toLowerCase().replace(/['’]/g, "");
+  const found = new Map<string, PaymentChannelId[]>();
+  for (const [channel, re] of CHANNEL_WORDS) {
+    const g = new RegExp(re.source, "g");
+    if (!g.test(t)) continue;
+    const members = channel === "QR_PAYMENT" ? (["QR_PAYMENT", "DUITNOW_QR", "TNG_QR"] as PaymentChannelId[]) : [channel];
+    const family = channel === "QR_PAYMENT" || channel === "DUITNOW_QR" || channel === "TNG_QR" ? "QR" : channel === "BANK_TRANSFER" || channel === "ONLINE_BANKING" ? "Bank transfer" : channelInfo(channel).label;
+    found.set(family, [...new Set([...(found.get(family) ?? []), ...members])]);
+  }
+  return [...found.entries()].map(([family, channels]) => ({ family, channels }));
+}
+
 export function extractChannel(text: string): { channel: PaymentChannelId; channels?: PaymentChannelId[]; word: string } | null {
   const t = text.toLowerCase().replace(/['’]/g, "");
   for (const [channel, re] of CHANNEL_WORDS) {
@@ -259,23 +287,50 @@ const NOT_NAME = new RegExp(String.raw`^(${MONTH_RE}|${WEEKDAYS.join("|")}|rm|my
 // ---------------------------------------------------------------------------------------------------------------
 
 const has = (t: string, re: RegExp) => re.test(t);
-const SECURITY = /\b(pretend|act as|you are now|role ?play|switch to)\b.{0,30}\b(admin|administrator|developer|root|superuser|god mode)\b|\b(everyone|everybody|anyone)'?s?\b.{0,20}\b(expenses?|transactions?|spending|data|records)\b|\b(other|another|every|all|someone else'?s?|different)\s+(users?|people'?s|accounts? of)|\buser[\s_-]?ids?\b|\b(sql|drop\s+table|database records|all records)\b|\bselect\s+(\*|[a-z_]+\s+from\b)|ignore (all|any|previous|prior|your|the) (instructions|rules)|system prompt|\bjailbreak\b|developer mode/;
-const GREETING = /^(hi|hello|hey|salam|assalamualaikum|good (morning|afternoon|evening)|yo)\b[!. ]*$|^(help|what can you do|how do(es)? (this|you) work)\??$/;
+const SECURITY = /\b(every|all|other|another)\s+(customers?|clients?|members?|people)'?s?\b|\b(customers|clients)'?\s+(transactions?|expenses?|data|records|spending)\b|\b(pretend|act as|you are now|role ?play|switch to)\b.{0,30}\b(admin|administrator|developer|root|superuser|god mode)\b|\b(everyone|everybody|anyone)'?s?\b.{0,20}\b(expenses?|transactions?|spending|data|records)\b|\b(other|another|every|all|someone else'?s?|different)\s+(users?|people'?s|accounts? of)|\buser[\s_-]?ids?\b|\b(sql|drop\s+table|database records|all records)\b|\bselect\s+(\*|[a-z_]+\s+from\b)|ignore (all|any|previous|prior|your|the) (instructions|rules)|system prompt|\bjailbreak\b|developer mode/;
+/** "What can you do?" — greetings and other small talk are handled by the conversation router (conversation.ts). */
+const HELP = /^(help|what can you do|how do(es)? (this|you) work|what can i ask)\??$/;
+/** A message that only points at something ("there?", "that?", "it?"). */
+const BARE_REFERENCE = /^(there|that|it|this|same|same place|that place|over there|that one|this one|the one)\??$/;
 const WHY = /\bwhy\b|what changed|\breason\b|kenapa|keno\b|কেন/;
-const COMPARE = /\b(going|go|gone) (up|down)\b|\b(more|less) (spent|spending)\b|\bcompare|comparison|\bvs\.?\b|versus|(spend|spent|spending)\s+(more|less)|\b(more|less|higher|lower)\s+than\b|increase|decrease|went (up|down)|too much|getting (worse|better)|\b(trend|trending)\b|\b(habit|lately|recently)\b.*\b(worse|better|more|less)\b/;
-const UNUSUAL = /\b(unusual|strange|weird|odd|anomal\w*|abnormal|out of the ordinary|spikes?|than usual|than normal|suspicious)\b/;
-const SUMMARY = /\b(summary|summari[sz]e|recap|overview|report|wrap[- ]?up)\b|where did (all )?my money go|where('?s| is) my money going/;
+const COMPARE = /\b(worse|better) than\b|\b(more|less)( money)? (spent|spending)\b|\b(going|go|gone) (up|down)\b|\b(more|less) (spent|spending)\b|\bcompare|comparison|\bvs\.?\b|versus|(spend|spent|spending)\s+(more|less)|\b(more|less|higher|lower)\s+than\b|increase|decrease|went (up|down)|too much|getting (worse|better)|\b(trend|trending)\b|\b(habit|lately|recently)\b.*\b(worse|better|more|less)\b/;
+const UNUSUAL = /\b(unusual|strange|weird|odd|anomal\w*|abnormal|out of the ordinary|spikes?|than usual|than normal|suspicious)\b|\b(anything|something) (off|odd|weird|strange|wrong) (with|in|about) my\b/;
+const SUMMARY = /\b(summary|summari[sz]e|recap|overview|report|wrap[- ]?up)\b|where did (all )?my money go|where('?s| is) my money going|\bmy money where (goes|go|going)\b|\bwhere (does|do) my money (go|goes)\b/;
 const ACCOUNT_Q = /\b(which|what)\s+(funding\s+)?(account|bank|wallet)s?\b|\baccounts? do i\b|\bby (funding )?account\b|\bper account\b/;
-const CHANNEL_Q = /\b(which|what)\s+(payment\s+)?(channel|method)s?\b|how do i (usually |mostly )?pay\b|\bby (payment )?(channel|method)\b/;
-const CATEGORY_Q = /\bwhat do i spend (the )?most on\b|\b(which|what)\s+categor(y|ies)\b|\bby categor(y|ies)\b|categor(y|ies) (cost|costs|take|takes)|breakdown|\b(share|percent(age)?|proportion|portion) of (my )?(spending|money)\b/;
+const CHANNEL_Q = /\bpa(y|id) with (the )?most\b|\b(which|what) (card|app|way|method)s?\b.*\bpa(y|id)\b|\b(which|what)\s+(payment\s+)?(channel|method)s?\b|how do i (usually |mostly )?pay\b|\bby (payment )?(channel|method)\b/;
+const CATEGORY_Q = /\bwhat am i spending (my money )?on\b|\bwhere (is|does|do|did) (most of |all of |all )?my money (go|going|goes|went)\b|\bmost of my money\b|\bwhat do i spend (the )?most on\b|\b(which|what)\s+categor(y|ies)\b|\bby categor(y|ies)\b|categor(y|ies) (cost|costs|take|takes)|breakdown|\b(share|percent(age)?|proportion|portion) of (my )?(spending|money)\b/;
 const MERCHANT_Q = /\b(which|what)\s+(merchants?|shops?|stores?|places?|restaurants?|cafes?|brands?)\b|\btop merchants?\b|where do i (spend|shop|eat) (the )?most|\bmost (at|from)\b/;
 const BIGGEST = /\b(biggest|largest|most expensive|highest|priciest|top \d+)\b/;
 const SMALLEST = /\b(smallest|cheapest|lowest)\b/;
 const COUNT = /\bhow many\b|\bnumber of\b/;
 const AVERAGE = /\baverage|\bavg\b|\bmean\b|\bper day\b|\bdaily\b/;
-const LIST = /\b(show|list|find|search|which transactions|what transactions|what was (that|the)|what did i buy|purchases|payments|transactions|receipts?|look for|look up)\b/;
+const LIST = /\bbought\b|\b(show|list|find|search|which transactions|what transactions|what was (that|the)|what did i buy|purchases|payments|transactions|receipts?|look for|look up)\b/;
 const HOW_MUCH = /\bhow much|\btotal|\bspent\b|\bspend(ing)?\b|\bcost\b|\bpaid\b|\bberapa|\bbelanja|\bkoto\b|\bkhoroch|কত|খরচ/;
 const DETAIL = /\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|last) one\b|#\s?([1-9])\b|\bnumber ([1-9])\b|\b(that|this) one\b|\btell me more\b|\bmore details?\b|\bdetails\b/;
+/** A question about the last answer compared with normal ("Was that higher than normal?", "is that a lot?"). */
+const NORMAL_Q = /\b(is|was|isn'?t|wasn'?t)\s+(that|this|it)(\s+(amount|total|spending|figure))?\s+(higher|lower|more|less|bigger|smaller|normal|usual|a lot|too much|average|high|low|okay|ok)\b|\b(that|it)('?s| is| was)\s+(a lot|too much|normal|usual|high)\b|\b(higher|lower|more|less) than (normal|usual|average)\b|^(normal|usual|is that normal)\??$/;
+/**
+ * Concept families (verbs × objects) for how people talk about money, so unseen idioms map to an intent:
+ *   consumption — something consumes / loses the money ("eating up", "burning through", "draining", "disappearing")
+ *   excess      — spending is too high ("out of hand", "like crazy", "way too high", "through the roof")
+ *   waste       — a judgement SpenDrop can't make ("wasting", "throwing money away") → shown honestly, never guessed
+ *   trend       — going up / down in any language (normalised to "increasing" / "decreasing")
+ *   frequency   — how often → a count of transactions
+ */
+const MONEY_WORD = /\b(money|spending|spend|expenses?|cash|budget|finances?|bills|savings)\b/;
+const CONSUME = /\b(eat(s|ing|en)?\s+up|eat(s|ing)? (into|away)|burn(s|ing|ed|t)?\s+(through|thru)|blow(s|ing|n)?\s+(through|thru)|chew(s|ing)?\s+(through|up)|drain(s|ing|ed)?|bleed(s|ing)?|disappear(s|ing|ed)?|vanish(es|ing|ed)?|leak(s|ing)?|go(es|ing)? (down the drain|missing))\b/;
+const EXCESS = /\b(out of (hand|control)|way too (high|much|big)|too (high|much)|through the roof|sky ?rocket\w*|like crazy|like mad|insane(ly)?|excessive(ly)?|over ?board|spiral(l)?ing|crazy|a lot lately|so much lately)\b/;
+const WASTE = /\b(wast(e|es|ed|ing)|(throw(s|ing|n)?|threw)\s+(my\s+|money\s+|cash\s+)?away|blow(s|ing|n)?\s+(my\s+)?(money|cash))\b/;
+const TREND_UP = /\b(increas(e|es|ed|ing)|going up|go up|gone up|went up|rising|rise|rose|growing|grow(s|n)?|climbing|creeping up)\b/;
+const TREND_DOWN = /\b(decreas(e|es|ed|ing)|going down|go down|went down|dropping|falling|fell|shrinking|coming down)\b/;
+const FREQ = /\bhow (often|frequently|regularly)\b|\bhow many times\b|\bnumber of times\b|\bfrequency\b/;
+/** Remove idiom words before looking for entities ("eating up" is not Food, not a merchant). */
+const withoutIdioms = (t: string) => t.replace(new RegExp(`${CONSUME.source}|${EXCESS.source}|${WASTE.source}`, "g"), " ").replace(/\s+/g, " ").trim();
+
+/** What drives a change ("What's causing the increase?"). */
+const CAUSE = /\b(what'?s|what is|what) (causing|driving|behind)\b|\bcaus(e|ed|ing) (the|this|my) (increase|rise|jump|drop)\b|\b(reason|reasons) for\b/;
+/** A period relative to the last answer ("the day before?", "previous week", "the next day"). */
+const RELATIVE = /\b(the )?(day|week|month) (before|after)\b|\b(previous|next|following) (day|week|month)\b/;
 const FOLLOW_UP = /^(and|what about|how about|also|then|so|ok(ay)?|but)\b|^(why|those|them)\b|^compare (it |that |this )?(with|to)\b/;
 const WEAK_FOLLOW_UP = /^(which|show|list|that)\b/;
 const LOCATION = /\bnear\s+(the\s+)?\w+|\bat\s+(the\s+)?(uni|university|campus|office|college|school|mall|home|work)\b/;
@@ -291,10 +346,10 @@ const OFF_TOPIC: [RegExp, string][] = [
   [/\b(meaning of life|tell me a joke|joke|poem|recipe|movie|song|lyrics|translate)\b/, "anything for that — I only work with your spending records"],
 ];
 /** Words whose meaning SpenDrop can't know without the user (asked, never guessed). */
-const AMBIGUOUS_SPEND = /\b(waste[ds]?|wasting|unnecessary|useless|pointless|frivolous|impulse|stupid|bad) (money|spending|purchases?|buys?|things?)?\b|\bwaste\b/;
+const AMBIGUOUS_SPEND = /\b(throw(s|n|ing)?|threw)\s+(\w+\s+)?away\b|\b(waste[ds]?|wasting|unnecessary|useless|pointless|frivolous|impulse|stupid|bad) (money|spending|purchases?|buys?|things?)?\b|\bwaste\b|\b(blow|blew|spent|spend|burn|burned)\b.*\b(junk|rubbish|nonsense|useless stuff|silly stuff|crap)\b/;
 /** "How much did I spend there?" — needs a place from the conversation. */
 const REFERENCE = /\b(spen[dt]|paid|pay|buy|bought|purchases?)\b.*\b(there|that place|that shop|that store|that merchant|the same place)\b/;
-const INSIGHTS = /\b(spend(ing)?|spent) so much\b|\bso much (spent|spending|spend)\b|\bso much lately\b|what'?s (going )?wrong|going wrong|how am i doing|how'?s my spending|spending (habits?|patterns?)|\binsights?\b|anything i should know|should i (stop|cut|reduce)|where can i (save|cut)|\bcut back\b|spending too much|am i (over ?spending|spending too much)|\bnoticed?\b/;
+const INSIGHTS = /\bhow('?s| is| are| am| was)?\b.{0,12}\bmy (money|spending|finances?|budget|expenses)\b|\bmy (money|spending|finances?|expenses) (look(ing)?|doing|okay|ok|fine|alright|how|healthy)\b|\bhow am i spending\b|\b(is|are) my (spending|finances?|money) (okay|ok|fine|alright|healthy|good|bad|normal)\b|\b(tell me|anything|something) (something )?about my (spending|money|finances?)\b|\bwhat'?s (going on|happening|up) with my (spending|money|finances?)\b|\bspent? (a lot|much|so much|too much)\b|\b(spend(ing)?|spent) so much\b|\bso much (spent|spending|spend)\b|\bso much lately\b|what'?s (going )?wrong|going wrong|how am i doing|how'?s my spending|spending (habits?|patterns?)|\binsights?\b|anything i should know|should i (stop|cut|reduce)|where can i (save|cut)|\bcut back\b|spending too much|am i (over ?spending|spending too much)|\bnoticed?\b/;
 const ORDINAL_NUMS = ["1st", "2nd", "3rd", "4th", "5th"];
 
 const capabilities =
@@ -307,26 +362,91 @@ const spanArg = (s: DateSpan | null) => (s ? { from: s.from, to: s.to } : undefi
 const thisMonth = (today: LocalDate): DateSpan => ({ from: startOfMonth(today), to: endOfMonth(today) });
 
 export function plan(input: PlanInput): Plan {
-  const u = understand(input.message, [...input.vocabulary.merchants, ...input.vocabulary.fundingAccounts]);
-  const p = planFrom(input, u);
+  const names = [...input.vocabulary.merchants, ...input.vocabulary.fundingAccounts];
+  const social = readSocial(input.message);
+
+  // 1. An offer made in the previous answer ("search all your transactions?"): only an immediate yes / no answers it.
+  const offer = input.focus?.offer;
+  // The offer's own button ("Yes, search all my transactions") and "yes …" / "ok" accept it; "no" declines.
+  const startsYes = /^\s*(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|haa?n|ha|ji|boleh|ya)\b/i.test(input.message);
+  if (offer && (isYes(social) || isNo(social) || startsYes)) {
+    const keep = input.focus ? { ...input.focus, offer: undefined } : null;
+    if (isNo(social)) return { kind: "reply", intent: "SMALL_TALK", status: "answered", text: socialReply(input.message, { ...social, act: "deny" }), followUps: [], focus: keep, lang: social.lang };
+    const focus: Focus = { intent: "SEARCH", filters: input.focus!.filters, span: null, base: input.focus!.base };
+    return { kind: "tools", intent: "SEARCH", steps: [{ tool: "search_transactions", args: offer.args }], focus, notes: [], style: { detailIfSingle: true } };
+  }
+
+  // 2. Safety gates on the whole message (other users, SQL, secrets, balance, off-topic) — before anything else.
+  const whole = understand(input.message, names);
+  const gate = gates(whole.text, input.message);
+  if (gate) return gate;
+
+  // 3. Social or financial? Decided by meaning: anything about money goes to the financial engine.
+  if (!isFinancial(whole.text, input.message, input.vocabulary, input.focus, social) && social.act) {
+    return {
+      kind: "reply", intent: "SMALL_TALK", status: "answered", text: socialReply(input.message, social), followUps: socialFollowUps(social),
+      lang: social.lang, focus: input.focus ? { ...input.focus, offer: undefined } : null,
+    };
+  }
+
+  // 4. Financial understanding. A casual opener ("kemon aso bro, …") becomes a short greeting before the answer.
+  const { opener, rest } = splitOpener(input.message);
+  const message = opener ? rest : input.message;
+  const u = opener ? understand(message, names) : whole;
+  const p = planFrom({ ...input, message }, u);
+  // Drill-downs remember the main question, so "Yesterday?" after "Which restaurants?" repeats the main question.
+  if (p.kind === "tools" && input.focus && DRILL_DOWNS.has(p.intent) && sameSubject(input.focus.filters, p.focus.filters))
+    p.focus.base = input.focus.base ?? { intent: input.focus.intent, operation: input.focus.operation, groupBy: input.focus.groupBy };
   const shown = understoodAs(u);
-  return shown && p.kind !== "unknown" ? { ...p, understoodAs: shown } : p;
+  const preface = opener ? openerPreface(opener) : undefined;
+  return { ...p, ...(shown && p.kind !== "unknown" ? { understoodAs: shown } : {}), ...(preface && p.kind !== "unknown" ? { preface } : {}) };
 }
 
-function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understanding): Plan {
-  const raw = message.trim();
-  // The planner reads the normalised text (other languages, slang and typos → canonical English); names and
-  // amounts are also read from the original text.
-  const t = u.text;
-  const lowerRaw = raw.toLowerCase();
+/** Money vocabulary (after normalisation, so Malay / Banglish / typos are already English). */
+const FINANCE = /\b(spend|spends|spent|spending|money|cost|costs|costing|paid|pay|paying|payment|payments|price|prices|expense|expenses|expensive|transaction|transactions|purchase|purchases|bought|buy|buying|budget\w*|saving|savings|save money|remember|forget|memor(y|ies)|rules?|preferences?|account|accounts|bank|wallet|bills?|receipts?|refunds?|income|salary|total|totals|merchants?|categor(y|ies)|summary|report|insights?|unusual|afford|owe|debt|loan|split|transfers?|ringgit|rm|finances?|financial|biggest|largest|smallest)\b|\bhow much\b|\bhow many\b/;
 
+/**
+ * Does the message say anything about money? Strong signals (money words, amounts, categories, merchants, accounts,
+ * payment channels) always count. Weak ones (a period, intent words like "compare"/"show") count unless the message
+ * is clearly addressed to SpenDrop socially ("how are you today?"). Follow-ups count when there is something to
+ * follow up on.
+ */
+export function isFinancial(t: string, raw: string, vocabulary: Vocabulary, focus: Focus | null, social: SocialReading): boolean {
+  const strong = has(t, FINANCE) || Boolean(extractAmount(raw) ?? extractAmount(t)) || Boolean(extractCategory(t)) || Boolean(extractChannel(t))
+    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND);
+  if (strong) return true;
+  const sociallyAddressed = social.act !== null && social.act !== "chitchat" && social.act !== "ack" && social.act !== "affirm" && social.act !== "deny";
+  if (sociallyAddressed) return false;
+  const weak = Boolean(extractPeriod(t, "2000-01-01")) || [INSIGHTS, SUMMARY, ACCOUNT_Q, CHANNEL_Q, CATEGORY_Q, MERCHANT_Q, BIGGEST, SMALLEST, UNUSUAL, COUNT, AVERAGE, CAUSE, NORMAL_Q, LIST, COMPARE, HOW_MUCH, FREQ, TREND_UP, TREND_DOWN, CONSUME, EXCESS, WASTE].some((re) => has(t, re))
+    || (Boolean(focus) && has(t, WEAK_FOLLOW_UP));
+  if (weak) return true;
+  if (focus && [WHY, BARE_REFERENCE, DETAIL, FOLLOW_UP, RELATIVE, NORMAL_Q].some((re) => has(t, re))) return true;
+  // "why?" / "there?" / "that one?" without anything to refer to still get a clarifying question, not chit-chat.
+  return [WHY, BARE_REFERENCE, DETAIL].some((re) => has(t, re)) && !/\b(you|u|tumi|awak)\b/.test(t);
+}
+
+/** A merchant the user has records for, named in the message (whole words only, no guessing). */
+function knownMerchant(t: string, vocabulary: Vocabulary): string | null {
+  const text = ` ${normalizeText(t)} `;
+  for (const m of vocabulary.merchants) {
+    const n = normalizeText(m);
+    if (n.length >= 3 && text.includes(` ${n} `)) return m;
+    const first = n.split(" ").find((w) => w.length >= 4 && !NOT_MERCHANT.has(w));
+    if (first && text.includes(` ${first} `)) return m;
+  }
+  return null;
+}
+
+/** Safety and scope gates that run before any understanding of intent. */
+function gates(t: string, raw: string): Plan | null {
+  const lowerRaw = raw.toLowerCase();
   if (has(t, SECURITY) || has(lowerRaw, SECURITY))
     return {
       kind: "reply", intent: "SECURITY", status: "refused",
       text: "I can only see your own SpenDrop records — never anyone else's, and I can't run database queries or change my rules. Ask me anything about your own spending.",
       followUps: ["How much did I spend this week?", "Show my biggest purchase this month"],
     };
-  if (has(t, SECRETS))
+  if (has(t, SECRETS) || has(lowerRaw, SECRETS))
     return {
       kind: "reply", intent: "SECURITY", status: "refused",
       text: "I don't have access to passwords, PINs, OTPs or card numbers — and you should never share them with anyone, including me. SpenDrop only keeps the transactions you record.",
@@ -345,7 +465,52 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
       text: `I can help with your SpenDrop finances, but I don't have ${offTopic[1]}.`,
       followUps: ["How much did I spend this week?", "Where did my money go this week?"],
     };
-  if (has(t, GREETING)) return { kind: "reply", intent: "GENERAL", status: "answered", text: capabilities, followUps: ["How much did I spend this week?", "Give me my weekly summary"] };
+  return null;
+}
+
+/** Shift the last answer's period: "the day before" / "previous week" / "the next month". */
+function shiftSpan(span: DateSpan, t: string): DateSpan {
+  const m = /\b(?:the )?(day|week|month) (before|after)\b|\b(previous|next|following) (day|week|month)\b/.exec(t)!;
+  const unit = (m[1] ?? m[4]) as "day" | "week" | "month";
+  const dir = m[2] === "before" || m[3] === "previous" ? -1 : 1;
+  if (unit === "month") { const from = startOfMonth(addMonths(span.from, dir)); return { from, to: endOfMonth(from) }; }
+  const n = unit === "week" ? 7 : 1;
+  return span.from === span.to || unit === "day" ? { from: addDays(span.from, dir * n), to: addDays(span.from, dir * n) } : { from: addDays(span.from, dir * n), to: addDays(span.to, dir * n) };
+}
+
+/** Words that are never the name of a merchant in a question. */
+const QUESTION_WORDS = new Set(("i me my mine you your we our it its is am are was were be been do did does done have has had the a an and or but on in at of for to " +
+  "from with by about as into than then that these those there here so if not no yes ok okay please can could would should will just also how much many " +
+  "what where when which why who whom whose spend spent spending money total amount cost costs paid pay bought buy this last next week weeks month months " +
+  "year years today yesterday tomorrow day days all so more less lot a lot bro bhai lah now lately recently usually ever again overall whole entire up down " +
+  "kemon kmn show list find search transactions transaction payments payment purchases purchase receipts receipt goes go went gone where number times time " +
+  "compare vs versus normal usual average both each every any some only really very too there their them they she he his her").split(" "));
+
+/** In a money question, a single unrecognised word is the subject the user is asking about ("shopee te koto gese"). */
+/** Everyday verbs / fillers that are never a merchant name on their own ("getting", "increasing", "lately"). */
+const NOT_A_NAME = new Set(["getting", "going", "keeps", "keep", "kept", "being", "doing", "looking", "lately", "recently", "really", "still", "always", "again", "anymore", "these", "days", "much", "more", "less", "lot"]);
+function unknownSubject(t: string, today: LocalDate): string | null {
+  const concepts = new RegExp(`${TREND_UP.source}|${TREND_DOWN.source}|${FREQ.source}`, "g");
+  const tokens = normalizeText(withoutIdioms(t).replace(concepts, " ")).split(" ").filter(Boolean);
+  const rest = tokens.filter((w) => !QUESTION_WORDS.has(w) && !NOT_A_NAME.has(w) && !/^\d/.test(w) && !extractPeriod(w, today) && !extractCategory(w) && !extractChannel(w)
+    && !MONTHS.some((m) => m.startsWith(w) && w.length >= 3) && !WEEKDAYS.some((d) => d.startsWith(w) && w.length >= 3));
+  return rest.length === 1 && rest[0].length >= 3 ? rest[0] : null;
+}
+
+const DRILL_DOWNS = new Set<Intent>(["INVESTIGATE", "MERCHANT_ANALYSIS", "TRANSACTION_DETAIL"]);
+/** The new question keeps every subject filter of the previous one (it may add more, e.g. Food for "restaurants"). */
+const sameSubject = (before: FocusFilters, after: FocusFilters) =>
+  (["category", "merchant", "fundingAccount", "paymentChannel"] as const).every((k) => before[k] === undefined || before[k] === after[k]);
+
+function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understanding): Plan {
+  const raw = message.trim();
+  // The planner reads the normalised text (other languages, slang and typos → canonical English); names and
+  // amounts are also read from the original text.
+  const t = u.text;
+
+  const gate = gates(t, raw);
+  if (gate) return gate;
+  if (has(t, HELP)) return { kind: "reply", intent: "GENERAL", status: "answered", text: capabilities, followUps: ["How much did I spend this week?", "Give me my weekly summary"] };
 
   // Personal rules and memory ("Grab is transport for me", "what do you remember?", "forget Grab")
   const memory = memoryPlan(raw, t);
@@ -354,8 +519,10 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // Entities
   const amount = extractAmount(raw) ?? extractAmount(t);
   const period = extractPeriod(t, today);
-  const categoryHit = extractCategory(t);
+  const plain = withoutIdioms(t);
+  const categoryHit = extractCategory(plain);
   const channelHit = extractChannel(t);
+  const channelFamilies = extractChannels(t);
   const accountHit = extractFundingAccount(t, vocabulary);
   const notes: string[] = [];
 
@@ -366,7 +533,8 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     const fromAccount = new RegExp(String.raw`\b(from|in|my)\s+${accountHit.word}\b|\b${accountHit.word}\s+(account|wallet|balance)\b`).test(normalizeText(t));
     if (fromAccount) channel = undefined; else fundingAccount = undefined;
   }
-  const merchantHit = extractMerchant(t, vocabulary, [accountHit?.word ?? "", channelHit?.word ?? "", categoryHit?.word ?? ""].filter(Boolean), raw);
+  const merchantHit = extractMerchant(plain, vocabulary, [accountHit?.word ?? "", channelHit?.word ?? "", categoryHit?.word ?? ""].filter(Boolean), raw)
+    ?? (has(t, HOW_MUCH) && !categoryHit && !channelHit && !accountHit ? (() => { const w = unknownSubject(plain, today); return w ? { merchant: w, word: w } : null; })() : null);
   const currencyWord = /\b(usd|sgd|gbp|eur|bdt|myr|ringgit)\b/.exec(t)?.[1];
   // A currency named on its own filters everything; the currency of an amount only applies to that amount.
   const currency = currencyWord ? CURRENCY_OF[currencyWord] : undefined;
@@ -381,17 +549,25 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     ...(channel ? (channelHit?.channels ? { paymentChannels: channelHit.channels } : { paymentChannel: channel }) : {}),
     ...(currency ? { currency } : {}),
   };
-  const hasEntities = Object.keys(entityFilters).length > 0 || Boolean(amount) || Boolean(period);
+  const hasEntities = Object.keys(entityFilters).length > 0 || Boolean(amount) || Boolean(period) || (Boolean(focus?.span) && has(t, RELATIVE));
 
   // Follow-ups reuse what the conversation is about: the previous filters only when the message names none of its
   // own, the previous period only when it names no period. "Show me my Starbucks purchases" is a new question.
   const namesFilters = Object.keys(entityFilters).length > 0 || Boolean(amount);
-  const isFollowUp = Boolean(focus) && (has(t, FOLLOW_UP) || raw.split(/\s+/).length <= 3 || (has(t, WEAK_FOLLOW_UP) && !namesFilters && !period));
+  // Follow-up = an explicit marker ("why", "and…", "what about"), something relative to the last answer ("the day
+  // before", "is that normal?"), a short "which…/show…", or a message that only names a period / subject with no
+  // question of its own ("Yesterday?", "food?"). A message with its own intent is a new question and inherits nothing.
+  const ownIntent = [HOW_MUCH, LIST, COMPARE, INSIGHTS, SUMMARY, ACCOUNT_Q, CHANNEL_Q, CATEGORY_Q, MERCHANT_Q, BIGGEST, SMALLEST, COUNT, AVERAGE, UNUSUAL].some((re) => has(t, re));
+  const refersBack = /\b(that|it|this|those)\b/.test(t) && !period;
+  const isFollowUp = Boolean(focus) && (has(t, FOLLOW_UP) || has(t, RELATIVE) || has(t, NORMAL_Q) || has(t, CAUSE)
+    || (has(t, FREQ) && !namesFilters) || ((has(t, TREND_UP) || has(t, TREND_DOWN)) && refersBack && !namesFilters)
+    || (has(t, WEAK_FOLLOW_UP) && t.split(/\s+/).length <= 4) || (!ownIntent && hasEntities));
   const baseFilters: FocusFilters = isFollowUp && focus && !namesFilters ? stripAmounts(focus.filters) : entityFilters;
-  const baseSpan: DateSpan | null = period?.span ?? (isFollowUp && focus ? focus.span : null);
+  const relative = focus?.span && has(t, RELATIVE) ? shiftSpan(focus.span, t) : null;
+  const baseSpan: DateSpan | null = period?.span ?? relative ?? (isFollowUp && focus ? focus.span : null);
 
   // Don't guess what a word means when the answer would change with the meaning.
-  if (has(t, AMBIGUOUS_SPEND)) {
+  if (has(t, AMBIGUOUS_SPEND) && (has(t, HOW_MUCH) || !(has(t, WASTE) && has(t, MONEY_WORD)) && !has(t, WASTE))) {
     const when = period ? period.label.toLowerCase() : "this month";
     return {
       kind: "reply", intent: "CLARIFY", status: "clarify",
@@ -415,12 +591,90 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     return { kind: "reply", intent: "TRANSACTION_DETAIL", status: "clarify", text: `I only showed ${focus.transactionIds.length} transaction${focus.transactionIds.length === 1 ? "" : "s"}. Which one do you mean?`, followUps: [] };
   }
 
+  // Bare references and "why?" need something to refer to: use the conversation, or ask.
+  if (has(t, BARE_REFERENCE)) {
+    if (focus?.filters.merchant) return replay(focus);
+    return { kind: "reply", intent: "CLARIFY", status: "clarify", text: "Which merchant, place or transaction do you mean?", followUps: [] };
+  }
+  // "Why?" explains a total or a comparison; after a lookup or with nothing to refer to, ask instead of guessing.
+  const whyNeedsSubject = !focus || focus.intent === "SEARCH" || focus.intent === "TRANSACTION_DETAIL" || focus.intent === "CLARIFY";
+  if (has(t, WHY) && whyNeedsSubject && !hasEntities && !has(t, INSIGHTS) && t.split(/\s+/).length <= 3)
+    return { kind: "reply", intent: "CLARIFY", status: "clarify", text: "Why what? Ask me about your spending first — for example “How much did I spend this week?” — and then ask why.", followUps: ["How much did I spend this week?", "Why am I spending so much lately?"] };
+
   const filterArgs = (f: FocusFilters) => ({
     ...(f.category ? { category: f.category } : {}), ...(f.merchant ? { merchant: f.merchant } : {}),
     ...(f.fundingAccount ? { fundingAccount: f.fundingAccount } : {}), ...(f.paymentChannel ? { paymentChannel: f.paymentChannel } : {}),
     ...(f.paymentChannels ? { paymentChannels: f.paymentChannels } : {}),
     ...(f.currency ? { currency: f.currency } : {}),
   });
+
+  // Payment channels compared ("card or qr?", "apple pay vs card", "do I mostly pay by card?") → channel families.
+  const comparesChannels = channelFamilies.length >= 2 || (channelFamilies.length === 1 && /\b(mostly|more|most|usually|prefer|or|vs|versus|compared)\b/.test(t) && !amount);
+  if (comparesChannels && !amount) {
+    const overall = channelFamilies.length === 1 && /\b(mostly|usually|prefer)\b/.test(t) && !period;
+    const s = overall ? null : baseSpan ?? thisMonth(today);
+    const members = channelFamilies.length >= 2 ? channelFamilies.flatMap((c) => c.channels) : undefined;
+    const f: FocusFilters = { ...baseFilters };
+    delete f.paymentChannel; delete f.paymentChannels;
+    return { ...tools("PAYMENT_CHANNEL_ANALYSIS", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "sum", groupBy: "channel_family", ...filterArgs(f), ...(members ? { paymentChannels: members } : {}) } }],
+      { intent: "PAYMENT_CHANNEL_ANALYSIS", filters: f, span: s, groupBy: "payment_channel" }, notes), style: { channelFamilies: channelFamilies.map((c) => c.family) } };
+  }
+
+  // "How often do I use Grab?", "koto bar?", "berapa kali?" → how many transactions (not "visits").
+  if (has(t, FREQ) && !amount) {
+    const s = baseSpan ?? thisMonth(today);
+    return { ...tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "count", ...filterArgs(baseFilters) } }],
+      { intent: "CALCULATE", filters: baseFilters, span: s, operation: "count" }, notes), style: { frequency: true } };
+  }
+
+  // Trend: "is my spending increasing?", "barche?", "komche naki?", "food er khoroch barche keno?"
+  const trend = has(t, TREND_UP) ? "up" : has(t, TREND_DOWN) ? "down" : null;
+  if (trend && !amount) {
+    const s = period?.span ?? (refersBack && focus?.span ? focus.span : null) ?? (isFollowUp && focus?.span ? focus.span : thisMonth(today));
+    const b = previousComparable(s, today);
+    const f = baseFilters;
+    if (has(t, WHY)) return tools("INVESTIGATE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "INVESTIGATE", filters: f, span: s, compareSpan: b }, notes);
+    return { ...tools("COMPARE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "COMPARE", filters: f, span: s, compareSpan: b }, notes), style: { askedDirection: trend } };
+  }
+
+  // Idioms about money: "what's eating up my money?", "my spending is getting out of hand", "am I wasting money?"
+  const consumes = has(t, CONSUME) && (has(t, MONEY_WORD) || /\bmy\b/.test(t));
+  const excess = has(t, EXCESS) && has(t, MONEY_WORD);
+  const wastes = has(t, WASTE) && !has(t, HOW_MUCH);
+  if ((consumes || excess || wastes) && !amount) {
+    if (wastes) notes.push("I can't tell which purchases you'd call wasted — this is what your records show.");
+    const asksWhere = /^(what|where|which)\b|\b(what|where)('?s| is| are| am| does| do| did)?\b/.test(t) && !/^(am|are|is|do|does)\b/.test(t);
+    if ((consumes || wastes) && asksWhere) {
+      const s = baseSpan ?? thisMonth(today);
+      return tools("CATEGORY_ANALYSIS", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "sum", groupBy: "category", ...filterArgs(baseFilters) } }],
+        { intent: "CATEGORY_ANALYSIS", filters: baseFilters, span: s, groupBy: "category" }, notes);
+    }
+    const preset = period && /week/.test(period.label.toLowerCase()) || /\bweek\b/.test(t) ? "this_week" : "this_month";
+    return tools("INSIGHTS", [{ tool: "get_spending_insights", args: { period: preset, ...filterArgs(namesFilters ? entityFilters : {}) } }],
+      { intent: "INSIGHTS", filters: namesFilters ? entityFilters : {}, span: presetSpan(preset, today) }, notes);
+  }
+
+  // "Was that higher than normal?" → the current subject against the user's own normal.
+  if (focus && has(t, NORMAL_Q) && !amount && focus.intent !== "SEARCH") {
+    const f = baseFilters;
+    const s = focus.span;
+    const unitOf = (span: DateSpan | null) => !span ? null : span.from === startOfWeek(today) ? "this_week" : span.from === startOfMonth(today) ? "this_month" : null;
+    const preset = unitOf(s);
+    if (preset) return tools("INSIGHTS", [{ tool: "get_spending_insights", args: { period: preset, ...filterArgs(f) } }], { intent: "INSIGHTS", filters: f, span: s }, notes);
+    // A past period has no "so far" baseline: compare it with the period just before, and say so.
+    const a = s ?? thisMonth(today);
+    const b = previousComparable(a, today);
+    return tools("COMPARE", [{ tool: "compare_periods", args: { periodA: spanArg(a), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "COMPARE", filters: f, span: a, compareSpan: b },
+      [...notes, "For a past period I compare it with the period just before it."]);
+  }
+
+  // "What's causing the increase?" → the drivers of the change in the current subject (or this month).
+  if (has(t, CAUSE) && !amount) {
+    const s = baseSpan ?? thisMonth(today);
+    const b = focus?.compareSpan && !period ? focus.compareSpan : previousComparable(s, today);
+    return tools("INVESTIGATE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(baseFilters) } }],
+      { intent: "INVESTIGATE", filters: baseFilters, span: s, compareSpan: b }, notes);
+  }
 
   // Unusual spending / "more than usual"
   if (has(t, UNUSUAL)) {
@@ -465,7 +719,11 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     const previous = (u: "week" | "month" | "year") => presetSpan(u === "week" ? "last_week" : u === "month" ? "last_month" : "last_year", today)!;
     let a: DateSpan;
     let b: DateSpan;
-    if (unit && /\b(this|current)\s+(week|month|year)\b/.test(t) && /\b(last|previous)\s+(week|month|year)\b/.test(t)) {
+    const withPrevious = unit && period && period.span.from === previous(unit).from && /\b(with|to|than|against|vs)\b/.test(t) && !/\b(this|current)\b/.test(t);
+    if (withPrevious && !(isFollowUp && focus?.span && focus.intent !== "SEARCH")) {
+      // "compare with last month" / "last month er shathe compare koro": this month so far vs the same days of last month
+      a = current(unit!); b = previousComparable(a, today);
+    } else if (unit && /\b(this|current)\s+(week|month|year)\b/.test(t) && /\b(last|previous)\s+(week|month|year)\b/.test(t)) {
       // "this month vs last month": fair comparison (same days of last month while this one is in progress)
       a = current(unit); b = previousComparable(a, today);
     } else if (isFollowUp && focus?.span && focus.intent !== "SEARCH") {
@@ -522,7 +780,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // Lookups and lists ("where did my RM15 go", "show my Shopee purchases")
   const lookup = Boolean(amount) && /\bwhere|\bwhat|\bfind|\bwhich|\bshow|\bremember|\bthat\b|\bpayment|\bpurchase|\btransaction|\bspent|\bspend|\bpaid|\bgo\b|\bwent\b/.test(t);
   if (lookup || (has(t, LIST) && !has(t, HOW_MUCH))) {
-    const f: FocusFilters = { ...baseFilters, ...(amount ? { amountMin: amount.min, amountMax: amount.max } : {}) };
+    const f: FocusFilters = { ...baseFilters, ...(amount ? { amountMin: amount.min, amountMax: amount.max, ...(amount.target !== null ? { targetAmount: amount.target } : {}) } : {}) };
     const search = (s: DateSpan | null) => ({
       period: spanArg(s), ...filterArgs(f),
       ...(amount ? { amountMin: amount.min, amountMax: amount.max } : {}),
@@ -533,7 +791,9 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
       sort: amount || period?.exactDay ? "relevance" : "date_desc",
       limit: amount ? 10 : 20,
     });
-    let s = baseSpan;
+    // A remembered amount is searched in its own default window — never inside the period of an unrelated earlier
+    // question ("15 rm where" after a weekly summary) unless the message is an explicit follow-up ("and RM20?").
+    let s = amount ? period?.span ?? (has(t, FOLLOW_UP) ? baseSpan : null) : baseSpan;
     const expansions: { args: Record<string, unknown>; note: string }[] = [];
     if (amount && !s) {
       const named = f.merchant || f.category || f.fundingAccount || f.paymentChannel;
@@ -545,10 +805,14 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     }
     if (amount && amount.target !== null) {
       // Widen the amount a little if the remembered amount was off.
-      const wide = extractAmount(raw.replace(amount.text, `around ${amount.text}`));
-      if (wide && wide.min < amount.min) expansions.push({ args: { ...search(s), amountMin: wide.min, amountMax: wide.max }, note: `Nothing between ${fmt(amount.min, currency)} and ${fmt(amount.max, currency)}, so I widened the amount range.` });
+      // Widen numerically with the "approximate" tolerance (independent of how the amount was typed: RM15 / 15 rm).
+      const targetMinor = Math.round(amount.target * 100);
+      const delta = Math.max(AMOUNT_TOLERANCE.approximate.minMinor, Math.round(targetMinor * AMOUNT_TOLERANCE.approximate.ratio));
+      const wide = { min: Math.max(0, targetMinor - delta) / 100, max: (targetMinor + delta) / 100 };
+      if (wide.min < amount.min) expansions.push({ args: { ...search(s), amountMin: wide.min, amountMax: wide.max }, note: `Nothing between ${fmt(amount.min, currency)} and ${fmt(amount.max, currency)}, so I widened the amount range.` });
     }
-    return { ...tools("SEARCH", [{ tool: "search_transactions", args: search(s) }], { intent: "SEARCH", filters: f, span: s }, notes, expansions), style: { detailIfSingle: Boolean(amount) } };
+    const offer = amount && s ? { args: search(null), label: "Yes, search all my transactions" } : undefined;
+    return { ...tools("SEARCH", [{ tool: "search_transactions", args: search(s) }], { intent: "SEARCH", filters: f, span: s }, notes, expansions), style: { detailIfSingle: Boolean(amount) }, ...(offer ? { offer } : {}) };
   }
 
   // "What about last month?", "and Grab?" → repeat the previous question with only what was named changed.
@@ -571,9 +835,12 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   const general = !hasEntities && /\b(what is|what's|how (do|can|should) i|explain|tips?|advice|budget(ing)?|save|saving|invest)\b/.test(t);
   return { kind: "unknown", general };
 
-  function replay(f: Focus): Plan {
+  function replay(focusNow: Focus): Plan {
+    // Drill-downs repeat the main question they came from; the subject filters come from the latest answer.
+    const f: Focus = focusNow.base ? { ...focusNow, ...focusNow.base } : focusNow;
     const s = period?.span ?? f.span;
-    const kept = stripAmounts(f.filters);
+    const lookup = f.intent === "SEARCH" && f.filters.amountMin !== undefined;
+    const kept = lookup && !amount ? { ...f.filters } : stripAmounts(f.filters);
     if (entityFilters.merchant || entityFilters.category) { delete kept.merchant; delete kept.category; }
     if (entityFilters.paymentChannel || entityFilters.paymentChannels) { delete kept.paymentChannel; delete kept.paymentChannels; }
     const filters: FocusFilters = { ...kept, ...entityFilters };
@@ -590,9 +857,23 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
       }
       case "UNUSUAL_SPENDING":
         return tools("UNUSUAL_SPENDING", [{ tool: "find_unusual_spending", args: { period: spanArg(s ?? presetSpan("this_week", today)) } }], { intent: "UNUSUAL_SPENDING", filters: {}, span: s }, notes);
-      case "SEARCH": case "TRANSACTION_DETAIL":
+      case "SEARCH": case "TRANSACTION_DETAIL": {
+        if (lookup && !amount) {
+          // "Where did my RM15 go?" → "Yesterday?": still looking for RM15, now on that day.
+          const searchArgs = (span: DateSpan | null) => ({
+            period: spanArg(span), ...args, amountMin: filters.amountMin, amountMax: filters.amountMax,
+            ...(filters.targetAmount !== undefined ? { targetAmount: filters.targetAmount } : {}),
+            ...(span && span.from === span.to ? { targetDate: span.from } : {}), sort: "relevance", limit: 10,
+          });
+          const offer = s ? { args: searchArgs(null), label: "Yes, search all my transactions" } : undefined;
+          return { ...tools("SEARCH", [{ tool: "search_transactions", args: searchArgs(s) }], { intent: "SEARCH", filters, span: s }, notes), style: { detailIfSingle: true }, ...(offer ? { offer } : {}) };
+        }
         return tools("SEARCH", [{ tool: "search_transactions", args: { period: spanArg(s), ...args, sort: "date_desc", limit: 20 } }], { intent: "SEARCH", filters, span: s }, notes);
+      }
       case "INSIGHTS":
+        // Insights are about the current week / month; any other period ("yesterday?") is answered as a total.
+        if (s && s.from !== startOfWeek(today) && s.from !== startOfMonth(today))
+          return tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "sum", ...args } }], { intent: "CALCULATE", filters, span: s, operation: "sum" }, notes);
         return tools("INSIGHTS", [{ tool: "get_spending_insights", args: { period: s && s.to.slice(0, 7) !== s.from.slice(0, 7) ? "this_week" : "this_month", ...args } }], { intent: "INSIGHTS", filters, span: s }, notes);
       default: {
         if (f.groupBy) {
@@ -617,6 +898,10 @@ function memoryPlan(raw: string, t: string): Plan | null {
     const subject = forget![1].trim();
     return { kind: "memory", action: "forget", subject: /^(everything|all|all (my )?(rules|preferences|memories)|it all)$/.test(subject) ? null : subject.replace(/['"]/g, "") };
   }
+  const lookup = /^(?:what|which)\s+(?:category|type)\s+(?:is|does)\s+(.+?)(?:\s+(?:for me|in my case|count as|go under|belong to))*\??$/.exec(lower)
+    ?? /^(.+?)\s+is\s+what\s+category(?:\s+for me)?\??$/.exec(lower)
+    ?? /^(?:is|does)\s+(.+?)\s+(?:count as|go under|belong to)\s+\w+(?:\s+for me)?\??$/.exec(lower);
+  if (lookup) return { kind: "memory", action: "lookup", subject: lookup[1].replace(/['"]/g, "").trim() };
   if (/\btransfers?\b.*\b(own|my|between)\b.*\b(not|aren'?t|isn'?t|never|shouldn'?t)\b.*\b(expenses?|spending)\b/.test(lower))
     return {
       kind: "reply", intent: "PERSONAL_RULE", status: "answered",
@@ -650,7 +935,7 @@ function tools(intent: Intent, steps: PlanStep[], focus: Focus, notes: string[],
 }
 
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
-const stripAmounts = (f: FocusFilters): FocusFilters => { const { amountMin: _a, amountMax: _b, ...rest } = f; return rest; }; // eslint-disable-line @typescript-eslint/no-unused-vars
+const stripAmounts = (f: FocusFilters): FocusFilters => { const { amountMin: _a, amountMax: _b, targetAmount: _t, ...rest } = f; return rest; }; // eslint-disable-line @typescript-eslint/no-unused-vars
 const fmt = (major: number, currency?: string) => `${currency ? currencyKey(currency) : "RM"} ${major.toFixed(2)}`;
 
 export const CAPABILITIES_TEXT = capabilities;

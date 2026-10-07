@@ -18,7 +18,7 @@ export interface AiContext {
 export type Intent =
   | "SEARCH" | "CALCULATE" | "COMPARE" | "INVESTIGATE" | "SUMMARY" | "ACCOUNT_ANALYSIS" | "PAYMENT_CHANNEL_ANALYSIS"
   | "MERCHANT_ANALYSIS" | "CATEGORY_ANALYSIS" | "UNUSUAL_SPENDING" | "TRANSACTION_DETAIL" | "INSIGHTS" | "PERSONAL_RULE" | "MEMORY"
-  | "CLARIFY" | "OUT_OF_SCOPE" | "GENERAL" | "SECURITY" | "UNKNOWN";
+  | "CLARIFY" | "OUT_OF_SCOPE" | "SMALL_TALK" | "GENERAL" | "SECURITY" | "UNKNOWN";
 
 export type Confidence = "HIGH" | "MEDIUM" | "LOW" | "NO_MATCH";
 
@@ -85,6 +85,13 @@ export interface Focus {
   /** How the last answer was calculated, so "what about last month?" can repeat it with only the period changed. */
   operation?: "sum" | "count" | "average";
   groupBy?: "category" | "merchant" | "funding_account" | "payment_channel";
+  /**
+   * The main question a drill-down came from ("How much on Food this week?" → "Why?" → "Which restaurants?"): a later
+   * "Yesterday?" repeats the main question for the new period, not the drill-down.
+   */
+  base?: { intent: Intent; operation?: "sum" | "count" | "average"; groupBy?: "category" | "merchant" | "funding_account" | "payment_channel" };
+  /** An offer made in the last answer ("search all your transactions?"), accepted by "yes" / "okay". */
+  offer?: { args: Record<string, unknown>; label: string };
 }
 
 export interface FocusFilters {
@@ -96,6 +103,8 @@ export interface FocusFilters {
   currency?: string;
   amountMin?: number;
   amountMax?: number;
+  /** The amount the user remembers (lookups), so "Yesterday?" keeps looking for it. */
+  targetAmount?: number;
   keyword?: string;
 }
 
@@ -121,6 +130,8 @@ export interface AskAnswer {
   confidence?: Confidence;
   /** How SpenDrop read an informal / other-language / misspelt question ("how much spent food this week"). */
   understoodAs?: string;
+  /** A short greeting when the question opened casually ("kemon aso bro, …" → "Bhalo achi 😄"). Never contains figures. */
+  preface?: string;
   /** A data-based observation beyond the direct answer ("That's RM96 more than your usual week"). */
   insight?: string;
   /** An optional, evidence-based suggestion (never advice). */

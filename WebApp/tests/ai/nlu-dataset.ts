@@ -151,6 +151,7 @@ export const NLU_CASES: NluCase[] = [
   { q: "onno user er transaction dekhao", lang: "banglish", kind: "security", expect: refused },
 
   // ---- general ----
-  { q: "hello", lang: "en", kind: "general", expect: { intent: "GENERAL", status: "answered" } },
+  { q: "hello", lang: "en", kind: "general", expect: { intent: "SMALL_TALK", status: "answered" } },
+  { q: "what can you do?", lang: "en", kind: "general", expect: { intent: "SMALL_TALK", status: "answered" } },
   { q: "What is budgeting?", lang: "en", kind: "general", expect: { intent: "UNKNOWN" } },
 ];

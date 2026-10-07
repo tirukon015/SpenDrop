@@ -32,7 +32,14 @@ const PHRASES: [RegExp, string, Understanding["languages"][number]][] = [
   [/\b(eto|etto|onek)\s+beshi\b/g, "so much", "bn-latn"],
   [/\bonno\s+(user|lok|manush)(er)?\b/g, "other users", "bn-latn"],
   [/\b(er\s+)?(pichone|pichhone|jonno|jonne)\b/g, " on ", "bn-latn"],
-  // Malay
+  // Frequency ("koto bar", "kotobar", "berapa kali") → "how many times"
+  [/\b(koto|koy|kato)\s*bar\b|\bkotobar\b|\bkoybar\b/g, "how many times", "bn-latn"],
+  [/\bberapa\s+kali\b/g, "how many times", "ms"],
+  // Trend: "bere jacche / bere gese / beshi hocche" → increasing; "kome jacche / kom hocche" → decreasing
+  [/\bbere\s+(jacche|jacchhe|gese|geche|gelo|jay)\b|\bbeshi\s+(hocche|hoche|hoitese|hoye jacche)\b/g, "increasing", "bn-latn"],
+  [/\bkome\s+(jacche|gese|geche|gelo)\b|\bkom\s+(hocche|hoche|hoitese)\b/g, "decreasing", "bn-latn"],
+  // Malay ("apa khabar" is "how are you" — not the Banglish "khabar" = food)
+  [/\bapa\s+khabar\b/g, "how are you", "ms"],
   [/\bminggu\s+(ini|ni)\b/g, "this week", "ms"],
   [/\bminggu\s+(lepas|lalu|sudah)\b/g, "last week", "ms"],
   [/\bbulan\s+(ini|ni)\b/g, "this month", "ms"],
@@ -49,6 +56,8 @@ const PHRASES: [RegExp, string, Understanding["languages"][number]][] = [
   // English slang / informal
   [/\b(money|cash|duit|taka)\s+(gone|went)\b/g, "spent", "en"],
   [/\b(eating|eat)\s+out\b/g, "food", "en"],
+  // "eating up / into / away" is an idiom about money, not food
+  [/\beating(?=\s+(up|into|away|through)\b)/g, "eats", "en"],
   [/\bhow\s+much\s+money\b/g, "how much", "en"],
 ];
 
@@ -71,12 +80,40 @@ const WORDS: Record<string, [string, Understanding["languages"][number]]> = {
   kenapa: ["why", "ms"], tunjuk: ["show", "ms"], tunjukkan: ["show", "ms"], lebih: ["more", "ms"], kurang: ["less", "ms"],
   cuaca: ["weather", "ms"], esok: ["tomorrow", "ms"], guna: ["using", "ms"], pakai: ["using", "ms"], transaksi: ["transactions", "ms"], adakah: ["", "ms"],
   hocche: ["", "bn-latn"], hoche: ["", "bn-latn"], ta: ["", "bn-latn"],
-  duit: ["money", "ms"], wang: ["money", "ms"], semalam: ["yesterday", "ms"], ni: ["", "ms"], ke: ["", "ms"], dah: ["", "ms"], sudah: ["", "ms"],
+  duit: ["money", "ms"], banyak: ["a lot", "ms"], dengan: ["with", "ms"], banding: ["compare", "ms"], bandingkan: ["compare", "ms"],
+  koi: ["where", "bn-latn"], kemon: ["how", "bn-latn"], kmn: ["how", "bn-latn"], oi: ["that", "bn-latn"], kal: ["yesterday", "bn-latn"], jay: ["goes", "bn-latn"], jacche: ["goes", "bn-latn"],
+  shathe: ["with", "bn-latn"], sathe: ["with", "bn-latn"], songe: ["with", "bn-latn"], taka: ["money", "bn-latn"], naki: ["", "bn-latn"], wang: ["money", "ms"], semalam: ["yesterday", "ms"], ni: ["", "ms"], ke: ["", "ms"], dah: ["", "ms"], sudah: ["", "ms"],
   // English slang, filler and abbreviations
   burn: ["spend", "en"], burned: ["spent", "en"], burnt: ["spent", "en"], blew: ["spent", "en"], blow: ["spend", "en"], splurged: ["spent", "en"],
-  dropped: ["spent", "en"], wk: ["week", "en"], wks: ["weeks", "en"], mth: ["month", "en"], mnth: ["month", "en"], yday: ["yesterday", "en"],
+  dropped: ["spent", "en"], wk: ["week", "en"], wks: ["weeks", "en"], mth: ["month", "en"], mnth: ["month", "en"], yday: ["yesterday", "en"], yesday: ["yesterday", "en"], yestday: ["yesterday", "en"], ystrdy: ["yesterday", "en"], ystday: ["yesterday", "en"],
   tdy: ["today", "en"], u: ["you", "en"], ur: ["your", "en"], pls: ["", "en"], plz: ["", "en"], bro: ["", "en"], bruh: ["", "en"], dude: ["", "en"],
   lah: ["", "ms"], la: ["", "ms"], leh: ["", "ms"], meh: ["", "ms"], yaar: ["", "en"], eating: ["food", "en"], grub: ["food", "en"],
+};
+
+// Word stems (Banglish verb forms, Malay affixes): one rule covers every conjugation ("uraisi", "uraitesi",
+// "urailam"…). Applied to single words that the tables above don't already cover.
+const STEMS: [RegExp, string, Understanding["languages"][number]][] = [
+  [/^urai\w*$|^ura(chi|cchi|tesi|lam|si)$/, "spent", "bn-latn"],
+  // bar- / bere = increase, kom- = decrease ("barche", "barse", "bartese", "komche", "komse")
+  [/^bar(che|chhe|ce|se|tese|tesi|techhe|lo|e|bo)$/, "increasing", "bn-latn"],
+  [/^kom(che|chhe|ce|se|tese|tesi|techhe|lo)$/, "decreasing", "bn-latn"],
+  [/^(naik|meningkat|bertambah)$/, "increasing", "ms"],
+  [/^(turun|menurun|berkurang|merosot)$/, "decreasing", "ms"],
+  [/^khoro?ch\w*$/, "spent", "bn-latn"],
+  [/^ge(lo|che|se|silo|chilo|chhe)$/, "spent", "bn-latn"],
+  [/^kin(lam|chi|si|ecchi|echi|tesi|techi|bo|e|li)$/, "bought", "bn-latn"],
+  [/^di(yechi|chi|lam|si|yesi|ye|tesi)$/, "paid", "bn-latn"],
+  [/^kor(chi|si|tesi|techi|lam|bo|ben|o|chen|cho|te|e|eci|echi|eso)$/, "", "bn-latn"],
+  [/^h(o|oy)(ise|yeche|eche|cche|che|lo|ilo|ye|ycha|oyeche|sse)$/, "", "bn-latn"],
+  [/^habis\w*$|^berbelanja$/, "spent", "ms"],
+  [/^(beli|membeli|dibeli)$/, "bought", "ms"],
+  [/^(bayar|membayar|dibayar)$/, "paid", "ms"],
+];
+
+/** Short typos and abbreviations (edit-distance correction only touches words of 4+ letters). */
+const SHORT: Record<string, string> = {
+  fod: "food", fud: "food", mch: "much", muc: "much", wht: "what", wat: "what", wek: "week", wik: "week", hw: "how", yr: "year", mnt: "month", mont: "month",
+  mnth: "month", lst: "last", wich: "which", whch: "which", spnd: "spend", spnt: "spent", shw: "show", sho: "show", hwo: "how", tdy: "today", tmrw: "tomorrow",
 };
 
 // Bengali script (a few common words).
@@ -156,13 +193,19 @@ export function understand(message: string, names: string[] = []): Understanding
   const out = t.split(/(\s+|[?!.,;:()]+)/).map((token) => {
     const w = token.trim();
     if (!w || !/^[\p{L}][\p{L}-]*$/u.test(w)) return token;
+    const short = SHORT[w];
+    if (short) { corrections.push({ from: w, to: short }); return short; }
+    const stem = WORDS[w] ? undefined : STEMS.find(([re]) => re.test(w));
+    if (stem) { translations.push({ from: w, to: stem[1] || "(ignored)" }); languages.add(stem[2]); return stem[1]; }
     const mapped = WORDS[w];
     if (mapped) {
       if (mapped[0] !== w) { translations.push({ from: w, to: mapped[0] || "(ignored)" }); languages.add(mapped[1]); }
       return mapped[0];
     }
-    if (known.has(w) || w.length < 3) return token;
-    const max = w.length <= 5 ? 1 : 2;
+    // Edit-distance correction only for words of 5+ letters: shorter ones are too often real words ("who" ≠ "why",
+    // "junk" ≠ "june"); common short typos are in SHORT instead.
+    if (known.has(w) || w.length < 5) return token;
+    const max = w.length <= 6 ? 1 : 2;
     let best: string | null = null;
     let bestD = max + 1;
     for (const candidate of targets) {

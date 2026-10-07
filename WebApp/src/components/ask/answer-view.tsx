@@ -143,7 +143,8 @@ function splitAnswer(text: string): [string, string] {
 export function AnswerView({ answer, onFollowUp, debug }: { answer: AskAnswer; onFollowUp: (q: string) => void; debug?: boolean }) {
   const [showDetails, setShowDetails] = useState(false);
   const [why, setWhy] = useState(false);
-  const count = answer.evidence.reduce((max, e) => Math.max(max, e.transactionCount), 0);
+  // "Based on N" describes the answer's own dataset (the first evidence), never a supporting lookup's history.
+  const count = answer.evidence[0]?.transactionCount ?? 0;
   const chip = STATUS_CHIP[answer.status];
   const [lead, rest] = splitAnswer(answer.text);
   // The block that IS the answer stays visible (a figure, a comparison, findings, or the matches of a lookup);
@@ -161,6 +162,7 @@ export function AnswerView({ answer, onFollowUp, debug }: { answer: AskAnswer; o
           {chip.label}
         </span>
       )}
+      {answer.preface && <p className="text-[15px]">{answer.preface}</p>}
       {answer.understoodAs && <p className="text-xs italic text-label-2">I read this as “{answer.understoodAs}”</p>}
       <div className={cx("leading-relaxed", answer.status === "error" && "text-red")}>
         <p className="whitespace-pre-line text-[16px] font-semibold">{lead}</p>
