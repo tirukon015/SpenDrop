@@ -78,11 +78,44 @@ Open the `Android/` folder in Android Studio to run and debug.
 3. `~/Library/Android/sdk/platform-tools/adb devices` must list the phone as `device`.
 4. `adb install -r release/SpenDrop-debug.apk` then open SpenDrop.
 
+## Permissions (and testing them with ADB)
+
+| Permission | Type | Why |
+|---|---|---|
+| `android.permission.INTERNET` | install-time, auto-granted | sign-in, sync, cloud backup |
+| `android.permission.CAMERA` | **runtime**, asked when you tap *Take Photo of Receipt* | in-app receipt camera |
+| `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` | install-time, added by WorkManager | daily cloud backup job |
+
+Screenshots, photos and PDFs need **no** permission (photo picker, file picker, share sheet). App info → Permissions therefore lists only **Camera**. In-app: More → Settings → **Permissions & Access**.
+
+```bash
+ADB=~/Library/Android/sdk/platform-tools/adb
+PKG=com.spendrop.app.debug                       # release build: com.spendrop.app
+cd Android && ./gradlew assembleDebug            # 1. build
+$ADB devices                                     #    phone must show as "device"
+$ADB install -r app/build/outputs/apk/debug/app-debug.apk   # 2. install (keeps data)
+$ADB shell pm list packages | grep spendrop      # 3. installed package
+$ADB shell dumpsys package $PKG | sed -n '/requested permissions:/,/install permissions:/p'   # 4. declared
+$ADB shell dumpsys package $PKG | grep "android.permission.CAMERA:"   # 7. state: granted=true/false + flags
+$ADB shell pm revoke $PKG android.permission.CAMERA                   # 5. reset (runtime permissions only)
+$ADB shell pm clear-permission-flags $PKG android.permission.CAMERA user-set user-fixed   # forget "Don't ask again"
+$ADB shell pm grant $PKG android.permission.CAMERA                    #    grant without the dialog (testing)
+$ADB shell am start -n $PKG/com.spendrop.app.MainActivity             # 6. launch
+```
+
+`pm grant` / `pm revoke` only work for runtime permissions (here: CAMERA). INTERNET and the other install-time permissions are always granted and can't be changed. After `pm revoke`, SpenDrop shows the camera as not allowed and asks again on the next use. `pm clear-permission-flags … user-fixed` undoes a "Don't ask again" for testing.
+
 ## How sharing works (Share Target)
 
 SpenDrop registers for the Android share sheet (`ShareActivity`) for `image/*`, `application/pdf` and `text/plain`, single or multiple, plus "Open with" for images and PDFs. It never watches screenshot folders and needs **no storage permission**: Android hands over a temporary content URI, which SpenDrop copies into its private cache immediately. This works with every gallery and file manager (Samsung, Xiaomi, OPPO, Vivo, Pixel, Tecno…). Shared content opens a review screen on top of the app you shared from; after saving you're back where you were, and any unsaved form in SpenDrop itself is left alone.
 
+Sharing two or more images opens **Bulk Import** (below).
+
 In the app, Home → scan icon → "Screenshot or Photo" (Android photo picker) or "PDF or File" (file picker) does the same without sharing.
+
+## Bulk Screenshot Import
+
+Home → scan icon → **Bulk Import Screenshots** (or pick 2+ screenshots, or share 2+ images to SpenDrop). Up to 30 screenshots are read on the phone, two at a time. Each payment becomes its own normal draft (a bank-history screenshot gives one per row); possible duplicates (already saved, or twice in the batch) are skipped unless you choose Add Anyway or Merge. Tap a card to open the full transaction form, including Split Money. **Add N Transactions** saves each one separately, with its own screenshot as the receipt. Rules: `../Common/BusinessRules/bulk-import.md`.
 
 ## Release signing
 

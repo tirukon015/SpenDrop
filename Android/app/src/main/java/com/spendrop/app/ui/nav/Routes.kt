@@ -29,4 +29,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class RestoreRangeRoute(val source: String, val backupId: String? = null)
 @Serializable object ParserSelfTestRoute
 /** In-app import: the review flow for files the user picked (held by ImportCoordinator). */
-@Serializable object ImportRoute
+@Serializable data class ImportRoute(val fromCamera: Boolean = false)
+/** Bulk Screenshot Import: many screenshots → separate transactions in one review queue. */
+@Serializable object BulkImportRoute
+@Serializable object ReceiptCameraRoute
+@Serializable object PermissionsRoute

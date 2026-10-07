@@ -6,6 +6,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -138,7 +140,6 @@ fun TransactionEditorScreen(
     }
     LaunchedEffect(st.saved) { if (st.saved) onSaved() }
     var confirmDiscard by remember { mutableStateOf(false) }
-    var picker by remember { mutableStateOf<String?>(null) } // "split", "payer", "movement"
     val dirty = st.loaded && (st.amountText.isNotEmpty() || st.merchant.isNotEmpty() || st.isReview) && !st.saved
     BackHandler(enabled = dirty) { confirmDiscard = true }
 
@@ -154,68 +155,7 @@ fun TransactionEditorScreen(
     }) { padding ->
         if (!st.loaded || s == null) return@SDScreen
         Column(Modifier.padding(padding).imePadding().verticalScroll(rememberScrollState())) {
-            if (st.isReview) ReviewBanner(st)
-            // Record type
-            if (st.editingExpenseId == null && st.editingMovementId == null) {
-                val types = if (st.isReview) listOf(TransactionEntryType.EXPENSE, TransactionEntryType.MONEY_IN, TransactionEntryType.MONEY_OUT) else TransactionEntryType.entries
-                Segmented(types, st.entryType, { it.title }, vm::setEntryType)
-                if (st.isReview) {
-                    val p = st.parsed!!
-                    val caption = if (p.suggestedMovementKind == MoneyMovementKind.OWN_TRANSFER) "Looks like a top-up between your own accounts. Record it as a Transfer from Add → Transfer."
-                    else p.directionReason?.let { "Suggested from the screenshot: $it. Please confirm." }
-                    caption?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 16.dp)) }
-                }
-            }
-            if (st.isReview && st.imageFile != null) ScreenshotThumb(st)
-            AmountCard(st, onAmount = vm::setAmount, showQuick = !st.isReview && st.editingExpenseId == null && st.editingMovementId == null)
-            if (st.isReview) PossibleAmounts(st, vm::setAmount)
-
-            if (st.isExpense) ExpenseFields(st, s, vm, onPickPayBook = { picker = "merchant" })
-            else MovementFields(st, s, vm, onPickPerson = { picker = "movement" })
-
-            SectionHeader("Date & time")
-            SDCard(padding = 12.dp) { DateTimeField(st.date, { d -> vm.update { it.copy(date = d) } }, "Transaction time") }
-            SectionHeader(if (st.isExpense) "Description" else "Note", trailing = { Text("Optional", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel) })
-            SDCard(padding = 12.dp) {
-                OutlinedTextField(
-                    if (st.isExpense) st.notes else st.movement.note,
-                    { t -> vm.update { if (it.isExpense) it.copy(notes = t) else it.copy(movement = it.movement.copy(note = t)) } },
-                    placeholder = { Text(if (st.isExpense) "e.g. Lunch with team, monthly groceries" else "Add a note") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            if (st.isExpense) {
-                SectionHeader("Split money")
-                SDCard {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Group, null, tint = SD.colors.blue); Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Split Transaction", fontWeight = FontWeight.SemiBold)
-                            Text("Share this amount with people in PayBook", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
-                        }
-                        Switch(st.split != null, vm::setSplitEnabled)
-                    }
-                    val split = st.split
-                    if (split != null) {
-                        SplitSection(split, st.amountMinor, st.currency, s.people, SplitDraft.lastTimeSuggestion(st.merchant, s, st.editingExpenseId),
-                            onChange = { d -> vm.update { it.copy(split = d) } }, onPickPerson = { forPayer -> picker = if (forPayer) "payer" else "split" },
-                            onRemoveSplit = { vm.setSplitEnabled(false) })
-                    } else {
-                        TextButton(onClick = vm::setPaidForSomeone, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Column {
-                                Text("Paid for Someone", fontWeight = FontWeight.SemiBold)
-                                Text("You paid for them, or they paid for you", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
-                            }
-                        }
-                    }
-                }
-            }
-            st.splitProblem?.takeIf { st.isExpense && st.amountMinor > 0 }?.let { /* shown inside the split section */ }
-            if (!st.isExpense) {
-                val issues = st.movement.copy(amountText = st.amountText, date = st.date).issues
-                if (issues.isNotEmpty() && st.amountText.isNotEmpty()) Text(issues.first().message, color = SD.colors.orange, modifier = Modifier.padding(16.dp))
-            }
+            TransactionEditorFields(container, vm, st, s)
             Button(
                 onClick = { vm.onSave(context) }, enabled = st.isValid && !st.saving,
                 modifier = Modifier.fillMaxWidth().padding(16.dp).height(52.dp).testTag("saveButton"), shape = RoundedCornerShape(Radius.field),
@@ -245,28 +185,6 @@ fun TransactionEditorScreen(
         }
     }
 
-    // Pickers
-    val people = s?.people.orEmpty()
-    when (picker) {
-        "split", "payer", "movement", "merchant" -> PersonPickerSheet(
-            people, exclude = if (picker == "split") st.split?.participants?.mapNotNull { it.person?.id }.orEmpty().toSet() else emptySet(),
-            onDismiss = { picker = null },
-        ) { person, isNew ->
-            val which = picker
-            picker = null
-            scope.launch {
-                if (isNew) container.repository.apply(Changes(people = listOf(person)))
-                vm.update {
-                    when (which) {
-                        "split" -> it.copy(split = (it.split ?: SplitDraft()).add(person))
-                        "payer" -> it.copy(split = (it.split ?: SplitDraft()).setPayer(person))
-                        "movement" -> it.copy(movement = it.movement.copy(person = person))
-                        else -> it.copy(merchant = person.name)
-                    }
-                }
-            }
-        }
-    }
     if (confirmDiscard) ConfirmDialog(
         if (st.isReview) "Discard this import?" else "Discard changes?", "Nothing will be saved.", "Discard", destructive = true,
         onConfirm = onClose, onDismiss = { confirmDiscard = false }, dismissText = "Keep Editing",
@@ -345,27 +263,33 @@ fun ImageViewerDialog(file: java.io.File?, onDismiss: () -> Unit) {
 @Composable
 private fun AmountCard(st: EditorState, onAmount: (String) -> Unit, showQuick: Boolean) {
     Column(
-        Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(SD.colors.card).padding(vertical = 16.dp),
+        Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(SD.colors.card)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("ENTER AMOUNT", style = SD.sectionHeader, color = SD.colors.secondaryLabel)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(st.currency, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = SD.colors.secondaryLabel)
+        Spacer(Modifier.height(6.dp))
+        // Currency and number share one baseline and stay centred together as the number grows.
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            Text(st.currency, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = SD.colors.secondaryLabel, modifier = Modifier.alignByBaseline())
             Spacer(Modifier.width(6.dp))
             BasicTextField(
                 value = st.amountText,
                 onValueChange = { t -> if (t.all { it.isDigit() || it == '.' || it == ',' } && t.count { it == '.' } <= 1) onAmount(t) },
-                textStyle = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = SD.colors.label, textAlign = TextAlign.Center),
+                textStyle = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = SD.colors.label),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true, cursorBrush = SolidColor(SD.colors.blue),
-                modifier = Modifier.width(220.dp).testTag("amount").semantics { contentDescription = "Amount" },
-                decorationBox = { inner -> Box(contentAlignment = Alignment.Center) { if (st.amountText.isEmpty()) Text("0.00", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = SD.colors.tertiaryLabel); inner() } },
+                modifier = Modifier.alignByBaseline().width(IntrinsicSize.Min).widthIn(min = 40.dp, max = 240.dp).testTag("amount").semantics { contentDescription = "Amount" },
+                decorationBox = { inner -> Box { if (st.amountText.isEmpty()) Text("0.00", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = SD.colors.tertiaryLabel, maxLines = 1, softWrap = false); inner() } },
             )
         }
-        if (st.amountMinor == 0L) Text("Enter amount to save", style = MaterialTheme.typography.labelSmall, color = SD.colors.red)
-        if (showQuick) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        if (st.amountMinor == 0L) Text("Enter amount to save", style = MaterialTheme.typography.labelSmall, color = SD.colors.red, modifier = Modifier.padding(top = 4.dp))
+        if (showQuick) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             listOf(5L, 10L, 20L, 50L).forEach { inc ->
-                AssistChip(onClick = { onAmount(Money.plain(st.amountMinor + inc * 100)) }, label = { Text("+${st.currency}$inc") })
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { onAmount(Money.plain(st.amountMinor + inc * 100)) }, modifier = Modifier.weight(1f).height(40.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), shape = RoundedCornerShape(Radius.control),
+                ) { Text("+${st.currency}$inc", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelLarge) }
             }
         }
     }
@@ -376,7 +300,7 @@ private fun PossibleAmounts(st: EditorState, onAmount: (String) -> Unit) {
     val candidates = st.parsed?.amountCandidates.orEmpty().filter { !it.semanticType.isExcludedFromTransactionAmount }
         .distinctBy { it.amountMinor }
     if (candidates.size <= 1) return
-    Text("POSSIBLE AMOUNTS", style = SD.sectionHeader, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp))
+    Text("POSSIBLE AMOUNTS", style = SD.sectionHeader, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 32.dp))
     ChipRow(candidates, { Money.parseMinor(st.amountText) == it.amountMinor }, { c ->
         Money.format(c.amountMinor, st.currency) + if (c.semanticType.raw != "unknown") " (${c.semanticType.displayName})" else ""
     }, { onAmount(Money.plain(it.amountMinor)) }, modifier = Modifier.padding(vertical = 6.dp))
@@ -386,35 +310,27 @@ private fun PossibleAmounts(st: EditorState, onAmount: (String) -> Unit) {
 private fun ExpenseFields(st: EditorState, s: com.spendrop.core.model.FinanceSnapshot, vm: EditorViewModel, onPickPayBook: () -> Unit) {
     val options = remember(s.accounts) { AccountLinker.fundingOptions(COMMON_FUNDING_ACCOUNTS, s.accounts) }
     val shownFunding = if (st.fundingAccount in options || st.fundingAccount == "Unknown") options else listOf(st.fundingAccount) + options
-    SectionHeader("Funding account (where money came from)")
+    SectionHeader("Funding account", trailing = { Text("where the money came from", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel) })
     ChipRow(shownFunding, { it == st.fundingAccount }, { it }, { f -> vm.update { it.copy(fundingAccount = f) } })
     if (st.isReview && (st.fundingAccount == "Unknown" || st.fundingAccount.isBlank())) {
-        Text("We couldn't confidently identify the funding account. Choose where the money came from.", style = MaterialTheme.typography.bodySmall, color = SD.colors.orange, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        Text("We couldn't confidently identify the funding account. Choose where the money came from.", style = MaterialTheme.typography.bodySmall, color = SD.colors.orange, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
     }
-    SectionHeader("Payment channel (how payment was made)")
+    SectionHeader("Payment channel", trailing = { Text("how you paid", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel) })
     val palette = SD.colors
     ChipRow(PaymentChannel.pickerOrder, { it == st.channel }, { it.displayName }, { c -> vm.update { it.copy(channel = c) } },
         icon = { it.icon }, selectedColor = { if (it == PaymentChannel.APPLE_PAY) null else palette.named(it.tintName) })
     st.channelHint?.takeIf { st.isReview && it.reason.isNotEmpty() }?.let {
         Text(if (it.channel == PaymentChannel.UNKNOWN) it.reason else "${it.reason}. Please confirm.", style = MaterialTheme.typography.bodySmall,
-            color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
     }
     SectionHeader("Category")
-    FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ExpenseCategory.entries.forEach { c ->
-            FilterChip(
-                selected = st.category == c, onClick = { vm.update { it.copy(category = c, categoryTouched = true) } },
-                label = { Text(c.displayName) }, leadingIcon = { Icon(c.icon, null) },
-                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.color, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White, containerColor = SD.colors.card),
-            )
-        }
-    }
+    CategoryGrid(st.category) { c -> vm.update { it.copy(category = c, categoryTouched = true) } }
     st.categoryHint?.takeIf { st.isReview && it.confidence < CategoryDetector.REVIEW_THRESHOLD }?.let {
-        Text("${it.reason}. Please check the category.", style = MaterialTheme.typography.bodySmall, color = SD.colors.orange, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        Text("${it.reason}. Please check the category.", style = MaterialTheme.typography.bodySmall, color = SD.colors.orange, modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp))
     }
-    SectionHeader("Merchant / recipient", trailing = { TextButton(onClick = onPickPayBook) { Icon(Icons.Filled.Person, null); Spacer(Modifier.width(4.dp)); Text("Select from PayBook") } })
+    SectionHeader("Merchant / recipient", trailing = { TextButton(onClick = onPickPayBook, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Icon(Icons.Filled.Person, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("From PayBook", style = MaterialTheme.typography.labelLarge) } })
     SDCard(padding = 12.dp) {
-        OutlinedTextField(st.merchant, vm::setMerchant, placeholder = { Text("e.g. McDonald's, Mamak, Rahim (optional)") }, singleLine = true,
+        OutlinedTextField(st.merchant, vm::setMerchant, placeholder = { Text("e.g. McDonald's, Mamak, Rahim", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, singleLine = true,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), modifier = Modifier.fillMaxWidth().testTag("merchant"))
         st.fundingInstrument?.let { Text("Funding instrument: $it", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 6.dp)) }
     }
@@ -447,6 +363,132 @@ private fun MovementFields(st: EditorState, s: com.spendrop.core.model.FinanceSn
             }
         } else {
             Text("Account: ${st.fundingAccount}", color = SD.colors.secondaryLabel, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+/** iOS-style category picker: equal tiles, icon above the name, three per row. */
+@Composable
+private fun CategoryGrid(selected: ExpenseCategory, onSelect: (ExpenseCategory) -> Unit) {
+    val palette = SD.colors
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ExpenseCategory.entries.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { c ->
+                    val on = c == selected
+                    val tint = palette.named(c.tintName)
+                    Column(
+                        Modifier.weight(1f).height(68.dp).clip(RoundedCornerShape(Radius.control))
+                            .background(if (on) tint else palette.card)
+                            .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { onSelect(c) }
+                            .semantics { contentDescription = c.displayName + if (on) ", selected" else "" },
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(c.icon, null, tint = if (on) Color.White else tint, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text(c.displayName, style = MaterialTheme.typography.labelMedium, color = if (on) Color.White else palette.label, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * The complete transaction form (record type, amount, funding account vs payment channel, category, merchant, date &
+ * time, notes, Split Money / Paid for Someone) and its pickers. Used by the editor screen and, unchanged, by each
+ * expanded card of Bulk Import, so both always offer exactly the same fields and rules.
+ */
+@Composable
+fun TransactionEditorFields(container: AppContainer, vm: EditorViewModel, st: EditorState, s: com.spendrop.core.model.FinanceSnapshot) {
+    val scope = rememberCoroutineScope()
+    var picker by remember { mutableStateOf<String?>(null) } // "split", "payer", "movement", "merchant"
+    Column {
+        if (st.isReview) ReviewBanner(st)
+        // Record type
+        if (st.editingExpenseId == null && st.editingMovementId == null) {
+            val types = if (st.isReview) listOf(TransactionEntryType.EXPENSE, TransactionEntryType.MONEY_IN, TransactionEntryType.MONEY_OUT) else TransactionEntryType.entries
+            Segmented(types, st.entryType, { it.title }, vm::setEntryType)
+            if (st.isReview) {
+                val p = st.parsed!!
+                val caption = if (p.suggestedMovementKind == MoneyMovementKind.OWN_TRANSFER) "Looks like a top-up between your own accounts. Record it as a Transfer from Add → Transfer."
+                else p.directionReason?.let { "Suggested from the screenshot: $it. Please confirm." }
+                caption?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 32.dp)) }
+            }
+        }
+        if (st.isReview && st.imageFile != null) ScreenshotThumb(st)
+        AmountCard(st, onAmount = vm::setAmount, showQuick = !st.isReview && st.editingExpenseId == null && st.editingMovementId == null)
+        if (st.isReview) PossibleAmounts(st, vm::setAmount)
+
+        if (st.isExpense) ExpenseFields(st, s, vm, onPickPayBook = { picker = "merchant" })
+        else MovementFields(st, s, vm, onPickPerson = { picker = "movement" })
+
+        SectionHeader("Date & time")
+        SDCard(padding = 12.dp) { DateTimeField(st.date, { d -> vm.update { it.copy(date = d) } }, "Transaction time") }
+        SectionHeader(if (st.isExpense) "Description" else "Note", trailing = { Text("Optional", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel) })
+        SDCard(padding = 12.dp) {
+            OutlinedTextField(
+                if (st.isExpense) st.notes else st.movement.note,
+                { t -> vm.update { if (it.isExpense) it.copy(notes = t) else it.copy(movement = it.movement.copy(note = t)) } },
+                placeholder = { Text(if (st.isExpense) "e.g. Lunch with team" else "Add a note", maxLines = 1) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        if (st.isExpense) {
+            SectionHeader("Split money")
+            SDCard {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Group, null, tint = SD.colors.blue); Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Split Transaction", fontWeight = FontWeight.SemiBold)
+                        Text("Share this amount with people in PayBook", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
+                    }
+                    Switch(st.split != null, vm::setSplitEnabled)
+                }
+                val split = st.split
+                if (split != null) {
+                    SplitSection(split, st.amountMinor, st.currency, s.people, SplitDraft.lastTimeSuggestion(st.merchant, s, st.editingExpenseId),
+                        onChange = { d -> vm.update { it.copy(split = d) } }, onPickPerson = { forPayer -> picker = if (forPayer) "payer" else "split" },
+                        onRemoveSplit = { vm.setSplitEnabled(false) })
+                } else {
+                    TextButton(onClick = vm::setPaidForSomeone, modifier = Modifier.padding(horizontal = 8.dp)) {
+                        Column {
+                            Text("Paid for Someone", fontWeight = FontWeight.SemiBold)
+                            Text("You paid for them, or they paid for you", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
+                        }
+                    }
+                }
+            }
+        }
+        st.splitProblem?.takeIf { st.isExpense && st.amountMinor > 0 }?.let { /* shown inside the split section */ }
+        if (!st.isExpense) {
+            val issues = st.movement.copy(amountText = st.amountText, date = st.date).issues
+            if (issues.isNotEmpty() && st.amountText.isNotEmpty()) Text(issues.first().message, color = SD.colors.orange, modifier = Modifier.padding(16.dp))
+        }
+    }
+
+    // Pickers
+    val people = s.people
+    when (picker) {
+        "split", "payer", "movement", "merchant" -> PersonPickerSheet(
+            people, exclude = if (picker == "split") st.split?.participants?.mapNotNull { it.person?.id }.orEmpty().toSet() else emptySet(),
+            onDismiss = { picker = null },
+        ) { person, isNew ->
+            val which = picker
+            picker = null
+            scope.launch {
+                if (isNew) container.repository.apply(Changes(people = listOf(person)))
+                vm.update {
+                    when (which) {
+                        "split" -> it.copy(split = (it.split ?: SplitDraft()).add(person))
+                        "payer" -> it.copy(split = (it.split ?: SplitDraft()).setPayer(person))
+                        "movement" -> it.copy(movement = it.movement.copy(person = person))
+                        else -> it.copy(merchant = person.name)
+                    }
+                }
+            }
         }
     }
 }

@@ -121,7 +121,8 @@ data class Person(
 ) {
     val initials: String
         get() {
-            val parts = name.split(" ").filter { it.isNotEmpty() }
+            // Words with their punctuation removed: "Ravi (Sample)" -> "RS", not "R(".
+            val parts = name.split(" ").map { w -> w.filter { it.isLetterOrDigit() } }.filter { it.isNotEmpty() }
             return when {
                 parts.size >= 2 -> "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
                 parts.size == 1 -> parts[0].take(2).uppercase()

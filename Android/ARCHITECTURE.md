@@ -114,7 +114,15 @@ Everything except sign-in, sync and cloud backup works offline. Saves are local 
 
 ## Security & privacy
 
-- SpenDrop declares only `INTERNET`. WorkManager (daily backup) adds normal, no-prompt permissions (network state, wake lock, boot completed). No storage, SMS, contacts, notification or accessibility permissions.
+- **Permissions:**
+  - `INTERNET` is install-time and granted automatically.
+  - `CAMERA` is runtime, asked only when the user taps "Take Photo of Receipt". It is the only permission shown under App info → Permissions.
+  - WorkManager adds normal, no-prompt permissions (network state, wake lock, boot completed).
+  - Screenshots, photos and PDFs come through the Android photo picker, file picker and share sheet, so there are no storage or media permissions (and Play's photo/video permission policy doesn't apply).
+  - No notifications, location, contacts, SMS or accessibility.
+  - `permissions/` holds the central `PermissionManager`. Its state comes from Android (`checkSelfPermission`, `shouldShowRequestPermissionRationale`, hardware features), plus a record of past answers so "not requested yet" and "permanently denied" can be told apart.
+  - `rememberPermissionGate` explains, asks, and continues the feature automatically, including after a trip to Settings. If access is refused it offers the photo picker instead.
+  - Settings → Permissions & Access shows the real state of each permission.
 - Session tokens encrypted with a non-exportable Android Keystore AES-GCM key; Android Auto Backup excluded for data and prefs (`data_extraction_rules.xml`).
 - No service-role key anywhere; the publishable key is read from `local.properties` (git-ignored). RLS protects the data server-side.
 - No OCR text or amounts are logged.

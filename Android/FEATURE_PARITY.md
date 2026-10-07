@@ -113,10 +113,13 @@ The inventory comes from reading the iOS sources (see `Docs/IOS-Audit.md`), the 
 | Duplicate protection (strong → Merge or Add Anyway; weak → warning; manual never checked) | ✓ | ✓ | U | PASS |
 | Share target: images, PDF, text, multiple | Share Extension | ShareActivity | R (text) | PASS (text) / IMPL (image, PDF, multiple: need a device for OCR) |
 | In-app import: screenshot/photo (photo picker), PDF/file (file picker) | Photos | ✓ (+PDF, which iOS can only take via share) | B | IMPL |
+| Take a photo of a paper receipt (in-app camera, CAMERA runtime permission requested in context, Settings fallback, photo-picker fallback) | declared (`NSCameraUsageDescription`), no camera screen in code | ✓ CameraX | R (permission flows), D (permission state via adb) | IMPL |
+| Permissions & Access screen (real Android states) | — | ✓ | R | PASS |
 | PDF receipt: text pages (≤5) else OCR of rendered pages (≤3) | ✓ | ✓ | U, R (PdfBox text) | PASS (text path) / IMPL (OCR path) |
 | Multi-transaction bank statement PDF | ✗ | ✗ | — | N/A. Not in iOS or Web; nothing to reproduce. |
 | Receipt image kept with the expense (optimised, local only) | ✓ | ✓ | B | IMPL |
 | "Couldn't read" → Enter manually / Retry | ✓ | ✓ | B | IMPL |
+| Bulk Screenshot Import: up to 30 screenshots → separate drafts (history lists give one per row), batch + saved duplicate check (Skip by default / Add Anyway / Merge), collapsed cards that open the full editor incl. Split Money, "Unable to detect" cards, "Add N Transactions" saving each through the normal save path with its own screenshot | ✓ | ✓ (Home → scan → Bulk Import, picking 2+ screenshots, or sharing 2+ images) | U (shared `bulk-import-vectors.json`, BulkReview), R (review queue → Add N) | PASS (logic, UI with text) / IMPL (OCR of real screenshots needs a device) |
 | Apple Pay Shortcuts automation | ✓ | ✗ | — | N/A. Apple-only feature; Android has no equivalent public API. |
 
 ## Backup, restore, cloud

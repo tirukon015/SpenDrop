@@ -20,20 +20,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.spendrop.app.ui.theme.SD
 
 /** iOS segmented picker equivalent. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier, horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp) {
+    val size = when { options.size >= 4 -> 12.sp; options.size == 3 -> 13.sp; else -> 14.sp }
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 6.dp)) {
         options.forEachIndexed { i, o ->
             SegmentedButton(
                 selected = o == selected,
                 onClick = { onSelect(o) },
                 shape = SegmentedButtonDefaults.itemShape(i, options.size),
                 icon = {},
-                label = { Text(label(o), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text(label(o), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, fontSize = size, letterSpacing = 0.sp) },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
             )
         }
     }
@@ -50,7 +53,7 @@ fun <T> ChipRow(
     selectedColor: (T) -> Color? = { null },
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { o ->
             val sel = isSelected(o)
             val c = selectedColor(o) ?: SD.colors.blue

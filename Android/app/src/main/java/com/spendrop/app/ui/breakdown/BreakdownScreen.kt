@@ -88,7 +88,7 @@ fun BreakdownScreen(container: AppContainer) {
                     AssistChip(onClick = { showFilters = true }, label = { Text(filters.dateFilter.displayName + " ▾") })
                     Text(engine.currentSubtitle, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(start = 8.dp))
                 }
-                filters.activeDimensionSummary?.let { Text(it, color = SD.colors.blue, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp)) }
+                filters.activeDimensionSummary?.let { Text(it, color = SD.colors.blue, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
             }
             if (mode == BreakdownMode.SPENDING) spending(engine, granularity, { granularity = it }) { f -> container.filters.value = filters.copy(dailySpendingRange = f) }.invoke(this) { name -> container.filters.value = filters.toggleFundingAccount(name) }
             else cashFlow(engine, granularity) { granularity = it }.invoke(this)
@@ -111,16 +111,22 @@ private fun spending(
             val c = b.comparison
             SectionHeader(c.header)
             SDCard(padding = 14.dp) {
-                Row { Text(c.periodName, Modifier.weight(1f)); Text(c.currentValue, fontWeight = FontWeight.SemiBold) }
-                Row { Text(c.comparison.previousPeriodSubtitle, Modifier.weight(1f), color = SD.colors.secondaryLabel); Text(com.spendrop.core.Money.format(c.comparison.previousTotalMinor), color = SD.colors.secondaryLabel) }
-                Text(c.comparison.differenceLabel + (c.comparison.percentageLabel?.let { " ($it)" } ?: ""),
-                    color = if (c.comparison.isIncreased) SD.colors.orange else SD.colors.green, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                Row(Modifier.padding(bottom = 4.dp)) { Text(c.periodName, Modifier.weight(1f)); Text(c.currentValue, fontWeight = FontWeight.SemiBold) }
+                Row(Modifier.padding(bottom = 8.dp)) { Text(c.comparison.previousPeriodSubtitle, Modifier.weight(1f), color = SD.colors.secondaryLabel); Text(com.spendrop.core.Money.format(c.comparison.previousTotalMinor), color = SD.colors.secondaryLabel) }
+                RowDivider(0.dp)
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Difference", Modifier.weight(1f), color = SD.colors.secondaryLabel)
+                    Text(c.comparison.differenceLabel, color = if (c.comparison.isIncreased) SD.colors.orange else SD.colors.green, fontWeight = FontWeight.SemiBold)
+                }
+                c.comparison.percentageLabel?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.align(Alignment.End))
+                }
             }
         }
         item {
             SectionHeader(b.daily.title)
             SDCard(padding = 12.dp) {
-                Segmented(DailySpendingRange.entries, b.daily.range, { it.displayName }, onRange)
+                Segmented(DailySpendingRange.entries, b.daily.range, { it.displayName }, onRange, horizontalPadding = 0.dp)
                 Text(b.daily.subtitle, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(bottom = 8.dp))
                 val blue = SD.colors.blue
                 BarChart(b.daily.points.map { Bar(it.dayLabel, it.amountMinor, blue, "${it.fullDateString}: ${Fmt.money(it.amountMinor)}, ${it.count} transactions") }, barWidth = 22)
@@ -219,7 +225,7 @@ private fun Rows(rows: List<InsightRow>) {
 private fun Trend(t: TrendCard, cashFlow: Boolean, onGranularity: (PeriodGrouping.Granularity) -> Unit) {
     SectionHeader(t.title)
     SDCard(padding = 12.dp) {
-        Segmented(PeriodGrouping.Granularity.entries, t.granularity, { it.displayName }, onGranularity)
+        Segmented(PeriodGrouping.Granularity.entries, t.granularity, { it.displayName }, onGranularity, horizontalPadding = 0.dp)
         val green = SD.colors.green; val purple = SD.colors.purple
         BarChart(t.buckets.map { bk ->
             if (cashFlow) Bar(bk.label, bk.netMinor, green, "${bk.label}: in ${Fmt.money(bk.inMinor)}, out ${Fmt.money(bk.outMinor)}, net ${Fmt.money(bk.netMinor)}")

@@ -47,6 +47,12 @@ import com.spendrop.app.ui.home.HomeNav
 import com.spendrop.app.ui.home.HomeScreen
 import com.spendrop.app.ui.importing.ImportFlowScreen
 import com.spendrop.app.ui.importing.rememberImportPickers
+import com.spendrop.app.ui.importing.ImportPickers
+import com.spendrop.app.permissions.PermissionRationale
+import com.spendrop.app.permissions.SpenDropAccess
+import com.spendrop.app.permissions.rememberPermissionGate
+import com.spendrop.app.ui.camera.ReceiptCameraScreen
+import com.spendrop.app.ui.more.PermissionsScreen
 import com.spendrop.app.ui.more.MoreScreen
 import com.spendrop.app.ui.more.ParserSelfTestScreen
 import com.spendrop.app.ui.more.SettingsScreen
@@ -62,6 +68,7 @@ import com.spendrop.app.ui.transactions.ExpenseDetailScreen
 import com.spendrop.app.ui.transactions.TransactionsNav
 import com.spendrop.app.ui.transactions.TransactionsScreen
 import kotlin.reflect.KClass
+import androidx.compose.ui.unit.sp
 
 private data class Tab(val route: Any, val cls: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -80,12 +87,27 @@ fun SpenDropRoot(container: AppContainer) {
     val entry by nav.currentBackStackEntryAsState()
     val dest = entry?.destination
     val onTab = tabs.any { t -> dest?.hasRoute(t.cls) == true }
-    val pickers = rememberImportPickers { uris -> container.pendingImports.set(uris); nav.navigate(ImportRoute) }
+    val basePickers = rememberImportPickers(
+        onPicked = { uris -> container.pendingImports.set(uris); nav.navigate(ImportRoute()) },
+        onBulk = { uris -> container.pendingImports.set(uris); nav.navigate(BulkImportRoute) },
+    )
+    // Camera: check → explain → ask Android → open the camera automatically once allowed; otherwise offer the photo picker.
+    val cameraGate = rememberPermissionGate(
+        SpenDropAccess.items.first { it.permission == SpenDropAccess.CAMERA },
+        PermissionRationale(
+            title = "Allow camera to photograph receipts?",
+            message = "SpenDrop uses the camera only while you take a photo of a receipt. The photo is read on this phone and stays in SpenDrop; nothing goes to your gallery.",
+            deniedMessage = "Without camera access you can still add receipts: take the photo with your camera app and share it to SpenDrop, or choose a photo.",
+            fallbackLabel = "Choose a Photo Instead",
+        ),
+        onFallback = basePickers.photos,
+    )
+    val pickers = ImportPickers(basePickers.photos, basePickers.files, camera = { cameraGate.run { nav.navigate(ReceiptCameraRoute) } }, bulk = basePickers.bulk)
     val link by container.links.latest.collectAsState()
     val awaitingPassword by container.auth.awaitingNewPassword.collectAsState()
 
     Scaffold(bottomBar = {
-        if (onTab) NavigationBar {
+        if (onTab) NavigationBar(containerColor = com.spendrop.app.ui.theme.SD.colors.card) {
             tabs.forEach { t ->
                 NavigationBarItem(
                     selected = dest?.hasRoute(t.cls) == true,
@@ -95,7 +117,15 @@ fun SpenDropRoot(container: AppContainer) {
                             launchSingleTop = true; restoreState = true
                         }
                     },
-                    icon = { Icon(t.icon, null) }, label = { Text(t.label) },
+                    icon = { Icon(t.icon, null) },
+                    // One line on small phones ("Transactions" must not wrap), SpenDrop blue when selected.
+                    label = { Text(t.label, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Visible, fontSize = 11.sp, letterSpacing = 0.sp) },
+                    alwaysShowLabel = true,
+                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                        selectedIconColor = com.spendrop.app.ui.theme.SD.colors.blue, selectedTextColor = com.spendrop.app.ui.theme.SD.colors.blue,
+                        indicatorColor = com.spendrop.app.ui.theme.SD.colors.blue.copy(alpha = 0.14f),
+                        unselectedIconColor = com.spendrop.app.ui.theme.SD.colors.gray, unselectedTextColor = com.spendrop.app.ui.theme.SD.colors.gray,
+                    ),
                 )
             }
         }
@@ -155,11 +185,23 @@ fun SpenDropRoot(container: AppContainer) {
             }
             composable<CloudRestoreRoute> { CloudRestoreScreen(container, { nav.popBackStack() }) { nav.navigate(RestoreRangeRoute("cloud")) } }
             composable<RestoreRangeRoute> { RestoreRangeScreen(container, { nav.popBackStack() }) { nav.popBackStack() } }
-            composable<SettingsRoute> { SettingsScreen(container, { nav.popBackStack() }, { nav.navigate(RestoreRangeRoute("file")) }, { nav.navigate(ParserSelfTestRoute) }) }
+            composable<SettingsRoute> { SettingsScreen(container, { nav.popBackStack() }, { nav.navigate(RestoreRangeRoute("file")) }, { nav.navigate(ParserSelfTestRoute) }, { nav.navigate(PermissionsRoute) }) }
             composable<ParserSelfTestRoute> { ParserSelfTestScreen { nav.popBackStack() } }
-            composable<ImportRoute> {
-                ImportFlowScreen(container, load = { Intake.fromUris(container.context, container.pendingImports.take()) }, fromShare = false) { nav.popBackStack() }
+            composable<ImportRoute> { e ->
+                val fromCamera = e.toRoute<ImportRoute>().fromCamera
+                ImportFlowScreen(container, load = { Intake.fromUris(container.context, container.pendingImports.take()) }, fromShare = false,
+                    onFinished = { nav.popBackStack() }, fromCamera = fromCamera)
             }
+            composable<BulkImportRoute> {
+                com.spendrop.app.ui.bulk.BulkImportScreen(container, load = { Intake.fromUris(container.context, container.pendingImports.take(), Intake.MAX_BULK_ITEMS) }, onClose = { nav.popBackStack() })
+            }
+            composable<ReceiptCameraRoute> {
+                ReceiptCameraScreen(
+                    onCaptured = { uri -> container.pendingImports.set(listOf(uri)); nav.popBackStack(); nav.navigate(ImportRoute(fromCamera = true)) },
+                    onClose = { nav.popBackStack() },
+                )
+            }
+            composable<PermissionsRoute> { PermissionsScreen(onBack = { nav.popBackStack() }, openCamera = { nav.navigate(ReceiptCameraRoute) }) }
         }
     }
 

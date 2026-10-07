@@ -76,7 +76,7 @@ fun SplitSection(
             { if (it == SplitDraft.Purpose.SHARED) "Shared Expense" else "Paid for Someone" }, { onChange(draft.setPurpose(it)) })
         if (draft.purpose == SplitDraft.Purpose.SHARED) {
             Segmented(listOf(SplitMethod.EQUAL, SplitMethod.PARTS, SplitMethod.AMOUNTS), draft.method, {
-                when (it) { SplitMethod.EQUAL -> "Equally"; SplitMethod.AMOUNTS -> "Custom Amount"; SplitMethod.PARTS -> "Parts" }
+                when (it) { SplitMethod.EQUAL -> "Equally"; SplitMethod.AMOUNTS -> "Amounts"; SplitMethod.PARTS -> "Parts" }
             }, { m ->
                 onChange(when (m) { SplitMethod.EQUAL -> draft.useEqualSplit(); SplitMethod.PARTS -> draft.useParts(); SplitMethod.AMOUNTS -> draft.useCustomAmounts(totalMinor) })
             })

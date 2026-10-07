@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The only permission: sign-in and the optional cloud backup. No storage, SMS, contacts or
-         notification permissions — files arrive through the Android share sheet / file picker. -->
+    <!-- Install-time (normal) permission: sign-in, sync and the optional cloud backup. No storage, SMS, contacts or
+         notification permissions: screenshots and PDFs arrive through the Android photo picker, file picker and
+         share sheet, which need no permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Runtime permission, asked only when the user taps "Take Photo of Receipt" (in-app camera). Like the iOS
+         NSCameraUsageDescription: "SpenDrop needs camera access to photograph transaction receipts." -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Phones without a camera can still install SpenDrop; the camera option is then shown as not available. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".SpenDropApplication"

@@ -136,7 +136,7 @@ class ImportFlowViewModel(app: Application) : AndroidViewModel(app) {
  * [onFinished] is called when every item has been saved, skipped or cancelled.
  */
 @Composable
-fun ImportFlowScreen(container: AppContainer, load: suspend () -> List<IntakeItem>, fromShare: Boolean, onFinished: (savedCount: Int) -> Unit) {
+fun ImportFlowScreen(container: AppContainer, load: suspend () -> List<IntakeItem>, fromShare: Boolean, fromCamera: Boolean = false, onFinished: (savedCount: Int) -> Unit) {
     val flow: ImportFlowViewModel = viewModel()
     LaunchedEffect(Unit) { flow.start(load) }
     val ui by flow.ui.collectAsState()
@@ -151,7 +151,7 @@ fun ImportFlowScreen(container: AppContainer, load: suspend () -> List<IntakeIte
         }
         is ImportPhase.Review -> key(p.key) {
             val vm: EditorViewModel = viewModel(key = p.key, factory = EditorViewModel.Factory(container))
-            LaunchedEffect(p.key) { vm.startReview(p.parsed, p.imageFile, if (fromShare) ExpenseSourceType.SHARE_EXTENSION else p.sourceType) }
+            LaunchedEffect(p.key) { vm.startReview(p.parsed, p.imageFile, when { fromShare -> ExpenseSourceType.SHARE_EXTENSION; fromCamera -> ExpenseSourceType.PHOTO; else -> p.sourceType }) }
             TransactionEditorScreen(container, EditorMode.Review, onClose = { flow.next(saved = false) }, vm = vm, onSaved = { flow.next(saved = true) })
         }
         is ImportPhase.NoDetails -> Status("SpenDrop$counter", { flow.next(false) }) {

@@ -52,6 +52,28 @@ class ImportProcessor(private val context: Context) {
         }
     }
 
+    /**
+     * Bulk Import: every transaction found in one screenshot (Common/BusinessRules/bulk-import.md §1). A payment /
+     * bank history becomes one parsed transaction per row; anything else goes through the existing receipt parser.
+     * Empty = no transaction could be detected (the screenshot is shown as "Unable to detect", never dropped).
+     */
+    suspend fun detectAll(item: IntakeItem): List<ParsedTransaction> = withContext(Dispatchers.Default) {
+        if (item !is IntakeItem.Image) {
+            return@withContext when (val out = process(item)) { is ImportOutcome.Parsed -> listOf(out.parsed); else -> emptyList() }
+        }
+        val bitmap = withContext(Dispatchers.IO) { ImageTools.decodeOriented(item.file, 2400) } ?: return@withContext emptyList()
+        val result = try { ocr.recognize(bitmap) } catch (e: OcrFailed) { null } finally { bitmap.recycle() }
+        if (result == null || result.lines.isEmpty()) return@withContext emptyList()
+        val lines = result.lines.map { it.text }
+        when (val split = com.spendrop.core.bulk.ScreenshotSplitter.classify(lines, java.time.LocalDate.now())) {
+            is com.spendrop.core.bulk.ScreenshotSplitter.Result.Multiple -> split.rows.map { row -> com.spendrop.core.bulk.BulkReview.rowToParsed(row, row.line) }
+            com.spendrop.core.bulk.ScreenshotSplitter.Result.Single -> {
+                val parsed = TransactionParser.parse(result)
+                if (parsed.amountMinor == null && parsed.merchant == null) emptyList() else listOf(parsed)
+            }
+        }
+    }
+
     private suspend fun image(item: IntakeItem.Image): ImportOutcome {
         // Long edge up to 2400 px keeps small receipt text readable without using too much memory on low-end phones.
         val bitmap = withContext(Dispatchers.IO) { ImageTools.decodeOriented(item.file, 2400) }

@@ -256,11 +256,21 @@ class EditorViewModel(private val container: AppContainer) : ViewModel() {
         saveExpense(context, mergeInto = null)
     }
 
-    fun saveMovement() {
+    /**
+     * Bulk Import: saves this draft through exactly the same path as the Save button (no dialogs; the duplicate choice
+     * was made on the review card). [mergeInto] = "Merge with Existing". Returns true when the record was saved.
+     */
+    suspend fun commit(context: Context, mergeInto: Expense?): Boolean {
+        val job = if (_state.value.isExpense) saveExpense(context, mergeInto) else saveMovement()
+        job?.join()
+        return _state.value.saved
+    }
+
+    fun saveMovement(): kotlinx.coroutines.Job? {
         val st = _state.value
-        if (st.saving) return
+        if (st.saving) return null
         _state.update { it.copy(saving = true, movementDuplicateMessage = null) }
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
                 var draft = st.movement.copy(amountText = st.amountText, date = st.date, transactionReference = st.reference ?: st.movement.transactionReference)
@@ -287,11 +297,11 @@ class EditorViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun saveExpense(context: Context, mergeInto: Expense?) {
+    fun saveExpense(context: Context, mergeInto: Expense?): kotlinx.coroutines.Job? {
         val st = _state.value
-        if (st.saving) return
+        if (st.saving) return null
         _state.update { it.copy(saving = true, askDuplicate = false) }
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 val s = snapshot
                 val now = System.currentTimeMillis()

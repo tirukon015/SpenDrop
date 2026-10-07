@@ -68,7 +68,7 @@ import java.time.LocalDate
 
 /** Settings (iOS SettingsView). */
 @Composable
-fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () -> Unit, openSelfTest: () -> Unit) {
+fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () -> Unit, openSelfTest: () -> Unit, openPermissions: () -> Unit = {}) {
     val snapshot by container.repository.snapshot.collectAsState()
     val authState by container.auth.state.collectAsState()
     val appearance by container.preferences.string(Preferences.Keys.appearance, "system").collectAsState("system")
@@ -160,6 +160,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () 
             }
             item {
                 SectionHeader("Privacy & security")
+                SDCard { ListRow("Permissions & Access", subtitle = "What SpenDrop can use on this phone, straight from Android", icon = Icons.Filled.Verified, chevron = true, onClick = openPermissions) }
+                androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
                 SDCard(padding = 16.dp) {
                     Text("100% Local-First", fontWeight = FontWeight.SemiBold)
                     Text("SpenDrop never asks for your bank login, passwords, OTPs, or card PINs. OCR and transaction parsing run entirely on your phone. Cloud backup is optional and private to your account.",
@@ -246,7 +248,7 @@ fun ParserSelfTestScreen(onBack: () -> Unit) {
                 SectionHeader("Test results")
             }
             val r = results
-            if (r == null) item { Text("No test run yet. Tap 'Run Tests' above.", color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp)) }
+            if (r == null) item { Text("No test run yet. Tap 'Run Tests' above.", color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 32.dp)) }
             else r.forEach { res ->
                 item {
                     SDCard(padding = 12.dp) {

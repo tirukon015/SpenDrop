@@ -27,6 +27,15 @@ sealed interface IntakeItem {
 object Intake {
     const val MAX_FILE_BYTES = 40L * 1024 * 1024
     const val MAX_ITEMS = 10
+    /** Bulk Screenshot Import takes up to 30 screenshots (same as iOS and Web). */
+    const val MAX_BULK_ITEMS = 30
+
+    /** Two or more shared images go to Bulk Import instead of the one-by-one review. */
+    fun isBulkShare(intent: Intent): Boolean {
+        if (intent.action != Intent.ACTION_SEND_MULTIPLE) return false
+        val type = intent.type.orEmpty()
+        return type.startsWith("image/") && (intent.streamUris().size >= 2 || (intent.clipData?.itemCount ?: 0) >= 2)
+    }
     private const val DIR = "imports"
 
     fun isImportIntent(intent: Intent?): Boolean = when (intent?.action) {
@@ -36,7 +45,7 @@ object Intake {
     }
 
     /** Must run off the main thread. */
-    fun fromIntent(context: Context, intent: Intent): List<IntakeItem> {
+    fun fromIntent(context: Context, intent: Intent, max: Int = MAX_ITEMS): List<IntakeItem> {
         val uris = LinkedHashSet<Uri>()
         when (intent.action) {
             Intent.ACTION_SEND -> intent.streamUri()?.let(uris::add)
@@ -44,7 +53,7 @@ object Intake {
             Intent.ACTION_VIEW -> intent.data?.let(uris::add)
         }
         intent.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let(uris::add) }
-        val items = uris.take(MAX_ITEMS).map { copy(context, it, intent.type) }.toMutableList()
+        val items = uris.take(max).map { copy(context, it, intent.type) }.toMutableList()
         if (uris.isEmpty()) {
             val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim()
                 ?: intent.clipData?.text()
@@ -53,7 +62,7 @@ object Intake {
         return items
     }
 
-    fun fromUris(context: Context, uris: List<Uri>): List<IntakeItem> = uris.take(MAX_ITEMS).map { copy(context, it, null) }
+    fun fromUris(context: Context, uris: List<Uri>, max: Int = MAX_ITEMS): List<IntakeItem> = uris.take(max).map { copy(context, it, null) }
 
     fun copy(context: Context, uri: Uri, hintMime: String?): IntakeItem {
         val id = UUID.randomUUID().toString()
@@ -61,8 +70,9 @@ object Intake {
         val name = runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         }.getOrNull()
+        val fileName = name ?: uri.lastPathSegment?.takeIf { uri.scheme == "file" }
         val mime = (runCatching { resolver.getType(uri) }.getOrNull() ?: hintMime?.takeUnless { it.endsWith("/*") }
-            ?: name?.substringAfterLast('.', "")?.let { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it.lowercase()) }).orEmpty()
+            ?: fileName?.substringAfterLast('.', "")?.let { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it.lowercase()) }).orEmpty()
         val kind = when {
             mime.startsWith("image/") -> "img"
             mime == "application/pdf" -> "pdf"

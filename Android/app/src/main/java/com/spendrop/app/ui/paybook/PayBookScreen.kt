@@ -78,7 +78,7 @@ fun PayBookScreen(container: AppContainer, openPerson: (String) -> Unit, addPers
         LazyColumn(contentPadding = padding) {
             item {
                 OutlinedTextField(
-                    search, { search = it }, placeholder = { Text("Search people, banks, accounts...") },
+                    search, { search = it }, placeholder = { Text("Search people, banks, accounts...", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                     leadingIcon = { Icon(Icons.Filled.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(Radius.field),
                 )

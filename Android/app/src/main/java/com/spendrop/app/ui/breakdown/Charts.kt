@@ -41,7 +41,7 @@ fun BarChart(bars: List<Bar>, modifier: Modifier = Modifier, barWidth: Int = 28,
     val track = SD.colors.tertiary
     Row(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.Bottom,
     ) {
         bars.forEach { b ->
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(barWidth.dp + 10.dp).semantics(mergeDescendants = true) { contentDescription = b.description }) {

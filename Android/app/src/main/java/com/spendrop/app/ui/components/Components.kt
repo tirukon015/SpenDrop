@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,8 +49,8 @@ import com.spendrop.app.ui.theme.SD
 /** iOS-style section header: small, bold, upper case, secondary colour. */
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
-    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 18.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text.uppercase(), style = SD.sectionHeader, color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f))
+    Row(modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text.uppercase(), style = SD.sectionHeader, color = SD.colors.secondaryLabel, modifier = Modifier.weight(1f), maxLines = 2)
         trailing?.invoke()
     }
 }
@@ -65,7 +66,7 @@ fun SDCard(modifier: Modifier = Modifier, padding: Dp = 0.dp, content: @Composab
 
 @Composable
 fun SectionFooter(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+    Text(text, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 4.dp))
 }
 
 @Composable
@@ -96,11 +97,11 @@ fun ListRow(
             Icon(icon, null, tint = iconTint ?: SD.colors.blue, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(14.dp))
         }
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = titleColor ?: SD.colors.label)
+        Column(Modifier.weight(1.3f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = titleColor ?: SD.colors.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
         }
-        if (value != null) Text(value, style = MaterialTheme.typography.bodyLarge, color = valueColor ?: SD.colors.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+        if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = valueColor ?: SD.colors.secondaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.padding(start = 12.dp).then(if (value.length > 14) Modifier.weight(1f) else Modifier))
         trailing?.invoke()
         if (chevron) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = SD.colors.tertiaryLabel)
     }

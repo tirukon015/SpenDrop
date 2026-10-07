@@ -83,7 +83,7 @@ fun HomeScreen(container: AppContainer, pickers: ImportPickers, nav: HomeNav) {
         val now = System.currentTimeMillis()
         val home = remember(s, now / 60_000) { HomeAnalytics.home(s, now, CalendarContext.device()) }
         LazyColumn(contentPadding = padding) {
-            item { Text(home.monthYear, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp)) }
+            item { Text(home.monthYear, color = SD.colors.secondaryLabel, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) }
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SummaryCard(home.today, Icons.Filled.WbSunny, SD.colors.orange, hero = true)

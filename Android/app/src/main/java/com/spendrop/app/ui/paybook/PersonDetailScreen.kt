@@ -2,6 +2,7 @@ package com.spendrop.app.ui.paybook
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -323,7 +324,7 @@ private fun Header(person: Person) {
             Text(person.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { clipboard.setText(AnnotatedString(person.name)) }) { Icon(Icons.Filled.ContentCopy, "Copy name", Modifier.size(18.dp)) }
         }
-        person.notes?.let { Text(it, color = SD.colors.secondaryLabel) }
+        person.notes?.let { Text(it, color = SD.colors.secondaryLabel, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
     }
 }
 
@@ -335,8 +336,8 @@ private fun MoneyActions(person: Person, debts: List<Debt>, onPayment: (PaymentR
     var give by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
-            FilledTonalButton(onClick = { receive = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.AutoMirrored.Filled.CallReceived, null); Spacer(Modifier.width(6.dp)); Text("Receive Money")
+            FilledTonalButton(onClick = { receive = true }, modifier = Modifier.fillMaxWidth().height(48.dp), contentPadding = PaddingValues(horizontal = 10.dp)) {
+                Icon(Icons.AutoMirrored.Filled.CallReceived, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("Receive Money", maxLines = 1, softWrap = false)
             }
             DropdownMenu(receive, { receive = false }) {
                 DropdownMenuItem({ Text("Payment from ${person.name}") }, { receive = false; onPayment(PaymentRequest(1, currency, open)) })
@@ -344,8 +345,8 @@ private fun MoneyActions(person: Person, debts: List<Debt>, onPayment: (PaymentR
             }
         }
         Column(Modifier.weight(1f)) {
-            FilledTonalButton(onClick = { give = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.AutoMirrored.Filled.CallMade, null); Spacer(Modifier.width(6.dp)); Text("Give Money")
+            FilledTonalButton(onClick = { give = true }, modifier = Modifier.fillMaxWidth().height(48.dp), contentPadding = PaddingValues(horizontal = 10.dp)) {
+                Icon(Icons.AutoMirrored.Filled.CallMade, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("Give Money", maxLines = 1, softWrap = false)
             }
             DropdownMenu(give, { give = false }) {
                 DropdownMenuItem({ Text("Pay back what I owe") }, { give = false; onPayment(PaymentRequest(-1, currency, open)) })
@@ -408,20 +409,21 @@ private fun CreditRow(text: String, canApply: Boolean, apply: () -> Unit) {
 
 @Composable
 private fun DebtRow(d: Debt, selected: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, onSettle: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Title gets the full width; amount and "Settle" sit in their own column on the right.
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Top) {
         IconButton(onClick = onToggle, modifier = Modifier.semantics { contentDescription = "Select transaction ${d.title}" }) {
             Icon(if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (selected) SD.colors.blue else SD.colors.tertiaryLabel)
         }
-        Column(Modifier.weight(1f).clickable(onClick = onOpen).padding(vertical = 6.dp)) {
-            Text(d.title, fontWeight = FontWeight.SemiBold)
-            Text("${Fmt.date(d.date)} · ${d.detail}", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel)
+        Column(Modifier.weight(1f).clickable(onClick = onOpen).padding(top = 10.dp, end = 8.dp)) {
+            Text(d.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text("${Fmt.date(d.date)} · ${d.detail}", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (d.isPartiallyPaid) Text("Paid ${PersonLedger.format(d.settledMinor, d.currency)} of ${PersonLedger.format(d.originalMinor, d.currency)}", style = MaterialTheme.typography.bodySmall, color = SD.colors.blue)
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text((if (d.direction > 0) "+" else "−") + PersonLedger.format(d.outstandingMinor, d.currency), fontWeight = FontWeight.SemiBold, color = if (d.direction > 0) SD.colors.green else SD.colors.orange)
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(top = 10.dp)) {
+            Text((if (d.direction > 0) "+" else "−") + PersonLedger.format(d.outstandingMinor, d.currency), fontWeight = FontWeight.SemiBold, color = if (d.direction > 0) SD.colors.green else SD.colors.orange, maxLines = 1)
             Text(if (d.direction > 0) "owes you" else "you owe", style = MaterialTheme.typography.labelSmall, color = SD.colors.secondaryLabel)
+            TextButton(onClick = onSettle, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(36.dp).semantics { contentDescription = "Mark ${d.title} as paid" }) { Text("Settle") }
         }
-        TextButton(onClick = onSettle, modifier = Modifier.semantics { contentDescription = "Mark ${d.title} as paid" }) { Text("Settle") }
     }
 }
 

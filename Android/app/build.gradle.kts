@@ -79,6 +79,12 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true
+        // Robolectric loads one Android version per JVM cleanly; some tests run on API 30 (Android 11) and 35.
+        unitTests.all {
+            it.forkEvery = 1
+            it.systemProperty("spendrop.audit", project.findProperty("spendrop.audit") ?: "false")
+            it.systemProperty("spendrop.auditDir", rootProject.file("build/audit").absolutePath)
+        }
     }
 
     packaging {
@@ -127,6 +133,10 @@ dependencies {
     implementation(libs.mlkit.text)
     implementation(libs.pdfbox.android)
     implementation(libs.androidx.exif)
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

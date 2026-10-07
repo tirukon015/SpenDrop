@@ -11,7 +11,9 @@ import androidx.compose.runtime.getValue
 import com.spendrop.app.container
 import com.spendrop.app.data.Preferences
 import com.spendrop.app.importing.Intake
+import com.spendrop.app.ui.bulk.BulkImportScreen
 import com.spendrop.app.ui.importing.ImportFlowScreen
+import com.spendrop.core.model.ExpenseSourceType
 import com.spendrop.app.ui.theme.Appearance
 import com.spendrop.app.ui.theme.SpenDropTheme
 
@@ -27,13 +29,17 @@ class ShareActivity : ComponentActivity() {
         // Copy the shared content right away: URI read permission only lasts while this activity is alive. The import
         // view model survives rotation, so the same share is never processed twice.
         val shared = Intent(intent)
+        val bulk = Intake.isBulkShare(shared)
         setContent {
             val appearance by container.preferences.string(Preferences.Keys.appearance, "system").collectAsState(initial = "system")
             SpenDropTheme(Appearance.fromRaw(appearance)) {
-                ImportFlowScreen(container, load = { Intake.fromIntent(applicationContext, shared) }, fromShare = true) { saved ->
+                val done: (Int) -> Unit = { saved ->
                     if (saved > 0) Toast.makeText(this, if (saved == 1) "Saved to SpenDrop" else "$saved transactions saved to SpenDrop", Toast.LENGTH_SHORT).show()
                     finish()
                 }
+                if (bulk) BulkImportScreen(container, load = { Intake.fromIntent(applicationContext, shared, Intake.MAX_BULK_ITEMS) },
+                    source = ExpenseSourceType.SHARE_EXTENSION, onClose = done)
+                else ImportFlowScreen(container, load = { Intake.fromIntent(applicationContext, shared) }, fromShare = true, onFinished = done)
             }
         }
     }

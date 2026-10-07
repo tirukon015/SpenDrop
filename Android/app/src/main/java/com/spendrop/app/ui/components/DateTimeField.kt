@@ -40,10 +40,13 @@ fun DateTimeField(millis: Long, onChange: (Long) -> Unit, label: String, showTim
     val local = Instant.ofEpochMilli(millis).atZone(zone)
     var pickDate by remember { mutableStateOf(false) }
     var pickTime by remember { mutableStateOf(false) }
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = SD.colors.label, modifier = Modifier.weight(1f))
-        AssistChip(onClick = { pickDate = true }, label = { Text(Fmt.date(millis)) }, leadingIcon = { Icon(Icons.Filled.CalendarMonth, null) })
-        if (showTime) AssistChip(onClick = { pickTime = true }, label = { Text(Fmt.time(millis)) }, leadingIcon = { Icon(Icons.Filled.Schedule, null) }, modifier = Modifier.padding(start = 6.dp))
+    // Label above the date/time buttons so neither is squeezed on narrow phones.
+    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth()) {
+        Text(label, color = SD.colors.secondaryLabel, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AssistChip(onClick = { pickDate = true }, label = { Text(Fmt.date(millis), maxLines = 1) }, leadingIcon = { Icon(Icons.Filled.CalendarMonth, null) })
+            if (showTime) AssistChip(onClick = { pickTime = true }, label = { Text(Fmt.time(millis), maxLines = 1) }, leadingIcon = { Icon(Icons.Filled.Schedule, null) }, modifier = Modifier.padding(start = 8.dp))
+        }
     }
     if (pickDate) {
         // The Material date picker works in UTC days: convert the local calendar day both ways.

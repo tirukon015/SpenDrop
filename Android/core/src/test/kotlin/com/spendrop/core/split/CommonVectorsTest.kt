@@ -69,6 +69,8 @@ class CommonVectorsTest {
                     "fixed" -> d.setFixed(op["minor"]!!.jsonPrimitive.long, idOf(who!!), total)!!
                     "parts" -> d.setParts(op["value"]!!.jsonPrimitive.int, idOf(who!!))
                     "autoCalculate" -> d.setAutoCalculate(op["value"]!!.jsonPrimitive.boolean, total)
+                    // Who paid is independent of how the bill is divided ("Me" = I paid).
+                    "payer" -> d.setPayer(if (who == "Me") null else d.participants.first { it.name == who }.person)
                     else -> error("unknown op in $name")
                 }
             }

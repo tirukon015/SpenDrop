@@ -35,6 +35,13 @@ Last updated: 2026-10-07 (overnight autonomous build).
    - The payment source follows the chosen funding account.
    - Double-tap guards; a missing record closes the editor; single-instance password screen; responses are closed on cancellation.
 
+## Later on 2026-10-07
+
+- Installed and run on the OPPO (CPH2269, Android 11): Google sign-in and live sync checked by hand.
+- Camera runtime permission, in-app receipt camera, Permissions & Access screen.
+- UI spacing pass on all screens; more room under the status bar for page titles.
+- **Bulk Screenshot Import** (same rules as iOS and Web: `Common/BusinessRules/bulk-import.md`). Tests: `./gradlew :core:test` 284, `:app:testDebugUnitTest` 49, 0 failures.
+
 ## Verification
 
 | Check | Result |

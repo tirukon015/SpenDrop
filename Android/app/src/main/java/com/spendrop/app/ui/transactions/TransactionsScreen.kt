@@ -110,7 +110,7 @@ fun TransactionsScreen(container: AppContainer, nav: TransactionsNav) {
         LazyColumn(contentPadding = padding, modifier = Modifier.fillMaxSize()) {
             item {
                 OutlinedTextField(filters.searchText, { t -> container.filters.value = filters.copy(searchText = t) },
-                    placeholder = { Text("Search merchant, amount, category...") }, leadingIcon = { Icon(Icons.Filled.Search, null) }, singleLine = true,
+                    placeholder = { Text("Search merchant, amount, category...", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, leadingIcon = { Icon(Icons.Filled.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(Radius.field))
             }
             item {
@@ -125,7 +125,7 @@ fun TransactionsScreen(container: AppContainer, nav: TransactionsNav) {
                 }
             }
             item {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
                         Text("SPENT", style = SD.sectionHeader, color = SD.colors.secondaryLabel)
                         Text(Fmt.money(summary.spendingMinor), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -149,7 +149,7 @@ fun TransactionsScreen(container: AppContainer, nav: TransactionsNav) {
                 else -> groups.forEach { g ->
                     item(key = "h-${g.date}") {
                         Text((g.dateHeader.uppercase() + (g.dateSubtitle?.let { " • $it" } ?: "")), style = SD.sectionHeader, color = SD.colors.secondaryLabel,
-                            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 6.dp))
+                            modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 16.dp, bottom = 6.dp))
                     }
                     items(g.items, key = { it.id }) { item ->
                         SwipeDelete(onDelete = {
@@ -192,7 +192,7 @@ private suspend fun restore(container: AppContainer, s: FinanceSnapshot, item: A
 fun SwipeDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { if (it == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false })
     SwipeToDismissBox(state, enableDismissFromStartToEnd = false, backgroundContent = {
-        Box(Modifier.fillMaxSize().padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp)).background(SD.colors.red), contentAlignment = Alignment.CenterEnd) {
+        if (state.dismissDirection == SwipeToDismissBoxValue.EndToStart) Box(Modifier.fillMaxSize().padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp)).background(SD.colors.red), contentAlignment = Alignment.CenterEnd) {
             Icon(Icons.Filled.Delete, "Delete", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.padding(end = 20.dp))
         }
     }) { content() }

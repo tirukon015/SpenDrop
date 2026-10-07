@@ -45,7 +45,7 @@ fun FilterSheet(filters: TransactionFilters, fundingAccounts: List<String>, onCh
                 TextButton(onClick = onDismiss) { Text("Done") }
             }
             SectionHeader("Date range")
-            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(Modifier.padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 QuickDateFilter.entries.forEach { f ->
                     FilterChip(filters.dateFilter == f, {
                         if (f == QuickDateFilter.CUSTOM) {
@@ -64,17 +64,17 @@ fun FilterSheet(filters: TransactionFilters, fundingAccounts: List<String>, onCh
             }
             if (fundingAccounts.isNotEmpty()) {
                 SectionHeader("Funding accounts")
-                FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(Modifier.padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     fundingAccounts.forEach { a -> FilterChip(a in filters.fundingAccounts, { onChange(filters.toggleFundingAccount(a)) }, { Text(a) }) }
                 }
             }
             SectionHeader("Categories")
-            FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(Modifier.padding(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ExpenseCategory.entries.forEach { c -> FilterChip(c in filters.categories, { onChange(filters.toggleCategory(c)) }, { Text(c.displayName) }, leadingIcon = { Icon(c.icon, null) }) }
             }
-            if (filters.categories.isNotEmpty()) Text("A category filter shows expenses only.", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 20.dp))
+            if (filters.categories.isNotEmpty()) Text("A category filter shows expenses only.", style = MaterialTheme.typography.bodySmall, color = SD.colors.secondaryLabel, modifier = Modifier.padding(horizontal = 32.dp))
             SectionHeader("Payment channels")
-            FlowRow(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(Modifier.padding(horizontal = 32.dp).padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PaymentChannel.pickerOrder.forEach { c -> FilterChip(c in filters.paymentChannels, { onChange(filters.toggleChannel(c)) }, { Text(c.displayName) }, leadingIcon = { Icon(c.icon, null) }) }
             }
         }
