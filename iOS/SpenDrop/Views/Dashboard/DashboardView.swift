@@ -18,6 +18,7 @@ public struct DashboardView: View {
     @State private var parsedTransaction: ParsedTransaction?
     @State private var showingOCRError = false
     @State private var ocrErrorMessage = ""
+    @State private var showingBulkImport = false
 
     private var calendar: Calendar { Calendar.current }
     private var now: Date { Date() }
@@ -170,6 +171,21 @@ public struct DashboardView: View {
                             Spacer()
 
                             HStack(spacing: 8) {
+                                // Bulk Import: several screenshots at once, each reviewed before saving
+                                Button {
+                                    showingBulkImport = true
+                                } label: {
+                                    Image(systemName: "photo.stack")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.blue)
+                                        .frame(width: 36, height: 36)
+                                        .background(Color.blue.opacity(0.12))
+                                        .clipShape(Circle())
+                                }
+                                .accessibilityLabel("Bulk Import")
+                                .accessibilityIdentifier("home.bulkImport")
+
                                 // Scan / Drop Screenshot shortcut
                                 PhotosPicker(selection: $selectedPhotoItem, matching: .images, preferredItemEncoding: .current) {
                                     Image(systemName: "viewfinder.rectangular")
@@ -409,6 +425,10 @@ public struct DashboardView: View {
             }
             .sheet(item: $parsedTransaction) { parsed in
                 ExpenseReviewView(parsed: parsed)
+                    .environment(\.modelContext, modelContext)
+            }
+            .sheet(isPresented: $showingBulkImport) {
+                BulkImportView()
                     .environment(\.modelContext, modelContext)
             }
             .alert("Couldn't read this image", isPresented: $showingOCRError) {

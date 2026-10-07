@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		709E8CB67BC805B97EFD78E2 /* BulkImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482BF450B9EEC0CF234B7692 /* BulkImportView.swift */; };
+		0AAA7843BFD50E1CA02B99DA /* BulkImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */; };
+		411769169E6BF88A0FEF0249 /* BulkImportSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1971AEC23EB2964D3A997610 /* BulkImportSession.swift */; };
+		F53362E348329DC0C750972F /* ScreenshotSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1268BE3115673B0F5D29A985 /* ScreenshotSplitter.swift */; };
 		0335A86DEA50E170E9472F3A /* AddExpenseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC43EBF03EE2468FDDB6DEF /* AddExpenseView.swift */; };
 		039D4A67B5E70FF5724ED661 /* SplitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F05DDB45F8299BD7930592 /* SplitCalculator.swift */; };
 		04A0E1B5E4781357EA3F54D0 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FFF646FE2FC4D7C75FEA8F /* MoreView.swift */; };
@@ -176,6 +180,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		482BF450B9EEC0CF234B7692 /* BulkImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportView.swift; sourceTree = "<group>"; };
+		0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportTests.swift; sourceTree = "<group>"; };
+		1971AEC23EB2964D3A997610 /* BulkImportSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportSession.swift; sourceTree = "<group>"; };
+		1268BE3115673B0F5D29A985 /* ScreenshotSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotSplitter.swift; sourceTree = "<group>"; };
 		02955226116027AB104FAA8C /* sample_photo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sample_photo.jpg; sourceTree = "<group>"; };
 		0394B0D80D2BCFD87A86FB44 /* ExpensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpensesView.swift; sourceTree = "<group>"; };
 		08D9AD5D69593B13C044F950 /* SpenDropShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpenDropShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -316,6 +324,7 @@
 		0A0593D92C769872C2602B42 /* Dashboard */ = {
 			isa = PBXGroup;
 			children = (
+				482BF450B9EEC0CF234B7692 /* BulkImportView.swift */,
 				174153C611390E7C4DE1B9C9 /* Components */,
 				F8DE07B59FC969E5045C2ECA /* DashboardView.swift */,
 			);
@@ -426,6 +435,7 @@
 		5C83A3B517CD0354E8AFA678 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */,
 				68CE5BA46F294CB69AC4816C /* TestKit.swift */,
 				97C6C4D96250C1F526514E6C /* SplitFeatureTests.swift */,
 				5308225118CA1DC65E77572B /* PeopleBalanceTests.swift */,
@@ -466,6 +476,8 @@
 		782F633D9016F8C323B526E3 /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				1971AEC23EB2964D3A997610 /* BulkImportSession.swift */,
+				1268BE3115673B0F5D29A985 /* ScreenshotSplitter.swift */,
 				6B13BFA0565178CE6CA86F31 /* ExpenseDataContainer.swift */,
 				F9472BC1B655354029FA1C75 /* DuplicateDetector.swift */,
 				4046FDBFADDF9C0D2D24A14C /* TransactionFilterEngine.swift */,
@@ -834,6 +846,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				709E8CB67BC805B97EFD78E2 /* BulkImportView.swift in Sources */,
+				0AAA7843BFD50E1CA02B99DA /* BulkImportTests.swift in Sources */,
+				411769169E6BF88A0FEF0249 /* BulkImportSession.swift in Sources */,
+				F53362E348329DC0C750972F /* ScreenshotSplitter.swift in Sources */,
 				CBF6D1BBCC693FB30AB001F0 /* SpenDropApp.swift in Sources */,
 				598CD975F366FEC06F888261 /* Expense.swift in Sources */,
 				719D5EF75D55248B607B3571 /* ExpenseCategory.swift in Sources */,

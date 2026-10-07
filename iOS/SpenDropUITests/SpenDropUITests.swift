@@ -660,6 +660,53 @@ final class SpenDropUITests: XCTestCase {
         XCTAssertEqual(app.textFields["split.amount.Riyad"].value as? String, "100.00")
         snap("Edit restores paid by Riyad")
     }
+
+    /// Bulk Import from Home with fixture screenshots (a receipt, a 2-row history, the same receipt again, one with no
+    /// text): review queue, the full editor inside a card, duplicate skipped by default, "Add 3", each saved separately.
+    func test18_BulkImportReviewQueue() {
+        app.terminate()
+        app.launchArguments = ["--ui-testing", "--ui-testing-bulk-import"]
+        app.launch()
+        let entry = app.buttons["home.bulkImport"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "Bulk Import is offered on Home")
+        entry.tap()
+
+        let add = app.buttons["bulk.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 20), "review queue appears after reading")
+        XCTAssertEqual(add.label, "Add 3 Transactions", "the duplicate of screenshot 1 is skipped by default")
+        XCTAssertEqual(app.staticTexts["bulk.summary"].label, "4 screenshots · 4 transactions detected")
+        XCTAssertTrue(app.staticTexts["Possible Duplicate"].exists)
+        let unreadable = app.descendants(matching: .any)["bulk.unreadable.4"]
+        for _ in 0..<4 where !unreadable.exists { app.swipeUp() }
+        XCTAssertTrue(unreadable.exists, "a screenshot without a transaction is listed")
+        snap("Bulk import review queue")
+        for _ in 0..<4 { app.swipeDown() }
+
+        // A card opens into the normal editor (Save as, fields, Split Money).
+        let card = app.buttons["bulk.card.1.0"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        let split = app.switches["share.splitToggle"]
+        for _ in 0..<5 where !split.isHittable { app.swipeUp() }
+        XCTAssertTrue(split.exists, "the full editor with Split Money is inside the card")
+        XCTAssertTrue(app.buttons["draft.paidFor"].exists, "Paid for Someone is offered")
+        snap("Bulk import card expanded")
+        let collapse = app.buttons["bulk.collapse"]
+        for _ in 0..<5 where !collapse.isHittable { app.swipeUp() }
+        collapse.tap()
+
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(app.staticTexts["Added 3 transactions"].waitForExistence(timeout: 10))
+        app.buttons["bulk.done"].tap()
+
+        tab("Transactions")
+        // The two history rows are dated today (the receipt is dated 16 Sep, outside the default period).
+        for name in ["Grab", "Starbucks"] {
+            XCTAssertTrue(app.staticTexts[name].firstMatch.waitForExistence(timeout: 5), "\(name) saved as its own transaction")
+        }
+        snap("Bulk import saved")
+    }
 }
 
 private extension XCUIElement {

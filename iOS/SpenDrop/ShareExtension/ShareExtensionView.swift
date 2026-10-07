@@ -258,6 +258,114 @@ public final class ShareExtensionViewModel: ObservableObject {
         shareLog("[SpenDropShare][OCR] review/result UI presented (manual entry)")
         self.phase = .reviewing(image: image, parsed: manualParsed)
     }
+
+    // MARK: - Draft rules and save path (shared by the Share Extension and Bulk Import)
+
+    public var parsedAmount: Double {
+        CurrencyFormatter.parse(string: amountText) ?? 0.0
+    }
+
+    /// A split must add up to the amount exactly before the expense can be saved.
+    public var isValid: Bool {
+        guard parsedAmount > 0 else { return false }
+        guard saveAs == .expense, let split = splitDraft else { return true }
+        return split.isValid(totalMinor: Money.minorUnits(from: parsedAmount))
+    }
+
+    /// The movement kind for Money In / Money Out: the parser's suggestion when it matches, else Other In / Other Out.
+    public var movementKind: MoneyMovementKind {
+        let wanted: MoneyDirection = saveAs == .moneyIn ? .moneyIn : .moneyOut
+        if let suggested = suggestedMovementKind, suggested.direction == wanted { return suggested }
+        return wanted == .moneyIn ? .otherIn : .otherOut
+    }
+
+    /// Money In / Money Out. The account is resolved from the funding account text (Unknown stays unlinked, no
+    /// duplicate accounts are created). Inserts and saves; the caller reports the result.
+    @discardableResult
+    public func saveMovementRecord(sourceType: ExpenseSourceType = .shareExtension, in modelContext: ModelContext) throws -> MoneyMovement {
+        let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteParts = [trimmedMerchant, notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }
+        let movement = MoneyMovement(
+            kind: movementKind,
+            amountMinor: Money.minorUnits(from: parsedAmount),
+            date: date,
+            account: AccountLinker.resolveAccount(named: fundingAccount, in: modelContext),
+            note: noteParts.isEmpty ? nil : noteParts.joined(separator: " · "),
+            transactionReference: transactionReference,
+            sourceType: sourceType,
+            paymentChannel: selectedPaymentChannel
+        )
+        modelContext.insert(movement)
+        try modelContext.save()
+        return movement
+    }
+
+    /// Saves the draft as a new expense (screenshot attached as its receipt), or — only when the user chose
+    /// "Merge with Existing" for a same-reference match — adds its details to that existing expense.
+    @discardableResult
+    public func saveExpenseRecord(mergeInto mergeTarget: Expense?, sourceType: ExpenseSourceType = .shareExtension,
+                                  imageStore: ImageStorageService = .shared, in modelContext: ModelContext) throws -> Expense {
+        let savedImagePath = inputImage.flatMap { imageStore.saveImage($0) }
+        let trimmedMerchant = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalMerchant = trimmedMerchant.isEmpty ? "Unknown" : trimmedMerchant
+
+        var resolvedSource = selectedPaymentSource
+        if resolvedSource == .unknown {
+            resolvedSource = PaymentSource.from(string: fundingAccount)
+        }
+
+        let saved: Expense
+        if let existing = mergeTarget {
+            let candidate = ReconcileCandidate(
+                amount: parsedAmount,
+                merchant: finalMerchant,
+                date: date,
+                category: selectedCategory,
+                fundingAccount: fundingAccount,
+                paymentChannel: selectedPaymentChannel,
+                reference: transactionReference,
+                notes: notes.isEmpty ? nil : notes,
+                imageRelativePath: savedImagePath,
+                rawOCRText: nil,
+                fundingInstrument: fundingInstrument
+            )
+            _ = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
+            // Applied only when it matches the merged expense's amount; otherwise nothing changes.
+            splitDraft?.apply(to: existing, in: modelContext)
+            saved = existing
+        } else {
+            let expense = Expense(
+                amount: parsedAmount,
+                currency: "RM",
+                merchant: finalMerchant,
+                category: selectedCategory,
+                paymentSource: resolvedSource,
+                underlyingBank: resolvedSource == .applePay ? PaymentSource.from(string: fundingAccount) : nil,
+                paymentMethod: resolvedSource.defaultPaymentMethod,
+                date: date,
+                notes: notes,
+                transactionReference: transactionReference,
+                imageRelativePath: savedImagePath,
+                sourceType: sourceType,
+                ocrText: nil,
+                confidence: 1.0,
+                paymentChannel: selectedPaymentChannel,
+                fundingAccount: fundingAccount,
+                fundingInstrument: fundingInstrument
+            )
+            modelContext.insert(expense)
+            AccountLinker.relink(expense, in: modelContext)
+            // Split Money: shares (and who paid) are saved with the expense; PayBook balances follow from them.
+            splitDraft?.apply(to: expense, in: modelContext)
+            TransactionClassifier.learn(merchant: finalMerchant, category: selectedCategory, accountId: expense.account?.id, in: modelContext)
+            ChannelLearning.learn(merchant: finalMerchant, funding: fundingAccount, channel: selectedPaymentChannel, in: modelContext)
+            saved = expense
+        }
+
+        try modelContext.save()
+        modelContext.processPendingChanges()
+        return saved
+    }
 }
 
 public struct ShareExtensionView: View {
@@ -278,27 +386,10 @@ public struct ShareExtensionView: View {
         self.onCancel = onCancel
     }
 
-    private var parsedAmount: Double {
-        CurrencyFormatter.parse(string: viewModel.amountText) ?? 0.0
-    }
+    private var parsedAmount: Double { viewModel.parsedAmount }
 
     /// A split must add up to the amount exactly before the expense can be saved.
-    private var isValid: Bool {
-        guard parsedAmount > 0 else { return false }
-        guard viewModel.saveAs == .expense, let split = viewModel.splitDraft else { return true }
-        return split.isValid(totalMinor: Money.minorUnits(from: parsedAmount))
-    }
-
-    /// A small explanation under a field: why SpenDrop suggested it, or that it needs checking.
-    private func shareCaption(_ text: String, warning: Bool = true) -> some View {
-        Label(text, systemImage: warning ? "exclamationmark.circle" : "info.circle")
-            .font(.caption)
-            .foregroundStyle(warning ? Color.orange : Color.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 52)
-            .padding(.trailing, 16)
-            .padding(.bottom, 8)
-    }
+    private var isValid: Bool { viewModel.isValid }
 
     public var body: some View {
         NavigationStack {
@@ -507,23 +598,7 @@ public struct ShareExtensionView: View {
                 }
 
                 // Save as
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("Save as", selection: $viewModel.saveAs) {
-                        ForEach(ShareExtensionViewModel.SaveType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    if viewModel.suggestedMovementKind == .ownTransfer {
-                        Text("Looks like a top-up between your own accounts. Open SpenDrop to record it as a Transfer.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    } else if let reason = viewModel.directionReason {
-                        Text("Suggested from the screenshot: \(reason). Please confirm.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                ShareSaveAsSection(viewModel: viewModel)
 
                 // Screenshot Preview Thumbnail (Allows verifying while editing)
                 HStack(spacing: 12) {
@@ -560,252 +635,8 @@ public struct ShareExtensionView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                // Amount Card
-                VStack(spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(parsed.currency)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundStyle(.secondary)
-
-                        TextField("0.00", text: $viewModel.amountText)
-                            .font(.system(size: 40, weight: .heavy, design: .rounded))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-
-                    if parsedAmount == 0 {
-                        Text("Enter amount to save")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                    }
-                }
-                .padding(.vertical, 12)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                // Details Card
-                VStack(spacing: 0) {
-                    // Paid To (Merchant / Payee)
-                    HStack(spacing: 12) {
-                        Image(systemName: "storefront.fill")
-                            .foregroundStyle(.blue)
-                            .frame(width: 24)
-                        Text("Paid To")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        TextField("Optional", text: $viewModel.merchant)
-                            .multilineTextAlignment(.trailing)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    Divider().padding(.leading, 52)
-
-                    // Category
-                    HStack(spacing: 12) {
-                        Image(systemName: viewModel.selectedCategory.icon)
-                            .foregroundStyle(viewModel.selectedCategory.color)
-                            .frame(width: 24)
-                        Text("Category")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Menu {
-                            ForEach(ExpenseCategory.allCases) { cat in
-                                Button {
-                                    viewModel.selectedCategory = cat
-                                    viewModel.categoryHint = nil
-                                } label: {
-                                    Label(cat.rawValue, systemImage: cat.icon)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(viewModel.selectedCategory.rawValue)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.primary)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    Divider().padding(.leading, 52)
-
-                    // Funding Method (Where money came from)
-                    HStack(spacing: 12) {
-                        Image(systemName: "building.columns.fill")
-                            .foregroundStyle(.blue)
-                            .frame(width: 24)
-                        Text("Funding Method")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Menu {
-                            ForEach(commonFundingAccounts, id: \.self) { acc in
-                                Button {
-                                    viewModel.fundingAccount = acc
-                                } label: {
-                                    Text(acc)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(viewModel.fundingAccount.isEmpty ? "Unknown" : viewModel.fundingAccount)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.primary)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    if let hint = viewModel.categoryHint, hint.needsReview {
-                        shareCaption("Suggested · please check. \(hint.reason)")
-                    }
-
-                    Divider().padding(.leading, 52)
-
-                    // Payment Channel (How payment was made - ALWAYS VISIBLE)
-                    HStack(spacing: 12) {
-                        Image(systemName: viewModel.selectedPaymentChannel.iconName)
-                            .foregroundStyle(viewModel.selectedPaymentChannel.tintColor)
-                            .frame(width: 24)
-                        Text("Payment Channel")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Menu {
-                            ForEach(PaymentChannel.allCases) { ch in
-                                Button {
-                                    viewModel.selectedPaymentChannel = ch
-                                    viewModel.channelHint = nil
-                                } label: {
-                                    Label(ch.displayName, systemImage: ch.iconName)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(viewModel.selectedPaymentChannel.displayName)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.primary)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    if let hint = viewModel.channelHint {
-                        if hint.channel == .unknown {
-                            shareCaption("Unknown — needs review. \(hint.reason)")
-                        } else if !hint.reason.isEmpty {
-                            shareCaption(hint.reason, warning: false)
-                        }
-                    }
-
-                    // Funding Instrument (if available)
-                    if let instrument = viewModel.fundingInstrument, !instrument.isEmpty {
-                        Divider().padding(.leading, 52)
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "creditcard")
-                                .foregroundStyle(.orange)
-                                .frame(width: 24)
-                            Text("Funding Instrument")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(instrument)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-
-                    Divider().padding(.leading, 52)
-
-                    // Date & Time
-                    HStack(spacing: 12) {
-                        Image(systemName: "calendar")
-                            .foregroundStyle(.indigo)
-                            .frame(width: 24)
-                        Text("Date & Time")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        DatePicker("", selection: $viewModel.date)
-                            .labelsHidden()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                // Split Money: share the amount with people in PayBook before saving (expenses only)
-                if viewModel.saveAs == .expense {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: Binding(get: { viewModel.splitDraft != nil }, set: { on in
-                            withAnimation(.easeInOut(duration: 0.2)) { viewModel.splitDraft = on ? SplitDraft() : nil }
-                        })) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.2.fill").foregroundStyle(.blue)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Split Money").font(.subheadline.weight(.semibold))
-                                    Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("share.splitToggle")
-                        if viewModel.splitDraft != nil {
-                            Divider()
-                            InlineSplitSection(draft: Binding(get: { viewModel.splitDraft ?? SplitDraft() }, set: { viewModel.splitDraft = $0 }),
-                                               totalMinor: Money.minorUnits(from: parsedAmount))
-                        }
-                    }
-                    .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-
-                // Notes
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("REMARKS")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.secondary)
-                            .tracking(1.0)
-                        Spacer()
-                        Text("Optional")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 4)
-
-                    TextField("Add remarks (optional)", text: $viewModel.notes)
-                        .padding(12)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
+                // Amount, details, Split Money and remarks (the same editor fields Bulk Import uses)
+                ShareDraftEditor(viewModel: viewModel, currency: parsed.currency, fundingOptions: commonFundingAccounts)
 
                 // Save Expense Button
                 Button(action: handleSaveButtonTapped) {
@@ -900,11 +731,7 @@ public struct ShareExtensionView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var movementKind: MoneyMovementKind {
-        let wanted: MoneyDirection = viewModel.saveAs == .moneyIn ? .moneyIn : .moneyOut
-        if let suggested = viewModel.suggestedMovementKind, suggested.direction == wanted { return suggested }
-        return wanted == .moneyIn ? .otherIn : .otherOut
-    }
+    private var movementKind: MoneyMovementKind { viewModel.movementKind }
 
     private func handleSaveButtonTapped() {
         if viewModel.saveAs != .expense {
@@ -928,21 +755,8 @@ public struct ShareExtensionView: View {
     /// (Unknown stays unlinked, no duplicate accounts are created).
     private func saveMovement() {
         guard isValid else { return }
-        let trimmedMerchant = viewModel.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        let noteParts = [trimmedMerchant, viewModel.notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty }
-        let movement = MoneyMovement(
-            kind: movementKind,
-            amountMinor: Money.minorUnits(from: parsedAmount),
-            date: viewModel.date,
-            account: AccountLinker.resolveAccount(named: viewModel.fundingAccount, in: modelContext),
-            note: noteParts.isEmpty ? nil : noteParts.joined(separator: " · "),
-            transactionReference: viewModel.transactionReference,
-            sourceType: .shareExtension,
-            paymentChannel: viewModel.selectedPaymentChannel
-        )
-        modelContext.insert(movement)
         do {
-            try modelContext.save()
+            let movement = try viewModel.saveMovementRecord(in: modelContext)
             shareLog("[SpenDropShare] money movement saved (\(movement.kind.rawValue))")
         } catch {
             shareLog("[SpenDropShare][ERROR] failed to save money movement: \(error.localizedDescription)")
@@ -955,64 +769,8 @@ public struct ShareExtensionView: View {
     /// same-reference match — adds its details to that existing expense.
     private func saveToSwiftData(mergeInto mergeTarget: Expense?) {
         guard isValid else { return }
-
-        let savedImagePath = viewModel.inputImage.flatMap { ImageStorageService.shared.saveImage($0) }
-        let trimmedMerchant = viewModel.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalMerchant = trimmedMerchant.isEmpty ? "Unknown" : trimmedMerchant
-
-        var resolvedSource = viewModel.selectedPaymentSource
-        if resolvedSource == .unknown {
-            resolvedSource = PaymentSource.from(string: viewModel.fundingAccount)
-        }
-
-        if let existing = mergeTarget {
-            let candidate = ReconcileCandidate(
-                amount: parsedAmount,
-                merchant: finalMerchant,
-                date: viewModel.date,
-                category: viewModel.selectedCategory,
-                fundingAccount: viewModel.fundingAccount,
-                paymentChannel: viewModel.selectedPaymentChannel,
-                reference: viewModel.transactionReference,
-                notes: viewModel.notes.isEmpty ? nil : viewModel.notes,
-                imageRelativePath: savedImagePath,
-                rawOCRText: nil,
-                fundingInstrument: viewModel.fundingInstrument
-            )
-            _ = TransactionReconciliationEngine.shared.reconcile(existing: existing, with: candidate, in: modelContext)
-            // Applied only when it matches the merged expense's amount; otherwise nothing changes.
-            viewModel.splitDraft?.apply(to: existing, in: modelContext)
-        } else {
-            let expense = Expense(
-                amount: parsedAmount,
-                currency: "RM",
-                merchant: finalMerchant,
-                category: viewModel.selectedCategory,
-                paymentSource: resolvedSource,
-                underlyingBank: resolvedSource == .applePay ? PaymentSource.from(string: viewModel.fundingAccount) : nil,
-                paymentMethod: resolvedSource.defaultPaymentMethod,
-                date: viewModel.date,
-                notes: viewModel.notes,
-                transactionReference: viewModel.transactionReference,
-                imageRelativePath: savedImagePath,
-                sourceType: .shareExtension,
-                ocrText: nil,
-                confidence: 1.0,
-                paymentChannel: viewModel.selectedPaymentChannel,
-                fundingAccount: viewModel.fundingAccount,
-                fundingInstrument: viewModel.fundingInstrument
-            )
-            modelContext.insert(expense)
-            AccountLinker.relink(expense, in: modelContext)
-            // Split Money: shares (and who paid) are saved with the expense; PayBook balances follow from them.
-            viewModel.splitDraft?.apply(to: expense, in: modelContext)
-            TransactionClassifier.learn(merchant: finalMerchant, category: viewModel.selectedCategory, accountId: expense.account?.id, in: modelContext)
-            ChannelLearning.learn(merchant: finalMerchant, funding: viewModel.fundingAccount, channel: viewModel.selectedPaymentChannel, in: modelContext)
-        }
-
         do {
-            try modelContext.save()
-            modelContext.processPendingChanges()
+            try viewModel.saveExpenseRecord(mergeInto: mergeTarget, in: modelContext)
             shareLog("[SpenDropShare][OCR] expense saved successfully")
         } catch {
             shareLog("[SpenDropShare][OCR][ERROR] failed to save expense: \(error.localizedDescription)")
@@ -1020,5 +778,343 @@ public struct ShareExtensionView: View {
 
         HapticFeedback.notification(.success)
         onComplete()
+    }
+}
+
+// MARK: - Reusable draft editor pieces
+// The Share Extension review form, split into pieces so Bulk Import can show exactly the same fields for each of its
+// drafts. They only read and write a `ShareExtensionViewModel`; saving stays with the screen that shows them.
+
+/// "Save as" Expense / Money In / Money Out, with the reason it was suggested.
+public struct ShareSaveAsSection: View {
+    @ObservedObject public var viewModel: ShareExtensionViewModel
+
+    public init(viewModel: ShareExtensionViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Save as", selection: $viewModel.saveAs) {
+                ForEach(ShareExtensionViewModel.SaveType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+            if viewModel.suggestedMovementKind == .ownTransfer {
+                Text("Looks like a top-up between your own accounts. Open SpenDrop to record it as a Transfer.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if let reason = viewModel.directionReason {
+                Text("Suggested from the screenshot: \(reason). Please confirm.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Amount, Paid To, Category, Funding Method, Payment Channel, Funding Instrument, Date & Time, Split Money and
+/// Remarks for one draft. `showsPaidForSomeone` adds the "Paid for Someone" shortcut of Add Expense.
+public struct ShareDraftEditor: View {
+    @ObservedObject public var viewModel: ShareExtensionViewModel
+    public let currency: String
+    public let fundingOptions: [String]
+    public let showsPaidForSomeone: Bool
+
+    public init(viewModel: ShareExtensionViewModel, currency: String, fundingOptions: [String], showsPaidForSomeone: Bool = false) {
+        self.viewModel = viewModel
+        self.currency = currency
+        self.fundingOptions = fundingOptions
+        self.showsPaidForSomeone = showsPaidForSomeone
+    }
+
+    private var parsedAmount: Double { viewModel.parsedAmount }
+
+    /// A small explanation under a field: why SpenDrop suggested it, or that it needs checking.
+    private func shareCaption(_ text: String, warning: Bool = true) -> some View {
+        Label(text, systemImage: warning ? "exclamationmark.circle" : "info.circle")
+            .font(.caption)
+            .foregroundStyle(warning ? Color.orange : Color.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 52)
+            .padding(.trailing, 16)
+            .padding(.bottom, 8)
+    }
+
+    public var body: some View {
+        VStack(spacing: 16) {
+            // Amount Card
+            VStack(spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(currency)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    TextField("0.00", text: $viewModel.amountText)
+                        .font(.system(size: 40, weight: .heavy, design: .rounded))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+
+                if parsedAmount == 0 {
+                    Text("Enter amount to save")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.vertical, 12)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            // Details Card
+            VStack(spacing: 0) {
+                // Paid To (Merchant / Payee)
+                HStack(spacing: 12) {
+                    Image(systemName: "storefront.fill")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+                    Text("Paid To")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    TextField("Optional", text: $viewModel.merchant)
+                        .multilineTextAlignment(.trailing)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().padding(.leading, 52)
+
+                // Category
+                HStack(spacing: 12) {
+                    Image(systemName: viewModel.selectedCategory.icon)
+                        .foregroundStyle(viewModel.selectedCategory.color)
+                        .frame(width: 24)
+                    Text("Category")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        ForEach(ExpenseCategory.allCases) { cat in
+                            Button {
+                                viewModel.selectedCategory = cat
+                                viewModel.categoryHint = nil
+                            } label: {
+                                Label(cat.rawValue, systemImage: cat.icon)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(viewModel.selectedCategory.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().padding(.leading, 52)
+
+                // Funding Method (Where money came from)
+                HStack(spacing: 12) {
+                    Image(systemName: "building.columns.fill")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+                    Text("Funding Method")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        ForEach(fundingOptions, id: \.self) { acc in
+                            Button {
+                                viewModel.fundingAccount = acc
+                            } label: {
+                                Text(acc)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(viewModel.fundingAccount.isEmpty ? "Unknown" : viewModel.fundingAccount)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                if let hint = viewModel.categoryHint, hint.needsReview {
+                    shareCaption("Suggested · please check. \(hint.reason)")
+                }
+
+                Divider().padding(.leading, 52)
+
+                // Payment Channel (How payment was made - ALWAYS VISIBLE)
+                HStack(spacing: 12) {
+                    Image(systemName: viewModel.selectedPaymentChannel.iconName)
+                        .foregroundStyle(viewModel.selectedPaymentChannel.tintColor)
+                        .frame(width: 24)
+                    Text("Payment Channel")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Menu {
+                        ForEach(PaymentChannel.allCases) { ch in
+                            Button {
+                                viewModel.selectedPaymentChannel = ch
+                                viewModel.channelHint = nil
+                            } label: {
+                                Label(ch.displayName, systemImage: ch.iconName)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(viewModel.selectedPaymentChannel.displayName)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                if let hint = viewModel.channelHint {
+                    if hint.channel == .unknown {
+                        shareCaption("Unknown — needs review. \(hint.reason)")
+                    } else if !hint.reason.isEmpty {
+                        shareCaption(hint.reason, warning: false)
+                    }
+                }
+
+                // Funding Instrument (if available)
+                if let instrument = viewModel.fundingInstrument, !instrument.isEmpty {
+                    Divider().padding(.leading, 52)
+
+                    HStack(spacing: 12) {
+                        Image(systemName: "creditcard")
+                            .foregroundStyle(.orange)
+                            .frame(width: 24)
+                        Text("Funding Instrument")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(instrument)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+
+                Divider().padding(.leading, 52)
+
+                // Date & Time
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(.indigo)
+                        .frame(width: 24)
+                    Text("Date & Time")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    DatePicker("", selection: $viewModel.date)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            // Split Money: share the amount with people in PayBook before saving (expenses only)
+            if viewModel.saveAs == .expense {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: Binding(get: { viewModel.splitDraft != nil }, set: { on in
+                        withAnimation(.easeInOut(duration: 0.2)) { viewModel.splitDraft = on ? SplitDraft() : nil }
+                    })) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.2.fill").foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Split Money").font(.subheadline.weight(.semibold))
+                                Text("Share this amount with people in PayBook").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("share.splitToggle")
+                    if viewModel.splitDraft != nil {
+                        Divider()
+                        InlineSplitSection(draft: Binding(get: { viewModel.splitDraft ?? SplitDraft() }, set: { viewModel.splitDraft = $0 }),
+                                           totalMinor: Money.minorUnits(from: parsedAmount))
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+
+            // Notes
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("REMARKS")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.secondary)
+                        .tracking(1.0)
+                    Spacer()
+                    Text("Optional")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 4)
+
+                TextField("Add remarks (optional)", text: $viewModel.notes)
+                    .padding(12)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            if showsPaidForSomeone && viewModel.saveAs == .expense && viewModel.splitDraft == nil {
+                // "I paid RM100 for Bijoy" / "Bijoy paid for me" without typing anyone's share (as in Add Expense).
+                Button {
+                    var draft = SplitDraft()
+                    draft.purpose = .paidFor
+                    withAnimation(.easeInOut(duration: 0.2)) { viewModel.splitDraft = draft }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.right.circle.fill").foregroundStyle(.blue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Paid for Someone").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text("You paid for them, or they paid for you").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("draft.paidFor")
+            }
+        }
     }
 }
