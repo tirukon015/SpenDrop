@@ -1,0 +1,47 @@
+{
+  "$comment": "Bulk Import: classify one screenshot's OCR lines as a single receipt or a list of transactions (see bulk-import.md). importDate is the reference for dates without a year. For 'single', items is empty (the existing receipt parser handles it). Dates are local calendar dates (yyyy-MM-dd); time is HH:mm (12:00 when absent).",
+  "cases": [
+    { "name": "Single TNG payment receipt",
+      "importDate": "2026-10-07",
+      "lines": ["Touch 'n Go eWallet", "Payment Successful", "RM18.50", "Paid to: McDonald's", "16 Sep 2026 9:42 PM", "Ref No: TNG992837194"],
+      "expect": { "kind": "single", "items": [] } },
+    { "name": "Single receipt with total and subtotal (amounts but no dated rows)",
+      "importDate": "2026-10-07",
+      "lines": ["KOPITIAM RESTORAN", "Tax Invoice", "Subtotal RM20.00", "SST 6% RM1.20", "Total RM21.20", "Cash"],
+      "expect": { "kind": "single", "items": [] } },
+    { "name": "History list, one line per transaction",
+      "importDate": "2026-10-07",
+      "lines": ["Transaction History", "7 Oct — Grab — RM10.50", "7 Oct — McDonald's — RM12.90", "7 Oct — Starbucks — RM15.00"],
+      "expect": { "kind": "list", "items": [
+        { "merchant": "Grab", "amountMinor": 1050, "direction": "out", "date": "2026-10-07", "time": "12:00" },
+        { "merchant": "McDonald's", "amountMinor": 1290, "direction": "out", "date": "2026-10-07", "time": "12:00" },
+        { "merchant": "Starbucks", "amountMinor": 1500, "direction": "out", "date": "2026-10-07", "time": "12:00" } ] } },
+    { "name": "Bank history with signs, years and times",
+      "importDate": "2026-10-07",
+      "lines": ["Maybank2u", "Account History", "06/10/2026 21:32 SHOPEE MALAYSIA -RM35.00", "06/10/2026 14:05 DUITNOW FROM ALI +RM50.00", "05/10/2026 08:10 PETRONAS -RM60.00"],
+      "expect": { "kind": "list", "items": [
+        { "merchant": "SHOPEE MALAYSIA", "amountMinor": 3500, "direction": "out", "date": "2026-10-06", "time": "21:32" },
+        { "merchant": "DUITNOW FROM ALI", "amountMinor": 5000, "direction": "in", "date": "2026-10-06", "time": "14:05" },
+        { "merchant": "PETRONAS", "amountMinor": 6000, "direction": "out", "date": "2026-10-05", "time": "08:10" } ] } },
+    { "name": "Two dated rows on a payment receipt stay one receipt",
+      "importDate": "2026-10-07",
+      "lines": ["Payment Successful", "7 Oct 2026 Grab RM10.50", "Ref No: GRB12345678", "7 Oct 2026 Service fee RM0.50"],
+      "expect": { "kind": "single", "items": [] } },
+    { "name": "Date without year that would be in the future belongs to last year",
+      "importDate": "2026-01-03",
+      "lines": ["Recent", "30 Dec Parking RM5.00", "2 Jan 7-Eleven RM8.40"],
+      "expect": { "kind": "list", "items": [
+        { "merchant": "Parking", "amountMinor": 500, "direction": "out", "date": "2025-12-30", "time": "12:00" },
+        { "merchant": "7-Eleven", "amountMinor": 840, "direction": "out", "date": "2026-01-02", "time": "12:00" } ] } },
+    { "name": "Only one dated row is a single receipt",
+      "importDate": "2026-10-07",
+      "lines": ["Grab", "7 Oct 2026 8:42 PM", "RM10.50", "Apple Pay", "7 Oct 2026 Grab RM10.50"],
+      "expect": { "kind": "single", "items": [] } },
+    { "name": "Thousands separators and ISO dates",
+      "importDate": "2026-10-07",
+      "lines": ["2026-10-01 RENT PAYMENT RM1,250.00", "2026-10-02 TNB BILL RM120.40"],
+      "expect": { "kind": "list", "items": [
+        { "merchant": "RENT PAYMENT", "amountMinor": 125000, "direction": "out", "date": "2026-10-01", "time": "12:00" },
+        { "merchant": "TNB BILL", "amountMinor": 12040, "direction": "out", "date": "2026-10-02", "time": "12:00" } ] } }
+  ]
+}
