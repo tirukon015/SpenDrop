@@ -205,7 +205,9 @@ export function composeCalculate(d: CalculateData, hints: ComposeHints): Compose
         const w = asked[0];
         if (w) {
           const localized = say.channels(lang, { winner: w.label, wAmount: money(w.valueMinor, r.currency), wCount: w.count, rest: rest.map((g) => ({ label: g.label, amount: money(g.valueMinor, r.currency), count: g.count })), period: periodL });
-          line = localized ?? `You paid more by ${w.label}${subject} ${period}: ${money(w.valueMinor, r.currency)} across ${plural(w.count, "transaction")}${rest.length ? `, vs ${rest.map((g) => `${g.label} ${money(g.valueMinor, r.currency)} (${plural(g.count, "transaction")})`).join(", ")}` : ""}.${missing.length ? ` No ${missing.join(" or ")} payments were recorded.` : ""}`;
+          // The asked channels are the comparison itself — not repeated as a subject ("using QR Payment or …").
+          const sub = subject.replace(/ using [^.]*?(?= (in|on|this|last|across|yesterday|today)\b|$)/, "");
+          line = localized ?? `You paid more by ${w.label}${sub} ${period}: ${money(w.valueMinor, r.currency)} across ${plural(w.count, "transaction")}${rest.length ? `, vs ${rest.map((g) => `${g.label} ${money(g.valueMinor, r.currency)} (${plural(g.count, "transaction")})`).join(", ")}` : ""}.${missing.length ? ` No ${missing.join(" or ")} payments were recorded.` : ""}`;
           const byCount = [...asked].sort((a, b) => b.count - a.count)[0];
           if (!localized && byCount && byCount.key !== w.key) line += ` By number of payments it's ${byCount.label} (${byCount.count}).`;
           return line;

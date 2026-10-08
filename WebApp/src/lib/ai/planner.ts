@@ -756,8 +756,10 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   if (trend && !amount) {
     const whole = period?.span ?? (refersBack && focus?.span ? focus.span : null) ?? (isFollowUp && focus?.span ? focus.span : thisMonth(today));
     // A period still in progress is compared "so far": 1–7 Oct vs 1–7 Sep (same days on both sides, same labels).
+    // The comparison period is chosen from the WHOLE period (this month → the same days of last month), then the
+    // current period is shown "so far" (1–8 Oct vs 1–8 Sep).
+    const b = previousComparable(whole, today);
     const s = whole.from <= today && whole.to > today ? { from: whole.from, to: today } : whole;
-    const b = previousComparable(s, today);
     const f = baseFilters;
     if (has(t, WHY)) return tools("INVESTIGATE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "INVESTIGATE", filters: f, span: s, compareSpan: b }, notes);
     return { ...tools("COMPARE", [{ tool: "compare_periods", args: { periodA: spanArg(s), periodB: spanArg(b), ...filterArgs(f) } }], { intent: "COMPARE", filters: f, span: s, compareSpan: b }, notes), style: { askedDirection: trend } };

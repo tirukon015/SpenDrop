@@ -266,3 +266,13 @@ describe("regressions found in the browser (2026-10-08)", () => {
     expect(a.text).toContain("Account not recorded");
   });
 });
+
+describe("trend follow-ups compare the same days (regression, production 2026-10-08)", () => {
+  it("“barche naki?” after a this-month total compares 1–7 Oct with 1–7 Sep (not the previous 7 days)", async () => {
+    const { plan: planFor } = await import("@/lib/ai/planner");
+    const vocab = { merchants: ["KK Super Mart"], fundingAccounts: ["Maybank"], currencies: ["RM"], earliestDate: "2026-01-01", expenseCount: 5 };
+    const first = planFor({ message: "food e koto gelo?", today: "2026-10-07", vocabulary: vocab, focus: null });
+    const p = planFor({ message: "barche naki?", today: "2026-10-07", vocabulary: vocab, focus: first.kind === "tools" ? first.focus : null });
+    expect(p.kind === "tools" && p.steps[0].args).toMatchObject({ periodA: { from: "2026-10-01", to: "2026-10-07" }, periodB: { from: "2026-09-01", to: "2026-09-07" }, category: "Food" });
+  });
+});
