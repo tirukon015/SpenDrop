@@ -5,7 +5,7 @@ import Foundation
 /// Where the shared SpenDrop AI server lives. Optional `SPENDROP_API_URL` in the git-ignored
 /// `CloudConfig/SupabaseConfig.plist`; otherwise the production web app.
 public enum AskConfig {
-    public static let defaultBaseURL = URL(string: "https://spendrop.vercel.app")!
+    public static let defaultBaseURL = URL(string: "https://spendrop.rukon.dev")!
 
     public static func baseURL(bundle: Bundle = .main) -> URL {
         guard let fileURL = bundle.url(forResource: "SupabaseConfig", withExtension: "plist", subdirectory: "CloudConfig"),
