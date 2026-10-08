@@ -42,7 +42,7 @@ android {
         buildConfigField("String", "AUTH_REDIRECT", "\"spendrop://auth-callback\"")
         // SpenDrop AI ("Ask SpenDrop") runs on the shared SpenDrop server (same API as the Web app). Override with
         // spendrop.apiUrl in local.properties or SPENDROP_API_URL in the environment (e.g. a preview deployment).
-        buildConfigField("String", "SPENDROP_API_URL", "\"${config("spendrop.apiUrl", "SPENDROP_API_URL").ifEmpty { "https://spendrop.vercel.app" }.trimEnd('/')}\"")
+        buildConfigField("String", "SPENDROP_API_URL", "\"${config("spendrop.apiUrl", "SPENDROP_API_URL").ifEmpty { "https://spendrop.rukon.dev" }.trimEnd('/')}\"")
     }
 
     signingConfigs {
