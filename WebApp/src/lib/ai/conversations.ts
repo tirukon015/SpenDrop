@@ -18,7 +18,7 @@ const span = z.object({ from: date, to: date }).nullable();
 export const focusSchema = z.object({
   intent: z.string().max(40),
   filters: z.object({
-    category: categorySchema.optional(), merchant: z.string().max(80).optional(), fundingAccount: z.string().max(80).optional(),
+    category: categorySchema.optional(), merchant: z.string().max(120).optional(), merchants: z.array(z.string().max(120)).max(20).optional(), fundingAccount: z.string().max(80).optional(),
     paymentChannel: channelSchema.optional(), paymentChannels: z.array(channelSchema).max(11).optional(), currency: z.string().max(8).optional(),
     amountMin: z.number().min(0).optional(), amountMax: z.number().min(0).optional(), targetAmount: z.number().min(0).optional(), keyword: z.string().max(80).optional(),
   }),

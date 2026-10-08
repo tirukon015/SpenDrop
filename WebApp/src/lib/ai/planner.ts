@@ -7,6 +7,7 @@ import { COMMON_FUNDING_ACCOUNTS, channelInfo } from "@/lib/domain/constants";
 import type { CategoryId, PaymentChannelId } from "@/lib/domain/types";
 import { AMOUNT_TOLERANCE } from "./config";
 import { isNo, isYes, openerPreface, readSocial, socialFollowUps, socialReply, splitOpener, type Lang, type SocialReading } from "./conversation";
+import { resolveMerchant } from "./merchant-resolver";
 import { understand, understoodAs, type Understanding } from "./normalize";
 import type { Vocabulary } from "./repository";
 import {
@@ -415,7 +416,7 @@ const FINANCE = /\b(spend|spends|spent|spending|money|cost|costs|costing|paid|pa
  */
 export function isFinancial(t: string, raw: string, vocabulary: Vocabulary, focus: Focus | null, social: SocialReading): boolean {
   const strong = has(t, FINANCE) || Boolean(extractAmount(raw) ?? extractAmount(t)) || Boolean(extractCategory(t)) || Boolean(extractChannel(t))
-    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND);
+    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || namesOwnMerchant(raw, vocabulary) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND);
   if (strong) return true;
   const sociallyAddressed = social.act !== null && social.act !== "chitchat" && social.act !== "ack" && social.act !== "affirm" && social.act !== "deny";
   if (sociallyAddressed) return false;
@@ -425,6 +426,15 @@ export function isFinancial(t: string, raw: string, vocabulary: Vocabulary, focu
   if (focus && [WHY, BARE_REFERENCE, DETAIL, FOLLOW_UP, RELATIVE, NORMAL_Q].some((re) => has(t, re))) return true;
   // "why?" / "there?" / "that one?" without anything to refer to still get a clarifying question, not chit-chat.
   return [WHY, BARE_REFERENCE, DETAIL].some((re) => has(t, re)) && !/\b(you|u|tumi|awak)\b/.test(t);
+}
+
+/**
+ * The message names one of the user's own merchants by a whole name, a whole word or the start of a name ("anything
+ * with bijoy"). Inner fragments and typos don't turn small talk into a money question ("hope" ≠ Shopee).
+ */
+function namesOwnMerchant(message: string, vocabulary: Vocabulary): boolean {
+  const r = resolveMerchant(message, vocabulary.merchants);
+  return r?.kind === "match" && (r.quality === "exact" || r.quality === "word" || r.quality === "prefix");
 }
 
 /** A merchant the user has records for, named in the message (whole words only, no guessing). */
@@ -502,7 +512,8 @@ function unknownSubject(t: string, today: LocalDate): string | null {
 const DRILL_DOWNS = new Set<Intent>(["INVESTIGATE", "MERCHANT_ANALYSIS", "TRANSACTION_DETAIL"]);
 /** The new question keeps every subject filter of the previous one (it may add more, e.g. Food for "restaurants"). */
 const sameSubject = (before: FocusFilters, after: FocusFilters) =>
-  (["category", "merchant", "fundingAccount", "paymentChannel"] as const).every((k) => before[k] === undefined || before[k] === after[k]);
+  (["category", "merchant", "fundingAccount", "paymentChannel"] as const).every((k) => before[k] === undefined || before[k] === after[k])
+  && (before.merchants === undefined || JSON.stringify(before.merchants) === JSON.stringify(after.merchants));
 
 function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understanding): Plan {
   const raw = message.trim();
@@ -517,7 +528,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // "Rukon's transactions", "my wife's spending": someone else's records. Only the user's own records exist here,
   // so say so instead of searching for a merchant called "Rukon" (a known merchant / account name is fine).
   const owner = /\b([\p{L}]+)'s\s+(transactions?|expenses?|spending|data|records|receipts?|purchases?|account|money|history)\b/iu.exec(raw);
-  if (owner && !/^(today|yesterday|tomorrow|week|month|year|last|this|next|grab|shopee)$/i.test(owner[1]) && !knownMerchant(owner[1].toLowerCase(), vocabulary) && !extractFundingAccount(owner[1].toLowerCase(), vocabulary))
+  if (owner && !/^(today|yesterday|tomorrow|week|month|year|last|this|next|grab|shopee)$/i.test(owner[1]) && !knownMerchant(owner[1].toLowerCase(), vocabulary) && !resolveMerchant(owner[1], vocabulary.merchants) && !extractFundingAccount(owner[1].toLowerCase(), vocabulary))
     return { kind: "reply", intent: "SECURITY", status: "refused", text: "I can only see your own SpenDrop records — never anyone else's. Ask me anything about your own spending.", followUps: ["Show my recent transactions"] };
 
   // Personal rules and memory ("Grab is transport for me", "what do you remember?", "forget Grab")
@@ -541,8 +552,30 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     const fromAccount = new RegExp(String.raw`\b(from|in|my)\s+${accountHit.word}\b|\b${accountHit.word}\s+(account|wallet|balance)\b`).test(normalizeText(t));
     if (fromAccount) channel = undefined; else fundingAccount = undefined;
   }
-  const merchantHit = extractMerchant(plain, vocabulary, [accountHit?.word ?? "", channelHit?.word ?? "", categoryHit?.word ?? ""].filter(Boolean), raw)
-    ?? (has(t, HOW_MUCH) && !categoryHit && !channelHit && !accountHit ? (() => { const w = unknownSubject(plain, today); return w ? { merchant: w, word: w } : null; })() : null);
+  // Merchants: the user's own merchant names, matched generally (whole name, word, prefix, part of the name, small
+  // typo — "bijoy" → BIJOYSHARIARALAMIN). Several close matches → ask which one (unless the user asked for all similar
+  // names). Only then the older heuristics for names the user hasn't recorded ("at Foo Bar", a capitalised word).
+  const taken = [accountHit?.word ?? "", channelHit?.word ?? "", categoryHit?.word ?? ""].filter(Boolean);
+  const resolved = resolveMerchant(raw, vocabulary.merchants, { exclude: taken });
+  if (resolved?.kind === "ambiguous") {
+    const ref = resolved.reference;
+    const swap = (name: string) => raw.replace(new RegExp(ref.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\W_]*"), "i"), name);
+    return {
+      kind: "reply", intent: "CLARIFY", status: "clarify",
+      text: `I found a few merchants matching “${ref}”:\n${resolved.names.map((n) => `• ${n}`).join("\n")}\n\nWhich one do you mean? (Or ask about “all similar names” to include them all.)`,
+      followUps: resolved.names.slice(0, 4).map(swap),
+    };
+  }
+  const merchantHit: { merchant: string; word: string; exact?: string; names?: string[] } | null = resolved
+    ? resolved.quality === "exact" || resolved.quality === "word"
+      ? resolved.names.length === 1 && resolved.quality === "exact" ? { merchant: resolved.names[0], word: resolved.reference, exact: resolved.names[0] } : { merchant: resolved.reference, word: resolved.reference }
+      : resolved.names.length === 1 ? { merchant: resolved.names[0], word: resolved.reference, exact: resolved.names[0] } : { merchant: resolved.reference, word: resolved.reference, names: resolved.names }
+    : extractMerchant(plain, vocabulary, taken, raw)
+      ?? (has(t, HOW_MUCH) && !categoryHit && !channelHit && !accountHit ? (() => { const w = unknownSubject(plain, today); return w ? { merchant: w, word: w } : null; })() : null);
+  if (resolved && (resolved.quality === "prefix" || resolved.quality === "substring" || resolved.quality === "fuzzy")) {
+    if (resolved.names.length === 1) notes.push(`I matched “${resolved.reference}” to ${resolved.names[0]}.`);
+    else notes.push(`I included ${resolved.names.length} merchants with names like “${resolved.reference}”: ${resolved.names.slice(0, 5).join(", ")}${resolved.names.length > 5 ? "…" : ""}.`);
+  }
   const currencyWord = /\b(usd|sgd|gbp|eur|bdt|myr|ringgit)\b/.exec(t)?.[1];
   // A currency named on its own filters everything; the currency of an amount only applies to that amount.
   const currency = currencyWord ? CURRENCY_OF[currencyWord] : undefined;
@@ -552,7 +585,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
 
   const entityFilters: FocusFilters = {
     ...(categoryHit ? { category: categoryHit.category } : {}),
-    ...(merchantHit ? { merchant: titleCase(merchantHit.merchant) } : {}),
+    ...(merchantHit ? (merchantHit.names ? { merchants: merchantHit.names } : { merchant: merchantHit.exact ?? titleCase(merchantHit.merchant) }) : {}),
     ...(fundingAccount ? { fundingAccount } : {}),
     ...(channel ? (channelHit?.channels ? { paymentChannels: channelHit.channels } : { paymentChannel: channel }) : {}),
     ...(currency ? { currency } : {}),
@@ -610,7 +643,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     return { kind: "reply", intent: "CLARIFY", status: "clarify", text: "Why what? Ask me about your spending first — for example “How much did I spend this week?” — and then ask why.", followUps: ["How much did I spend this week?", "Why am I spending so much lately?"] };
 
   const filterArgs = (f: FocusFilters) => ({
-    ...(f.category ? { category: f.category } : {}), ...(f.merchant ? { merchant: f.merchant } : {}),
+    ...(f.category ? { category: f.category } : {}), ...(f.merchant ? { merchant: f.merchant } : {}), ...(f.merchants ? { merchants: f.merchants } : {}),
     ...(f.fundingAccount ? { fundingAccount: f.fundingAccount } : {}), ...(f.paymentChannel ? { paymentChannel: f.paymentChannel } : {}),
     ...(f.paymentChannels ? { paymentChannels: f.paymentChannels } : {}),
     ...(f.currency ? { currency: f.currency } : {}),

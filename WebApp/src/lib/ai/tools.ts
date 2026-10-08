@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/domain/money";
 import type { CategoryId, Expense, ExpenseShare, PaymentChannelId } from "@/lib/domain/types";
 import { averageMinor, maxBy, medianMinor, minBy, percentChange, roundHalfAway, scaleMinor, sharePercent, totalMinor } from "./calc";
 import { AI_LIMITS, UNUSUAL } from "./config";
+import { candidatesFor, decide } from "./merchant-resolver";
 import { TooMuchDataError, type FinanceRepository, type PersonalRule } from "./repository";
 import type { FiltersInput, PeriodInput } from "./schemas";
 import {
@@ -44,7 +45,8 @@ export const periodInfo = (span: DateSpan | null): PeriodInfo | null => (span ? 
 export function describeFilters(f: Omit<FiltersInput, "period">): string {
   const parts: string[] = [];
   if (f.category) parts.push(f.category);
-  if (f.merchant) parts.push(`merchant “${f.merchant}”`);
+  if (f.merchants?.length) parts.push(f.merchants.length === 1 ? f.merchants[0] : `${f.merchants.length} merchants like “${f.merchants[0]}”`);
+  else if (f.merchant) parts.push(`merchant “${f.merchant}”`);
   if (f.fundingAccount) parts.push(`from ${f.fundingAccount}`);
   if (f.paymentChannel) parts.push(`via ${channelInfo(f.paymentChannel).label}`);
   if (f.paymentChannels) parts.push(`via ${f.paymentChannels.map((c) => channelInfo(c).label).join(" / ")}`);
@@ -63,7 +65,8 @@ export function describeFilters(f: Omit<FiltersInput, "period">): string {
 export function describeSubject(f: Omit<FiltersInput, "period">): string {
   const parts: string[] = [];
   if (f.category) parts.push(`on ${f.category}`);
-  if (f.merchant) parts.push(`at ${f.merchant}`);
+  if (f.merchants?.length) parts.push(`at ${f.merchants.length <= 3 ? f.merchants.join(" or ") : `${f.merchants.slice(0, 3).join(", ")} and ${f.merchants.length - 3} similar names`}`);
+  else if (f.merchant) parts.push(`at ${f.merchant}`);
   if (f.fundingAccount) parts.push(`from ${f.fundingAccount}`);
   if (f.paymentChannel) parts.push(`using ${channelInfo(f.paymentChannel).label}`);
   if (f.paymentChannels) parts.push(`using ${f.paymentChannels.length === 3 && f.paymentChannels.includes("QR_PAYMENT") ? "QR" : f.paymentChannels.map((c) => channelInfo(c).label).join(" or ")}`);
@@ -145,8 +148,37 @@ function accountMatches(e: Expense, wanted: string, accountNames: Map<string, st
   return names.some((n) => n && (normalizeText(n) === w || ` ${normalizeText(n)} `.includes(` ${w} `)));
 }
 
+/**
+ * Which of these rows' merchant names a merchant filter means (normalised), or null for no merchant filter.
+ * Exact names (`merchants`) are used as given. A `merchant` reference first matches whole words ("Shopee" → Shopee,
+ * Shopee Food; never ShopeePay); if that finds nothing, the merchant resolver matches partial names and small typos
+ * ("bijoy" → BIJOYSHARIARALAMIN) among the user's own merchants. Answers disclose the names that matched.
+ */
+export function merchantSet(rows: Row[], f: Pick<FiltersInput, "merchant" | "merchants">): Set<string> | null {
+  if (f.merchants?.length) return new Set(f.merchants.map(normalizeText));
+  if (!f.merchant) return null;
+  const wanted = normalizeText(f.merchant);
+  const names = [...new Set(rows.map((r) => r.expense.merchant))];
+  const whole = names.filter((n) => ` ${normalizeText(n)} `.includes(` ${wanted} `));
+  if (whole.length) return new Set(whole.map(normalizeText));
+  const resolved = decide(f.merchant, candidatesFor(f.merchant, names), true);
+  return new Set((resolved?.names ?? []).map(normalizeText));
+}
+
+/**
+ * The merchant reference when it matches none of the user's merchants at all (in any period) — so an empty answer can
+ * say "I couldn't find a merchant matching …" instead of a bare "no records". Only checked when nothing matched.
+ */
+async function unknownMerchant(f: Pick<FiltersInput, "merchant" | "merchants">, repo: FinanceRepository): Promise<string | undefined> {
+  if (!f.merchant || f.merchants?.length) return undefined;
+  const all = (await repo.vocabulary()).merchants;
+  const wanted = normalizeText(f.merchant);
+  if (all.some((n) => ` ${normalizeText(n)} `.includes(` ${wanted} `)) || candidatesFor(f.merchant, all).length) return undefined;
+  return f.merchant;
+}
+
 export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accountNames: Map<string, string>): Row[] {
-  const merchant = f.merchant ? normalizeText(f.merchant) : null;
+  const merchants = merchantSet(rows, f);
   const keyword = f.keyword ? normalizeText(f.keyword) : null;
   const minMinor = f.amountMin !== undefined ? toMinor(f.amountMin) : null;
   const maxMinor = f.amountMax !== undefined ? toMinor(f.amountMax) : null;
@@ -160,7 +192,7 @@ export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accou
     if (maxMinor !== null && e.amountMinor > maxMinor) return false;
     if (f.hasReceipt !== undefined && Boolean(e.receiptPath) !== f.hasReceipt) return false;
     // Whole words: "Shopee" matches "Shopee" and "Shopee Food", never "ShopeePay" (answers list which names matched).
-    if (merchant && !` ${normalizeText(e.merchant)} `.includes(` ${merchant} `)) return false;
+    if (merchants && !merchants.has(normalizeText(e.merchant))) return false;
     if (keyword && ![e.merchant, e.notes ?? "", e.transactionReference ?? ""].some((t) => normalizeText(t).includes(keyword))) return false;
     if (f.fundingAccount && !accountMatches(e, f.fundingAccount, accountNames)) return false;
     return true;
@@ -253,6 +285,8 @@ export interface SearchData {
   personalRules: AppliedRule[];
   /** Distinct merchant names a merchant filter matched (disclosed when more than one). */
   merchantsMatched: string[];
+  /** Set when the merchant named matches none of the user's merchants at all. */
+  unknownMerchant?: string;
 }
 
 export async function searchTransactions(input: SearchInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<SearchData>> {
@@ -290,7 +324,7 @@ export async function searchTransactions(input: SearchInput, ctx: AiContext, rep
     const filters = describeFilters(input);
     const data: SearchData = {
       period: periodInfo(span), filters, subject: searchSubject(input, target), target: { amountMinor: target, date: input.targetDate ?? null },
-      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows), merchantsMatched: input.merchant ? merchantNames(rows) : [],
+      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : await unknownMerchant(input, repo),
     };
     return { ok: true, data, evidence: evidence("search_transactions", rows.length, span, filters) };
   });
@@ -323,6 +357,8 @@ export interface CalculateData {
   refunds: { currency: string; totalMinor: number; count: number }[];
   personalRules: AppliedRule[];
   merchantsMatched: string[];
+  /** Set when the merchant named matches none of the user's merchants at all. */
+  unknownMerchant?: string;
 }
 
 export async function calculateSpending(input: CalculateInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<CalculateData>> {
@@ -358,7 +394,7 @@ export async function calculateSpending(input: CalculateInput, ctx: AiContext, r
     const plain = !input.category && !input.merchant && !input.paymentChannel && !input.paymentChannels && !input.fundingAccount && !input.keyword && input.amountMin === undefined && input.amountMax === undefined;
     const refunds = plain ? refundTotals(await repo.refunds(span ? spanInstants(span, ctx.timeZone) : { start: null, end: null }), input.currency) : [];
     const filters = describeFilters(input);
-    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows), merchantsMatched: input.merchant ? merchantNames(rows) : [] }, evidence: evidence("calculate_spending", rows.length, span, filters) };
+    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : await unknownMerchant(input, repo) }, evidence: evidence("calculate_spending", rows.length, span, filters) };
   });
 }
 
@@ -380,7 +416,7 @@ function refundTotals(list: { currency: string; amountMinor: number }[], currenc
 // ---------------------------------------------------------------------------------------------------------------
 export interface CompareInput {
   periodA: PeriodInput; periodB?: PeriodInput;
-  merchant?: string; category?: CategoryId; fundingAccount?: string; paymentChannel?: PaymentChannelId; paymentChannels?: PaymentChannelId[]; currency?: string;
+  merchant?: string; merchants?: string[]; category?: CategoryId; fundingAccount?: string; paymentChannel?: PaymentChannelId; paymentChannels?: PaymentChannelId[]; currency?: string;
   breakdownBy?: Exclude<GroupKey, "day">;
 }
 export interface CurrencyCompare {
@@ -399,7 +435,7 @@ export async function comparePeriods(input: CompareInput, ctx: AiContext, repo: 
     const b = input.periodB ? resolvePeriod(input.periodB, ctx.today) : previousComparable(rawA, ctx.today);
     if (!b) throw new ToolInputError("Please choose a specific period to compare with (not all time).");
     const names = await accountNameMap(repo);
-    const filters = { merchant: input.merchant, category: input.category, fundingAccount: input.fundingAccount, paymentChannel: input.paymentChannel, paymentChannels: input.paymentChannels, currency: input.currency };
+    const filters = { merchant: input.merchant, merchants: input.merchants, category: input.category, fundingAccount: input.fundingAccount, paymentChannel: input.paymentChannel, paymentChannels: input.paymentChannels, currency: input.currency };
     const rowsA = applyFilters(await loadRows(repo, ctx, a), filters, names);
     const rowsB = applyFilters(await loadRows(repo, ctx, b), filters, names);
     const breakdownBy = input.breakdownBy ?? (input.category ? "merchant" : "category");

@@ -24,7 +24,8 @@ export type PeriodInput = z.infer<typeof periodSchema>;
 
 const filterShape = {
   period: periodSchema.optional().describe("Date range. Omit for all time."),
-  merchant: shortText(80).optional().describe("Merchant name or part of it, e.g. 'Starbucks'"),
+  merchant: shortText(80).optional().describe("Merchant name or part of it, e.g. 'Starbucks' or 'bijoy' (matched to the user's own merchant names)"),
+  merchants: z.array(shortText(120)).min(1).max(20).optional().describe("Exact merchant names as stored (e.g. from a previous answer)"),
   category: categorySchema.optional().describe("One of SpenDrop's categories"),
   fundingAccount: shortText(80).optional().describe("WHERE the money came from, e.g. 'Maybank', 'Touch n Go', 'Cash'. Never a payment channel."),
   paymentChannel: channelSchema.optional().describe("HOW it was paid, e.g. APPLE_PAY, QR_PAYMENT, CARD. Never a bank/account."),
@@ -58,7 +59,7 @@ export const calculateInputSchema = z.strictObject({
 export const compareInputSchema = z.strictObject({
   periodA: periodSchema.describe("The period being asked about (usually the more recent one)"),
   periodB: periodSchema.optional().describe("The period to compare with. Omit for the fair previous period"),
-  merchant: filterShape.merchant, category: filterShape.category, fundingAccount: filterShape.fundingAccount,
+  merchant: filterShape.merchant, merchants: filterShape.merchants, category: filterShape.category, fundingAccount: filterShape.fundingAccount,
   paymentChannel: filterShape.paymentChannel, paymentChannels: filterShape.paymentChannels, currency: filterShape.currency,
   breakdownBy: z.enum(["category", "merchant", "funding_account", "payment_channel"]).optional().describe("Show what changed by this dimension"),
 });
@@ -77,7 +78,7 @@ export const unusualInputSchema = z.strictObject({
 
 export const insightsInputSchema = z.strictObject({
   period: z.enum(["this_week", "this_month"]).optional().describe("Compare this week or this month so far with the user's own normal. Default this_month"),
-  merchant: filterShape.merchant, category: filterShape.category, fundingAccount: filterShape.fundingAccount,
+  merchant: filterShape.merchant, merchants: filterShape.merchants, category: filterShape.category, fundingAccount: filterShape.fundingAccount,
   paymentChannel: filterShape.paymentChannel, paymentChannels: filterShape.paymentChannels, currency: filterShape.currency,
 });
 
