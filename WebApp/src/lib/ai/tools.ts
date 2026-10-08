@@ -8,7 +8,7 @@ import { formatMoney } from "@/lib/domain/money";
 import type { CategoryId, Expense, ExpenseShare, PaymentChannelId } from "@/lib/domain/types";
 import { averageMinor, maxBy, medianMinor, minBy, percentChange, roundHalfAway, scaleMinor, sharePercent, totalMinor } from "./calc";
 import { AI_LIMITS, UNUSUAL } from "./config";
-import { candidatesFor, decide } from "./merchant-resolver";
+import { candidatesFor, decide, withSpellings } from "./merchant-resolver";
 import { TooMuchDataError, type FinanceRepository, type PersonalRule } from "./repository";
 import type { FiltersInput, PeriodInput } from "./schemas";
 import {
@@ -155,12 +155,12 @@ function accountMatches(e: Expense, wanted: string, accountNames: Map<string, st
  * ("bijoy" → BIJOYSHARIARALAMIN) among the user's own merchants. Answers disclose the names that matched.
  */
 export function merchantSet(rows: Row[], f: Pick<FiltersInput, "merchant" | "merchants">): Set<string> | null {
-  if (f.merchants?.length) return new Set(f.merchants.map(normalizeText));
+  const names = [...new Set(rows.map((r) => r.expense.merchant))];
+  if (f.merchants?.length) return new Set(withSpellings(f.merchants, names).map(normalizeText));
   if (!f.merchant) return null;
   const wanted = normalizeText(f.merchant);
-  const names = [...new Set(rows.map((r) => r.expense.merchant))];
   const whole = names.filter((n) => ` ${normalizeText(n)} `.includes(` ${wanted} `));
-  if (whole.length) return new Set(whole.map(normalizeText));
+  if (whole.length) return new Set(withSpellings(whole, names).map(normalizeText));
   const resolved = decide(f.merchant, candidatesFor(f.merchant, names), true);
   return new Set((resolved?.names ?? []).map(normalizeText));
 }

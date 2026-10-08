@@ -234,3 +234,31 @@ describe("generalisation on random synthetic merchants (seeded)", () => {
     expect(wrong).toBe(0);
   });
 });
+
+describe("one merchant, several spellings (real data: BIJOYSHARIARALAMIN and BIJOY SHARIAR AL AMIN)", () => {
+  function twoSpellings() {
+    const s = new MemoryTenantStore();
+    s.add(USER_A, { expenses: [
+      exp({ merchant: "BIJOYSHARIARALAMIN", amount: 599.32, date: "2026-10-07", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "BIJOYSHARIARALAMIN", amount: 7, date: "2026-10-03", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "BIJOY SHARIAR AL AMIN", amount: 50, date: "2026-09-20", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "KK Super Mart", amount: 5.5, date: "2026-10-05", category: "Food" }),
+    ] });
+    return s;
+  }
+  const ask = async (q: string) => { const r = await answerDeterministic(q, ctx(), twoSpellings().forUser(USER_A), null); if (r.kind !== "answer") throw new Error(q); return r.answer; };
+
+  it("spellings are one candidate (a typo is not 'ambiguous')", () => {
+    expect(resolveMerchant("bijoi", ["BIJOYSHARIARALAMIN", "BIJOY SHARIAR AL AMIN"])).toMatchObject({ kind: "match" });
+    expect(resolveMerchant("bijoi", ["BIJOYSHARIARALAMIN", "BIJOY SHARIAR AL AMIN"])?.names.sort()).toEqual(["BIJOY SHARIAR AL AMIN", "BIJOYSHARIARALAMIN"]);
+  });
+  it("all-time transactions include every spelling (3 rows), and the answer discloses both names", async () => {
+    const a = await ask("show bijoy transactions");
+    expect(listed(a).map((r) => r.spendMinor).sort((x, y) => x - y)).toEqual([700, 5000, 59932]);
+    expect(a.text).toMatch(/2 merchant names/);
+  });
+  it("totals across spellings are exact", async () => {
+    expect((await ask("how much did I spend at bijoi of all time?")).text).toContain("RM 656.32");
+    expect((await ask("similar name with bijoy how much")).text).toContain("RM 606.32"); // this month: only the October spelling has rows
+  });
+});

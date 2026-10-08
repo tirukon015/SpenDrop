@@ -54,7 +54,8 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   const started = Date.now();
   let vocabulary: Vocabulary;
   try {
-    vocabulary = await repo.vocabulary();
+    // Warm the per-request caches in one round trip (accounts and personal rules are needed by most tools).
+    [vocabulary] = await Promise.all([repo.vocabulary(), repo.accounts().catch(() => []), repo.personalRules().catch(() => [])]);
   } catch {
     return { kind: "answer", answer: unavailable(ctx, started) };
   }
@@ -71,6 +72,18 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   const executed: ExecutedTool[] = [];
   const notes = [...p.notes];
   let periodWords = periodWordsOf(message, ctx.today);
+  // A total for this week / this month also gets one line against the user's normal: that read is independent of
+  // the main calculation, so it runs at the same time (used only when the main result is a single-currency total).
+  const insightArgs = (() => {
+    const args = (p.steps[0]?.args ?? {}) as Record<string, unknown> & { period?: { from: string; to: string }; operation?: string };
+    if (p.intent !== "CALCULATE" || p.steps[0]?.tool !== "calculate_spending" || args.operation !== "sum" || args.amountMin !== undefined) return null;
+    const unit = ["this_week", "this_month"].find((u) => { const sp = presetSpan(u as "this_week", ctx.today)!; return args.period?.from === sp.from && args.period?.to === sp.to; });
+    if (!unit) return null;
+    const { period: _p, operation: _o, groupBy: _g, ...filters } = args; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { period: unit, ...filters };
+  })();
+  const insightRun = insightArgs ? executeTool("get_spending_insights", insightArgs, ctx, repo) : null;
+
   let main: ExecutedTool | null = null;
   for (const step of p.steps) {
     main = await executeTool(step.tool, step.args, ctx, repo);
@@ -122,13 +135,10 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
 
   // A total for this week / this month also gets one line of context against the user's own normal — only when
   // the difference is meaningful (the insight tool's thresholds), never as filler.
-  if (main.result.ok && main.name === "calculate_spending" && p.intent === "CALCULATE" && !composed.insight) {
-    const args = (p.steps[0]?.args ?? {}) as Record<string, unknown> & { period?: { from: string; to: string }; operation?: string };
-    const unit = ["this_week", "this_month"].find((u) => { const s = presetSpan(u as "this_week", ctx.today)!; return args.period?.from === s.from && args.period?.to === s.to; });
+  if (insightRun && main.result.ok && main.name === "calculate_spending" && !composed.insight) {
     const results = (main.result.data as { results: unknown[] }).results;
-    if (unit && args.operation === "sum" && results.length === 1 && args.amountMin === undefined) {
-      const { period: _p, operation: _o, groupBy: _g, ...filters } = args; // eslint-disable-line @typescript-eslint/no-unused-vars
-      const extra = await executeTool("get_spending_insights", { period: unit, ...filters }, ctx, repo);
+    const extra = await insightRun;
+    if (results.length === 1) {
       executed.push(extra);
       const line = extra.result.ok ? totalInsight(extra.result.data as InsightsData) : undefined;
       if (line && extra.result.ok) { composed.insight = line; evidence.push(extra.result.evidence); }

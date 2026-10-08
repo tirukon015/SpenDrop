@@ -47,35 +47,54 @@ export async function handleChat(request: Request, deps: ChatDeps): Promise<Resp
   const parsed = chatRequestSchema.safeParse(body);
   if (!parsed.success) return error(400, `Invalid request: ${describeIssues(parsed.error)}`, "invalid_request");
 
+  // Stage timings (no data): returned as a Server-Timing header so latency can be measured per stage.
+  const t0 = performance.now();
+  const timing: [string, number][] = [];
+  let mark = t0;
+  const lap = (name: string) => { const now = performance.now(); timing.push([name, now - mark]); mark = now; };
+
   const auth = await deps.authenticate(request);
   if (!auth.ok) return auth.response;
+  lap("auth");
 
   const timeZone = parsed.data.timeZone && isValidTimeZone(parsed.data.timeZone) ? parsed.data.timeZone : DEFAULT_TIME_ZONE;
   const ctx: AiContext = Object.freeze({ userId: auth.userId, timeZone, today: localDateOf(new Date(), timeZone), requestId: crypto.randomUUID() });
   const store = deps.store(auth);
 
   try {
+    // Independent reads in one round trip: rate limit, conversation ownership and its recent messages.
     const now = Date.now();
-    const [minute, hour] = await Promise.all([store.questionsSince(new Date(now - 60_000)), store.questionsSince(new Date(now - 3_600_000))]);
+    let conversationId = parsed.data.conversationId ?? null;
+    const [minute, hour, owned, stored] = await Promise.all([
+      store.questionsSince(new Date(now - 60_000)), store.questionsSince(new Date(now - 3_600_000)),
+      conversationId ? store.exists(conversationId) : Promise.resolve(true),
+      conversationId ? store.messages(conversationId, 20) : Promise.resolve([]),
+    ]);
     if (minute >= AI_RATE_LIMITS.perMinute || hour >= AI_RATE_LIMITS.perHour)
       return error(429, "You're asking very quickly — please wait a moment and try again.", "rate_limited");
-
-    let conversationId = parsed.data.conversationId ?? null;
-    if (conversationId && !(await store.exists(conversationId))) return error(404, "That conversation wasn't found.", "conversation_not_found");
+    if (!owned) return error(404, "That conversation wasn't found.", "conversation_not_found");
     const isNew = !conversationId;
     if (!conversationId) conversationId = await store.create("New conversation");
-
-    const stored = isNew ? [] : await store.messages(conversationId, 20);
     const history: HistoryTurn[] = stored.map((m) => ({ role: m.role, content: m.content }));
     const focus = ConversationStore.focusOf(stored);
-    await store.append(conversationId, "user", parsed.data.message);
+    lap("prepare");
 
+    // The question is saved while it is answered (both must succeed before replying).
+    const savedQuestion = store.append(conversationId, "user", parsed.data.message);
     const answer = await ask({ message: parsed.data.message, ctx, repo: deps.repository(auth), provider: deps.provider(), history, focus, memory: deps.memory?.(auth) ?? null });
+    lap("answer");
+    await savedQuestion;
     const { meta, ...rest } = answer;
-    await store.append(conversationId, "assistant", answer.text, { ...rest, meta: { requestId: meta.requestId, intent: meta.intent, route: meta.route, provider: meta.provider, model: meta.model, tools: meta.tools } });
-    if (isNew) await store.rename(conversationId, titleFor(answer));
+    await Promise.all([
+      store.append(conversationId, "assistant", answer.text, { ...rest, meta: { requestId: meta.requestId, intent: meta.intent, route: meta.route, provider: meta.provider, model: meta.model, tools: meta.tools } }),
+      isNew ? store.rename(conversationId, titleFor(answer)) : Promise.resolve(),
+    ]);
+    lap("save");
     logRequest(answer, { userId: ctx.userId, conversationId });
-    return json({ conversationId, answer: publicAnswer(answer, deps.debug) });
+    const response = json({ conversationId, answer: publicAnswer(answer, deps.debug) });
+    const tools = meta.tools.reduce((t, x) => t + x.ms, 0);
+    response.headers.set("server-timing", [...timing, ["tools", tools], ["total", performance.now() - t0]].map(([n, ms]) => `${n};dur=${(ms as number).toFixed(1)}`).join(", "));
+    return response;
   } catch (e) {
     if (e instanceof AiSetupError)
       return error(503, "SpenDrop AI isn't set up on this database yet. Apply Supabase/supabase/migrations/20261009000000_spendrop_ai.sql.", "not_set_up");

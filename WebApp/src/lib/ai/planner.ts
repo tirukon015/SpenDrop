@@ -363,6 +363,8 @@ export interface PlanInput { message: string; today: LocalDate; vocabulary: Voca
 
 const spanArg = (s: DateSpan | null) => (s ? { from: s.from, to: s.to } : undefined);
 const thisMonth = (today: LocalDate): DateSpan => ({ from: startOfMonth(today), to: endOfMonth(today) });
+/** "of all time", "ever", "overall", "since I started", "shob miliye", "sepanjang masa" → no date limit. */
+const ALL_TIME = /\b(all[- ]time|of all time|ever|overall|altogether|since (i|we) (started|began|joined)|(my )?(whole|entire) history|lifetime|till now|until now|so far in total|shob (miliye|shomoy)|ekhon porjonto|sepanjang masa|keseluruhan|setakat ini)\b|সব মিলিয়ে|এখন পর্যন্ত/;
 
 export function plan(input: PlanInput): Plan {
   const names = [...input.vocabulary.merchants, ...input.vocabulary.fundingAccounts];
@@ -538,6 +540,9 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // Entities
   const amount = extractAmount(raw) ?? extractAmount(t);
   const period = extractPeriod(t, today);
+  // No named period + "all time" → every record; otherwise questions default to this month.
+  const allTime = !period && (has(t, ALL_TIME) || has(raw.toLowerCase(), ALL_TIME));
+  const defaultSpan = (): DateSpan | null => (allTime ? null : thisMonth(today));
   const plain = withoutIdioms(t);
   const categoryHit = extractCategory(plain);
   const channelHit = extractChannel(t);
@@ -666,7 +671,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
 
   // "How often do I use Grab?", "koto bar?", "berapa kali?" → how many transactions (not "visits").
   if (has(t, FREQ) && !amount) {
-    const s = baseSpan ?? thisMonth(today);
+    const s = baseSpan ?? defaultSpan();
     return { ...tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "count", ...filterArgs(baseFilters) } }],
       { intent: "CALCULATE", filters: baseFilters, span: s, operation: "count" }, notes), style: { frequency: true } };
   }
@@ -794,7 +799,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   ];
   for (const [re, intent, groupBy] of analysis) {
     if (!has(t, re) || amount) continue;
-    const overall = /\b(usually|mostly|most|always|overall|ever|in general)\b/.test(t) && !period;
+    const overall = (/\b(usually|mostly|most|always|overall|ever|in general)\b/.test(t) || allTime) && !period;
     const s = overall ? null : baseSpan ?? thisMonth(today);
     const f = { ...baseFilters };
     // "Which restaurants?" → merchants in Food.
@@ -815,11 +820,11 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
 
   // Count / average
   if (has(t, COUNT) && !amount) {
-    const s = baseSpan ?? thisMonth(today);
+    const s = baseSpan ?? defaultSpan();
     return tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "count", ...filterArgs(baseFilters) } }], { intent: "CALCULATE", filters: baseFilters, span: s, operation: "count" }, notes);
   }
   if (has(t, AVERAGE) && !amount) {
-    const s = baseSpan ?? thisMonth(today);
+    const s = baseSpan ?? defaultSpan();
     return tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "average", ...filterArgs(baseFilters) } }], { intent: "CALCULATE", filters: baseFilters, span: s, operation: "average" }, notes);
   }
 
@@ -871,7 +876,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     return tools("SEARCH", [{ tool: "search_transactions", args: { period: spanArg(s), ...filterArgs(baseFilters), sort: "date_desc", limit: 20 } }], { intent: "SEARCH", filters: baseFilters, span: s }, notes);
   }
   if (has(t, HOW_MUCH) || bare) {
-    const s = baseSpan ?? (isFollowUp && focus ? focus.span : thisMonth(today));
+    const s = baseSpan ?? (isFollowUp && focus && !allTime ? focus.span : defaultSpan());
     const f = { ...baseFilters, ...(amount ? { amountMin: amount.min, amountMax: amount.max } : {}) };
     return tools("CALCULATE", [{ tool: "calculate_spending", args: { period: spanArg(s), operation: "sum", ...filterArgs(f), ...(amount ? { amountMin: amount.min, amountMax: amount.max } : {}) } }],
       { intent: "CALCULATE", filters: f, span: s, operation: "sum" }, notes);
