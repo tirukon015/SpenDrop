@@ -82,6 +82,13 @@ export function ruleNote(rules: AppliedRule[] | undefined): string[] {
   return [`Using your personal rule${rules.length > 1 ? "s" : ""}: ${rules.map((r) => `${r.merchant} counts as ${r.category} (${plural(r.count, "transaction")})`).join("; ")}. Your records themselves aren't changed.`];
 }
 
+/** No merchant in the user's records resembles the name asked about: say so (never invent a match). */
+const unknownMerchantAnswer = (name: string): Composed => ({
+  status: "no_match", confidence: "NO_MATCH",
+  text: `I couldn't find a merchant matching “${name}” in your records. Try part of the name as it appears on your transactions — or ask me to show your recent transactions.`,
+  blocks: [], followUps: ["Show my recent transactions", "Which merchants do I spend the most at?"],
+});
+
 // ---------------------------------------------------------------------------------------------------------------
 
 export function composeSearch(d: SearchData, hints: ComposeHints, detail?: TransactionDetail): Composed {
@@ -90,6 +97,8 @@ export function composeSearch(d: SearchData, hints: ComposeHints, detail?: Trans
   const ids = cards.map((c) => c.id);
   const target = d.target.amountMinor !== null ? ` close to ${money(d.target.amountMinor, d.transactions[0]?.currency ?? "RM")}` : "";
   const scope = `${d.subject}${target} ${when(d.period, h.periodWords)}`;
+  if (d.total === 0 && d.unknownMerchant)
+    return withNotes(unknownMerchantAnswer(d.unknownMerchant), h.notes);
   if (d.total === 0)
     return withNotes({
       status: "no_match", confidence: "NO_MATCH",
@@ -156,6 +165,7 @@ export function composeCalculate(d: CalculateData, hints: ComposeHints): Compose
   const lang = h.lang ?? "en";
   const periodL = periodText(lang, d.period, h.periodWords);
   const parts0 = h.subjectParts ?? {};
+  if (d.results.length === 0 && d.unknownMerchant) return withNotes(unknownMerchantAnswer(d.unknownMerchant), h.notes);
   if (d.results.length === 0)
     return withNotes({ status: "no_match", text: say.nothing(lang, { subject: parts0, period: periodL }) ?? `Your records show no spending${subject} ${period}.`, blocks: [], followUps: ["Show my recent transactions"] }, h.notes);
 

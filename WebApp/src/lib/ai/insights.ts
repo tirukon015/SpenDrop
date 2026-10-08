@@ -16,7 +16,7 @@ import type { PaymentChannelId } from "@/lib/domain/types";
 
 export interface InsightsInput {
   period?: "this_week" | "this_month";
-  category?: CategoryId; merchant?: string; fundingAccount?: string; paymentChannel?: PaymentChannelId; paymentChannels?: PaymentChannelId[]; currency?: string;
+  category?: CategoryId; merchant?: string; merchants?: string[]; fundingAccount?: string; paymentChannel?: PaymentChannelId; paymentChannels?: PaymentChannelId[]; currency?: string;
 }
 
 export interface Change { key: string; label: string; currentMinor: number; normalMinor: number; diffMinor: number; pctChange: number | null }
@@ -129,8 +129,8 @@ export async function getSpendingInsights(input: InsightsInput, ctx: AiContext, 
       currentMinor, currentCount: now.length, normalMinor, diffMinor: diff, pctChange: pct,
       significant: diff !== null && isSignificant(diff, pct, minDiff),
       categoryChanges: input.category ? [] : changes("category").slice(0, 5),
-      merchantChanges: input.merchant ? [] : changes("merchant").slice(0, 3),
-      largePurchases, smallAddUps, weekend: input.category || input.merchant ? null : weekend,
+      merchantChanges: input.merchant || input.merchants ? [] : changes("merchant").slice(0, 3),
+      largePurchases, smallAddUps, weekend: input.category || input.merchant || input.merchants ? null : weekend,
       personalRules: appliedRules(now),
     };
     // Evidence = this period's own transactions (the figure shown); the history used for "normal" is described, not counted.

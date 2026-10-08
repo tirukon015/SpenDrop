@@ -10,6 +10,8 @@ import type { CategoryId } from "@/lib/domain/types";
 import { DataUnavailableError, TooMuchDataError, merchantKey, vocabularyOf, type ExpenseSet, type FinanceRepository, type InstantRange, type MemoryStore, type PersonalRule, type Vocabulary, MemoryNotSetUpError } from "./repository";
 
 const isMissingTable = (e: { code?: string; message?: string }) => e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/.test(e.message ?? "");
+/** PostgREST / Postgres "function not found" (the RPC is not deployed yet). */
+const isMissingFunction = (e: { code?: string; message?: string }) => e.code === "PGRST202" || e.code === "42883" || /could not find the function|function .* does not exist/i.test(e.message ?? "");
 
 const PAGE = 1000;
 type Row = Record<string, unknown>;
@@ -104,6 +106,25 @@ export class SupabaseRepository implements FinanceRepository {
 
   vocabulary(): Promise<Vocabulary> {
     this.vocabularyCache ??= (async () => {
+      // One small round trip: the user's DISTINCT names, computed in Postgres under their own RLS
+      // (migration 20261011000000). Falls back to the older row scan if the function isn't deployed yet.
+      const rpc = await this.client.rpc("ai_vocabulary");
+      if (!rpc.error && rpc.data && typeof rpc.data === "object") {
+        const v = rpc.data as Partial<Vocabulary>;
+        const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string") : []);
+        return {
+          merchants: strings(v.merchants), fundingAccounts: strings(v.fundingAccounts), currencies: strings(v.currencies),
+          earliestDate: typeof v.earliestDate === "string" ? v.earliestDate : null, expenseCount: typeof v.expenseCount === "number" ? v.expenseCount : 0,
+        };
+      }
+      if (rpc.error && !isMissingFunction(rpc.error)) this.fail(rpc.error);
+      return this.vocabularyFromRows();
+    })();
+    return this.vocabularyCache;
+  }
+
+  private async vocabularyFromRows(): Promise<Vocabulary> {
+    {
       const [recent, count, first, accounts] = await Promise.all([
         this.client.from("expenses").select("user_id, merchant, funding_account, currency, date").eq("user_id", this.userId).is("deleted_at", null).order("date", { ascending: false }).limit(5000),
         this.client.from("expenses").select("id", { count: "exact", head: true }).eq("user_id", this.userId).is("deleted_at", null),
@@ -116,8 +137,7 @@ export class SupabaseRepository implements FinanceRepository {
       const v = vocabularyOf(rows, accounts);
       const earliest = (first.data?.[0]?.date as string | undefined) ?? v.earliestDate;
       return { ...v, earliestDate: earliest, expenseCount: count.count ?? rows.length };
-    })();
-    return this.vocabularyCache;
+    }
   }
 }
 

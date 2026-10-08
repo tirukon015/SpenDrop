@@ -113,3 +113,26 @@ describe("AI conversation tables", () => {
     expect((await db.query("select count(*)::int as n from public.ai_messages where user_id = $1", [B])).rows).toEqual([{ n: 0 }]);
   });
 });
+
+// Migration 20261011000000: ai_vocabulary() — the caller's own distinct names, under their own RLS.
+describe("ai_vocabulary()", () => {
+  const C = "33333333-3333-4333-8333-333333333333", D = "44444444-4444-4444-8444-444444444444";
+  it("returns only the caller's distinct merchant names (most used first), accounts, currencies and count", async () => {
+    await db.query(`insert into auth.users (id) values ('${C}'), ('${D}') on conflict do nothing`);
+    for (const [m, n] of [["BIJOYSHARIARALAMIN", 3], ["Starbucks", 1], ["starbucks", 1], ["Unknown", 1]] as const)
+      for (let i = 0; i < n; i++) await as(C, "insert into public.expenses (id, amount_minor, merchant, date, funding_account) values (gen_random_uuid(), 100, $1, now(), 'Maybank')", [m]);
+    await as(C, "insert into public.expenses (id, amount_minor, merchant, date, deleted_at) values (gen_random_uuid(), 100, 'DELETED SHOP', now(), now())");
+    await as(D, "insert into public.expenses (id, amount_minor, merchant, date) values (gen_random_uuid(), 100, 'OTHER USER SECRET', now())");
+    const [{ v }] = await as<{ v: { merchants: string[]; fundingAccounts: string[]; currencies: string[]; expenseCount: number } }>(C, "select public.ai_vocabulary() as v");
+    expect(v.merchants).toEqual(["BIJOYSHARIARALAMIN", "Starbucks"]);
+    expect(v.fundingAccounts).toEqual(["Maybank"]);
+    expect(v.expenseCount).toBe(6);
+    expect(JSON.stringify(v)).not.toContain("OTHER USER");
+    expect(JSON.stringify(v)).not.toContain("DELETED");
+    const [{ v: dv }] = await as<{ v: { merchants: string[] } }>(D, "select public.ai_vocabulary() as v");
+    expect(dv.merchants).toEqual(["OTHER USER SECRET"]);
+  });
+  it("anon cannot call it", async () => {
+    expect(await fails("anon", "select public.ai_vocabulary()")).toMatch(/permission denied/);
+  });
+});

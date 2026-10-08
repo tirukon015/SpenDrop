@@ -97,6 +97,8 @@ export interface Focus {
 export interface FocusFilters {
   category?: CategoryId;
   merchant?: string;
+  /** Exact stored merchant names the question resolved to (several when the user asked for all similar names). */
+  merchants?: string[];
   fundingAccount?: string;
   paymentChannel?: PaymentChannelId;
   paymentChannels?: PaymentChannelId[];
