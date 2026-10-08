@@ -71,7 +71,7 @@ export function describeSubject(f: Omit<FiltersInput, "period">): string {
   if (f.paymentChannel) parts.push(`using ${channelInfo(f.paymentChannel).label}`);
   if (f.paymentChannels) parts.push(`using ${f.paymentChannels.length === 3 && f.paymentChannels.includes("QR_PAYMENT") ? "QR" : f.paymentChannels.map((c) => channelInfo(c).label).join(" or ")}`);
   if (f.currency && f.amountMin === undefined && f.amountMax === undefined) parts.push(`in ${currencyKey(f.currency)}`);
-  if (f.keyword) parts.push(`matching “${f.keyword}”`);
+  if (f.keyword) parts.push(`mentioning “${f.keyword}”`);
   if (f.hasReceipt !== undefined) parts.push(f.hasReceipt ? "with a receipt" : "without a receipt");
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
@@ -125,7 +125,24 @@ export function toCard(r: Row, ctx: AiContext): TxnCard {
     id: e.id, merchant: e.merchant || "Unknown", amountMinor: e.amountMinor, spendMinor: r.spend, currency: currencyKey(e.currency),
     date: e.date, localDate: r.localDate, localTime: time, category: r.category, ...(r.category !== e.category ? { recordedCategory: e.category } : {}), fundingAccount: e.fundingAccount || "Unknown",
     paymentChannel: e.paymentChannel, hasReceipt: Boolean(e.receiptPath), isShared: (r.shares?.length ?? 0) > 0, source: e.sourceType || "manual",
+    // The user's own remark: context only, shown as the user's words — never a source of amounts or other facts.
+    ...(e.notes?.trim() ? { remark: e.notes.trim().slice(0, 140) } : {}),
   };
+}
+
+// Remarks / keywords -------------------------------------------------------------------------------------------
+const KEYWORD_STOP = new Set(("a an the my our your his her their with and or of for to on in at by from about related relating regarding " +
+  "mention mentions mentioning mentioned stuff things thing expense expenses transaction transactions payment payments spending spent").split(" "));
+/** Light plural stemming so "lunches" finds "lunch" and "friends" finds "friend". */
+export const stem = (w: string) =>
+  w.length > 4 && w.endsWith("ies") ? `${w.slice(0, -3)}y` : w.length > 4 && /(ches|shes|sses|xes)$/.test(w) ? w.slice(0, -2) : w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w;
+/** The meaningful words of a keyword / remark search ("lunches with friends" → lunch, friend). */
+export const keywordTerms = (k: string) => normalizeText(k).split(" ").filter((w) => w.length >= 2 && !KEYWORD_STOP.has(w)).map(stem);
+/** Every term appears (as a word, or the start of one) in the merchant, remark or reference. */
+export function mentions(texts: (string | null | undefined)[], terms: string[]): boolean {
+  if (!terms.length) return false;
+  const words = texts.flatMap((t) => normalizeText(t ?? "").split(" ")).filter(Boolean).map(stem);
+  return terms.every((t) => words.some((w) => w === t || (t.length >= 4 && w.startsWith(t)) || (w.length >= 4 && t.startsWith(w))));
 }
 
 export async function loadRows(repo: FinanceRepository, ctx: AiContext, span: DateSpan | null): Promise<Row[]> {
@@ -177,9 +194,18 @@ async function unknownMerchant(f: Pick<FiltersInput, "merchant" | "merchants">, 
   return f.merchant;
 }
 
+/**
+ * A name that is no merchant of the user's but appears in their remarks ("university", "birthday", "Ahmed") is
+ * searched in the remarks instead — and the answer says so. Returns the input to use and what happened.
+ */
+async function withRemarkFallback<T extends Pick<FiltersInput, "merchant" | "merchants" | "keyword">>(input: T, repo: FinanceRepository): Promise<{ input: T; remarks?: string }> {
+  if (!input.merchant || input.merchants?.length || input.keyword || !(await unknownMerchant(input, repo))) return { input };
+  return { input: { ...input, merchant: undefined, keyword: input.merchant }, remarks: input.merchant };
+}
+
 export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accountNames: Map<string, string>): Row[] {
   const merchants = merchantSet(rows, f);
-  const keyword = f.keyword ? normalizeText(f.keyword) : null;
+  const terms = f.keyword ? keywordTerms(f.keyword) : null;
   const minMinor = f.amountMin !== undefined ? toMinor(f.amountMin) : null;
   const maxMinor = f.amountMax !== undefined ? toMinor(f.amountMax) : null;
   const currency = f.currency ? currencyKey(f.currency) : null;
@@ -193,7 +219,7 @@ export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accou
     if (f.hasReceipt !== undefined && Boolean(e.receiptPath) !== f.hasReceipt) return false;
     // Whole words: "Shopee" matches "Shopee" and "Shopee Food", never "ShopeePay" (answers list which names matched).
     if (merchants && !merchants.has(normalizeText(e.merchant))) return false;
-    if (keyword && ![e.merchant, e.notes ?? "", e.transactionReference ?? ""].some((t) => normalizeText(t).includes(keyword))) return false;
+    if (terms && !mentions([e.merchant, e.notes, e.transactionReference], terms)) return false;
     if (f.fundingAccount && !accountMatches(e, f.fundingAccount, accountNames)) return false;
     return true;
   });
@@ -287,13 +313,16 @@ export interface SearchData {
   merchantsMatched: string[];
   /** Set when the merchant named matches none of the user's merchants at all. */
   unknownMerchant?: string;
+  /** Set when a name matched no merchant and the user's remarks were searched for it instead. */
+  searchedRemarks?: string;
 }
 
-export async function searchTransactions(input: SearchInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<SearchData>> {
+export async function searchTransactions(original: SearchInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<SearchData>> {
   return run(async () => {
-    const span = resolvePeriod(input.period, ctx.today);
-    const names = await accountNameMap(repo);
-    const rows = applyFilters(await loadRows(repo, ctx, span), input, names);
+    const span = resolvePeriod(original.period, ctx.today);
+    const [names, all, fallback] = await Promise.all([accountNameMap(repo), loadRows(repo, ctx, span), withRemarkFallback(original, repo)]);
+    const input = fallback.input;
+    const rows = applyFilters(all, input, names);
     const target = input.targetAmount !== undefined ? toMinor(input.targetAmount) : null;
     const sort = input.sort ?? (target !== null || input.targetDate ? "relevance" : "date_desc");
     const score = (r: Row) => {
@@ -324,7 +353,7 @@ export async function searchTransactions(input: SearchInput, ctx: AiContext, rep
     const filters = describeFilters(input);
     const data: SearchData = {
       period: periodInfo(span), filters, subject: searchSubject(input, target), target: { amountMinor: target, date: input.targetDate ?? null },
-      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : await unknownMerchant(input, repo),
+      total: rows.length, offset, transactions, confidence, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : fallback.remarks ?? await unknownMerchant(input, repo), ...(fallback.remarks && rows.length ? { searchedRemarks: fallback.remarks } : {}),
     };
     return { ok: true, data, evidence: evidence("search_transactions", rows.length, span, filters) };
   });
@@ -359,13 +388,16 @@ export interface CalculateData {
   merchantsMatched: string[];
   /** Set when the merchant named matches none of the user's merchants at all. */
   unknownMerchant?: string;
+  /** Set when a name matched no merchant and the user's remarks were searched for it instead. */
+  searchedRemarks?: string;
 }
 
-export async function calculateSpending(input: CalculateInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<CalculateData>> {
+export async function calculateSpending(original: CalculateInput, ctx: AiContext, repo: FinanceRepository): Promise<ToolResult<CalculateData>> {
   return run(async () => {
-    const span = resolvePeriod(input.period, ctx.today);
-    const names = await accountNameMap(repo);
-    const rows = applyFilters(await loadRows(repo, ctx, span), input, names);
+    const span = resolvePeriod(original.period, ctx.today);
+    const [names, all, fallback] = await Promise.all([accountNameMap(repo), loadRows(repo, ctx, span), withRemarkFallback(original, repo)]);
+    const input = fallback.input;
+    const rows = applyFilters(all, input, names);
     const groupBy = input.groupBy ?? "none";
     const results: CurrencyCalc[] = byCurrency(rows).map(([currency, list]) => {
       const total = sum(list);
@@ -394,7 +426,7 @@ export async function calculateSpending(input: CalculateInput, ctx: AiContext, r
     const plain = !input.category && !input.merchant && !input.paymentChannel && !input.paymentChannels && !input.fundingAccount && !input.keyword && input.amountMin === undefined && input.amountMax === undefined;
     const refunds = plain ? refundTotals(await repo.refunds(span ? spanInstants(span, ctx.timeZone) : { start: null, end: null }), input.currency) : [];
     const filters = describeFilters(input);
-    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : await unknownMerchant(input, repo) }, evidence: evidence("calculate_spending", rows.length, span, filters) };
+    return { ok: true, data: { operation: input.operation, groupBy, period: periodInfo(span), filters, subject: describeSubject(input), results, refunds, personalRules: appliedRules(rows), merchantsMatched: input.merchant || input.merchants ? merchantNames(rows) : [], unknownMerchant: rows.length ? undefined : fallback.remarks ?? await unknownMerchant(input, repo), ...(fallback.remarks && rows.length ? { searchedRemarks: fallback.remarks } : {}) }, evidence: evidence("calculate_spending", rows.length, span, filters) };
   });
 }
 

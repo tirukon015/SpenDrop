@@ -19,6 +19,14 @@ export interface Understanding {
 
 // Phrase → canonical replacement (multi-word first; matched on word boundaries, lowercase).
 const PHRASES: [RegExp, string, Understanding["languages"][number]][] = [
+  // "What was this for?" in Banglish / Malay (before the word-level rules split them up)
+  [/\b(ei|eta|eita|oi|ota|oita)?\s*(expense|khoroch|khorch|transaction|taka|payment)?\s*(ta|ti|gula)?\s*kis(h|s)?er\s+(jonno|jonne)(\s+(chilo|silo|sil|chhilo|chilo))?\b/g, "what was this for", "bn-latn"],
+  [/\b(eta|eita|oita|ota|ei\s+taka\s+ta|ei\s+khoroch\s+ta)\s+keno\s+(khoroch|khorch|kinsilam|kinechilam|kinlam|korsilam|korechilam|disilam|dilam)\w*(\s+(korsilam|korechilam|korlam|korsi))?\b/g, "why did i spend this", "bn-latn"],
+  [/\b(remark|note|nota|memo)\s*(e|te|er\s+moddhe)?\s*ki\s+likh\w*/g, "what did i write in the remark", "bn-latn"],
+  [/\buntuk\s+apa\b/g, "what was this for", "ms"],
+  [/\bkenapa\s+saya\s+(belanja|beli|bayar)\s+(ini|itu)\b/g, "why did i spend this", "ms"],
+  [/\bapa\s+yang\s+saya\s+tulis\s+dalam\s+(nota|catatan|remark)\b/g, "what did i write in the remark", "ms"],
+  [/\b(perbelanjaan|transaksi|bayaran)\s+(ini|itu)\b/g, "this expense", "ms"],
   // Banglish
   [/\bkoto\s+taka\b/g, "how much", "bn-latn"],
   [/\b(khoroch|khorch|khoros|khorcha)\s+(hoise|hoyeche|hoyse|korchi|korsi|korlam|korechi|holo|hoilo|koresi|kortesi|kortechi)\b/g, "spent", "bn-latn"],
@@ -67,7 +75,7 @@ const WORDS: Record<string, [string, Understanding["languages"][number]]> = {
   koto: ["how much", "bn-latn"], khoroch: ["spent", "bn-latn"], khorch: ["spent", "bn-latn"], khoros: ["spent", "bn-latn"], khorcha: ["spent", "bn-latn"],
   gelo: ["spent", "bn-latn"], geche: ["spent", "bn-latn"], gese: ["spent", "bn-latn"], gesilo: ["spent", "bn-latn"],
   uraisi: ["spent", "bn-latn"], uraichi: ["spent", "bn-latn"], urailam: ["spent", "bn-latn"], urechi: ["spent", "bn-latn"],
-  korchi: ["", "bn-latn"], korsi: ["", "bn-latn"], hoise: ["", "bn-latn"], hoyeche: ["", "bn-latn"], korlam: ["", "bn-latn"],
+  korchi: ["", "bn-latn"], korsi: ["", "bn-latn"], korsilam: ["", "bn-latn"], korechilam: ["", "bn-latn"], korsilo: ["", "bn-latn"], kinsilam: ["bought", "bn-latn"], kinechilam: ["bought", "bn-latn"], der: ["", "bn-latn"], hoise: ["", "bn-latn"], hoyeche: ["", "bn-latn"], korlam: ["", "bn-latn"],
   khabar: ["food", "bn-latn"], khawa: ["food", "bn-latn"], khaoa: ["food", "bn-latn"], khana: ["food", "bn-latn"], bazar: ["groceries", "bn-latn"],
   aaj: ["today", "bn-latn"], ajke: ["today", "bn-latn"], gotokal: ["yesterday", "bn-latn"], kalke: ["yesterday", "bn-latn"],
   keno: ["why", "bn-latn"], kon: ["which", "bn-latn"], konta: ["which", "bn-latn"], kothay: ["where", "bn-latn"], dekhao: ["show", "bn-latn"], abar: ["again", "bn-latn"], abaro: ["again", "bn-latn"], lagi: ["again", "ms"], dekhaw: ["show", "bn-latn"],
@@ -118,6 +126,9 @@ const SHORT: Record<string, string> = {
 
 // Bengali script (a few common words).
 const BENGALI: [RegExp, string][] = [
+  [/কিসের\s*জন্য(\s*ছিল)?/g, " what was this for "], [/কেন\s*(এই\s*)?(টাকা\s*)?খরচ\s*করেছিলাম|কেন\s*(এটা\s*)?কিনেছিলাম/g, " why did i spend this "],
+  [/(রিমার্কে|নোটে|মন্তব্যে)\s*(কী|কি)\s*লিখেছিলাম/g, " what did i write in the remark "], [/এই\s*(খরচটা|খরচটি|ট্রানজ্যাকশনের|ট্রানজ্যাকশনটা|ট্রানজ্যাকশন|লেনদেনটা|লেনদেন)/g, " this expense "],
+  [/ট্রানজ্যাকশন|লেনদেন/g, " transaction "], [/রিমার্ক/g, " remark "],
   [/কত\s*টাকা|কত/g, " how much "], [/খরচ/g, " spent "], [/এই\s*সপ্তাহে|এই\s*সপ্তাহ/g, " this week "], [/গত\s*সপ্তাহে|গত\s*সপ্তাহ/g, " last week "],
   [/এই\s*মাসে|এই\s*মাস/g, " this month "], [/গত\s*মাসে|গত\s*মাস/g, " last month "], [/আজ/g, " today "], [/গতকাল/g, " yesterday "], [/আগামীকাল/g, " tomorrow "], [/কাল/g, " yesterday "],
   [/খাবার/g, " food "], [/কেন/g, " why "], [/আমি|আমার|করেছি|হয়েছে|হলো/g, " "],
@@ -182,6 +193,9 @@ export function understand(message: string, names: string[] = []): Understanding
     languages.add("bn");
     for (const [re, to] of BENGALI) t = t.replace(re, (m) => { translations.push({ from: m.trim(), to: to.trim() }); return to; });
   }
+  // Banglish puts the topic before its postposition: "friends der sathe" → "with friends", "office er jonno" → "for office".
+  t = t.replace(/\b([a-z][a-z-]{2,})\s+(?:der|er|ra|r)?\s*(?:sathe|shathe|songe)\b/g, (m, x: string) => { translations.push({ from: m.trim(), to: `with ${x}` }); languages.add("bn-latn"); return ` with ${x} `; });
+  t = t.replace(/\b([a-z][a-z-]{2,})\s+(?:er|r)\s+(?:jonno|jonne)\b/g, (m, x: string) => { if (/^(ki|kis|kisher|eta|ei|oi|ota)$/.test(x)) return m; translations.push({ from: m.trim(), to: `for ${x}` }); languages.add("bn-latn"); return ` for ${x} `; });
   for (const [re, to, lang] of PHRASES) {
     t = t.replace(re, (m) => { if (m.trim() !== to.trim()) { translations.push({ from: m.trim(), to: to.trim() }); languages.add(lang); } return ` ${to} `; });
   }

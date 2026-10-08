@@ -34,6 +34,8 @@ export type Plan = (
       /** Shape hints for the composer. */
       style?: {
         topN?: number; smallest?: boolean; restaurants?: boolean; detailIfSingle?: boolean; judgement?: boolean;
+        /** "What was this for?": answer with the transaction's remark (the user's own words), or say there is none. */
+        explain?: boolean;
         /** A "how often" question: answer with the count of transactions (and distinct days), never "visits". */
         frequency?: boolean;
         /** Payment-channel families the user compared ("card or qr" → Card, QR). */
@@ -324,6 +326,14 @@ const EXCESS = /\b(out of (hand|control)|way too (high|much|big)|too (high|much)
 const WASTE = /\b(wast(e|es|ed|ing)|(throw(s|ing|n)?|threw)\s+(my\s+|money\s+|cash\s+)?away|blow(s|ing|n)?\s+(my\s+)?(money|cash))\b/;
 const TREND_UP = /\b(increas(e|es|ed|ing)|going up|go up|gone up|went up|rising|rise|rose|growing|grow(s|n)?|climbing|creeping up)\b/;
 const TREND_DOWN = /\b(decreas(e|es|ed|ing)|going down|go down|went down|dropping|falling|fell|shrinking|coming down)\b/;
+/** "What was this for?", "why did I spend this?", "what did I write?", "who was this with?" — the purpose of a payment. */
+const EXPLAIN = /\bwhat (was|is) (this|that|it)\b.{0,30}\bfor\b|\bwhat was this for\b|\bwhy did i (spend|pay|buy|get|spent)\b.{0,12}\b(this|that|it|rm|\d)|\bwhat did i (buy|spend|pay|get)\b.{0,25}\b(for|on)\s*(this|that|it)?\s*\??$|\bwhat (was|is) the money for\b|\bwhat (was|is) (this|that) (expense|transaction|payment|charge|transfer)( about)?\b|\btell me (more )?about (this|that) (expense|transaction|payment|charge|transfer|one)\b|\bwhat was i doing\b|\bwhat did i (write|note|put)\b|\b(remark|note|memo)s?\b.{0,20}\b(say|says|said)\b|\bwho was (this|that|it) with\b|\bthis expense\b.{0,20}\bfor\b|\bwhat was this transfer for\b/;
+/** Topic words that can only be found in remarks ("for my birthday", "with friends", "related to university"). */
+const TOPIC = /\b(?:related to|relating to|regarding|about|mentioning|mentions?|labell?ed|tagged(?: as)?|with|for|on)\s+(?:my |the |a |an |our |some |his |her |their )?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2}?)(?=\s+(?:this|last|next|in|on|during|yesterday|today|so|and|from|using|via|by|at|with|for|of|ever|overall|altogether|till|until|how|koto|berapa|spent|spend|paid|bought|buy|cost|did|do|was|were|is|are)\b|\s*[?.!,]|\s*$)|\b([a-z]+)[- ]related\b(?!\s+to\b)/g;
+const TOPIC_STOP = new Set(("it this that these those them me us you what which who whom something anything everything stuff things thing spending money " +
+  "expenses expense transactions transaction payments payment purchases purchase average total much many time times week weeks month months year " +
+  "day days today yesterday here there it's everyday daily now again all lot most least more less best biggest largest smallest " +
+  "usual normal same other others one ones each every first second last next").split(" "));
 const FREQ = /\bhow (often|frequently|regularly)\b|\bhow many times\b|\bnumber of times\b|\bfrequency\b/;
 /** Remove idiom words before looking for entities ("eating up" is not Food, not a merchant). */
 const withoutIdioms = (t: string) => t.replace(new RegExp(`${CONSUME.source}|${EXCESS.source}|${WASTE.source}`, "g"), " ").replace(/\s+/g, " ").trim();
@@ -402,6 +412,9 @@ export function plan(input: PlanInput): Plan {
   // Drill-downs remember the main question, so "Yesterday?" after "Which restaurants?" repeats the main question.
   if (p.kind === "tools" && input.focus && DRILL_DOWNS.has(p.intent) && sameSubject(input.focus.filters, p.focus.filters))
     p.focus.base = input.focus.base ?? { intent: input.focus.intent, operation: input.focus.operation, groupBy: input.focus.groupBy };
+  // "What was the RM35 for?" / "why did I spend at X yesterday?": a lookup whose answer leads with the remark.
+  if (p.kind === "tools" && (has(u.text, EXPLAIN) || (has(u.text, DETAIL) && /\bfor\s*\??\s*$/.test(u.text))) && (p.intent === "SEARCH" || p.intent === "TRANSACTION_DETAIL"))
+    p.style = { ...p.style, explain: true, detailIfSingle: true };
   const shown = understoodAs(u);
   const preface = opener ? openerPreface(opener) : undefined;
   return { ...p, ...(shown && p.kind !== "unknown" ? { understoodAs: shown } : {}), ...(preface && p.kind !== "unknown" ? { preface } : {}) };
@@ -418,7 +431,7 @@ const FINANCE = /\b(spend|spends|spent|spending|money|cost|costs|costing|paid|pa
  */
 export function isFinancial(t: string, raw: string, vocabulary: Vocabulary, focus: Focus | null, social: SocialReading): boolean {
   const strong = has(t, FINANCE) || Boolean(extractAmount(raw) ?? extractAmount(t)) || Boolean(extractCategory(t)) || Boolean(extractChannel(t))
-    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || namesOwnMerchant(raw, vocabulary) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND);
+    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || namesOwnMerchant(raw, vocabulary) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND) || has(t, EXPLAIN);
   if (strong) return true;
   const sociallyAddressed = social.act !== null && social.act !== "chitchat" && social.act !== "ack" && social.act !== "affirm" && social.act !== "deny";
   if (sociallyAddressed) return false;
@@ -506,15 +519,36 @@ const NOT_A_NAME = new Set(["getting", "going", "keeps", "keep", "kept", "being"
 function unknownSubject(t: string, today: LocalDate): string | null {
   const concepts = new RegExp(`${TREND_UP.source}|${TREND_DOWN.source}|${FREQ.source}`, "g");
   const tokens = normalizeText(withoutIdioms(t).replace(concepts, " ")).split(" ").filter(Boolean);
-  const rest = tokens.filter((w) => !QUESTION_WORDS.has(w) && !NOT_A_NAME.has(w) && !/^\d/.test(w) && !extractPeriod(w, today) && !extractCategory(w) && !extractChannel(w)
+  const rest = tokens.filter((w) => !QUESTION_WORDS.has(w) && !NOT_A_NAME.has(w) && !/^\d/.test(w) && !/^(rm|myr|usd|sgd|bdt)\d/.test(w) && !extractPeriod(w, today) && !extractCategory(w) && !extractChannel(w)
     && !MONTHS.some((m) => m.startsWith(w) && w.length >= 3) && !WEEKDAYS.some((d) => d.startsWith(w) && w.length >= 3));
   return rest.length === 1 && rest[0].length >= 3 ? rest[0] : null;
+}
+
+/** The remark topic of a question, or null ("how much on lunches with friends" → "lunches friends"). */
+function remarkTopic(t: string, taken: string[], vocabulary: Vocabulary, today: LocalDate): string | null {
+  const blocked = new Set(taken.flatMap((w) => normalizeText(w).split(" ")));
+  const words: string[] = [];
+  for (const m of t.matchAll(TOPIC)) {
+    // An explicit topic cue ("related to university", "the trip", "office-related") makes even a category SYNONYM a
+    // remark topic; the category's own name ("on food", "for transport") always stays the category.
+    const explicit = m[2] !== undefined || /^(related to|relating to|regarding|about|mention|labell?ed|tagged)/.test(m[0]) || /^(for|on|with)\s+(the|my|our|that)\s/.test(m[0]);
+    for (const w of (m[1] ?? m[2] ?? "").split(/\s+/)) {
+      const n = normalizeText(w);
+      if (n.length < 3 || /\d/.test(n) || blocked.has(n) || TOPIC_STOP.has(n) || QUESTION_WORDS.has(n) || NOT_A_NAME.has(n) || words.includes(n)) continue;
+      const cat = extractCategory(n);
+      if (cat && (!explicit || cat.category.toLowerCase() === n || `${cat.category.toLowerCase()}s` === n)) continue;
+      if (extractChannel(n) || extractFundingAccount(n, vocabulary) || extractPeriod(n, today)) continue;
+      if (MONTHS.some((mo) => mo.startsWith(n)) || WEEKDAYS.some((d) => d.startsWith(n))) continue;
+      words.push(n);
+    }
+  }
+  return words.length ? words.slice(0, 4).join(" ") : null;
 }
 
 const DRILL_DOWNS = new Set<Intent>(["INVESTIGATE", "MERCHANT_ANALYSIS", "TRANSACTION_DETAIL"]);
 /** The new question keeps every subject filter of the previous one (it may add more, e.g. Food for "restaurants"). */
 const sameSubject = (before: FocusFilters, after: FocusFilters) =>
-  (["category", "merchant", "fundingAccount", "paymentChannel"] as const).every((k) => before[k] === undefined || before[k] === after[k])
+  (["category", "merchant", "fundingAccount", "paymentChannel", "keyword"] as const).every((k) => before[k] === undefined || before[k] === after[k])
   && (before.merchants === undefined || JSON.stringify(before.merchants) === JSON.stringify(after.merchants));
 
 function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understanding): Plan {
@@ -571,7 +605,12 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
       followUps: resolved.names.slice(0, 4).map(swap),
     };
   }
-  const merchantHit: { merchant: string; word: string; exact?: string; names?: string[] } | null = resolved
+  // Remark topics ("for my birthday", "with friends", "related to university"): words that name no category, account,
+  // channel, period or merchant of the user's are searched in the remarks (the tools say when they did).
+  const topic = resolved ? null : remarkTopic(t, [accountHit?.word ?? "", channelHit?.word ?? ""].filter(Boolean), vocabulary, today);
+  // A category synonym used as the remark topic ("related to university") is not also a category filter.
+  const categoryIsTopic = Boolean(topic && categoryHit && topic.split(" ").some((w) => normalizeText(categoryHit.word).split(" ").includes(w)));
+  const merchantHit: { merchant: string; word: string; exact?: string; names?: string[] } | null = topic ? null : resolved
     ? resolved.quality === "exact" || resolved.quality === "word"
       ? resolved.names.length === 1 && resolved.quality === "exact" ? { merchant: resolved.names[0], word: resolved.reference, exact: resolved.names[0] } : { merchant: resolved.reference, word: resolved.reference }
       : resolved.names.length === 1 ? { merchant: resolved.names[0], word: resolved.reference, exact: resolved.names[0] } : { merchant: resolved.reference, word: resolved.reference, names: resolved.names }
@@ -589,11 +628,12 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   if (restaurants && categoryHit?.category === "Food") notes.push("SpenDrop has no separate Restaurants category, so I used your Food category.");
 
   const entityFilters: FocusFilters = {
-    ...(categoryHit ? { category: categoryHit.category } : {}),
+    ...(categoryHit && !categoryIsTopic ? { category: categoryHit.category } : {}),
     ...(merchantHit ? (merchantHit.names ? { merchants: merchantHit.names } : { merchant: merchantHit.exact ?? titleCase(merchantHit.merchant) }) : {}),
     ...(fundingAccount ? { fundingAccount } : {}),
     ...(channel ? (channelHit?.channels ? { paymentChannels: channelHit.channels } : { paymentChannel: channel }) : {}),
     ...(currency ? { currency } : {}),
+    ...(topic ? { keyword: topic } : {}),
   };
   const hasEntities = Object.keys(entityFilters).length > 0 || Boolean(amount) || Boolean(period) || (Boolean(focus?.span) && has(t, RELATIVE));
 
@@ -626,6 +666,16 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     else return { kind: "reply", intent: "CLARIFY", status: "clarify", text: "Which merchant or place do you mean?", followUps: [] };
   }
 
+  // "What was this for?" with nothing named: the transaction just discussed (its remark answers it), or ask which.
+  if (has(t, EXPLAIN) && !amount && !merchantHit && !period && !topic) {
+    const ids = focus?.transactionIds ?? [];
+    if (ids.length === 1)
+      return { ...tools("TRANSACTION_DETAIL", [{ tool: "get_transaction", args: { transactionId: ids[0] } }], { ...focus!, intent: "TRANSACTION_DETAIL", transactionIds: ids }, notes), style: { explain: true } };
+    if (ids.length > 1)
+      return { kind: "reply", intent: "CLARIFY", status: "clarify", text: `I showed ${ids.length} transactions — which one do you mean?`, followUps: ["What was the first one for?", "What was the second one for?"] };
+    return { kind: "reply", intent: "CLARIFY", status: "clarify", text: "Which transaction do you mean? For example: “What was the RM35 at McDonald's yesterday for?” — or ask me to show your recent transactions first.", followUps: ["Show my recent transactions"] };
+  }
+
   // Transaction detail ("the first one", "tell me more")
   if (focus?.transactionIds?.length && has(t, DETAIL) && !amount) {
     const m = DETAIL.exec(t)!;
@@ -652,6 +702,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
     ...(f.fundingAccount ? { fundingAccount: f.fundingAccount } : {}), ...(f.paymentChannel ? { paymentChannel: f.paymentChannel } : {}),
     ...(f.paymentChannels ? { paymentChannels: f.paymentChannels } : {}),
     ...(f.currency ? { currency: f.currency } : {}),
+    ...(f.keyword ? { keyword: f.keyword } : {}),
   });
 
   // "Show it again" / "abar dekhao": the previous question, unchanged.
@@ -742,7 +793,7 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   }
 
   // Why? → investigate the change behind the current focus (or the named filters/period)
-  if (has(t, WHY)) {
+  if (has(t, WHY) && !(amount && has(t, EXPLAIN))) {
     const s = baseSpan ?? thisMonth(today);
     const b = focus?.compareSpan && !period ? focus.compareSpan : previousComparable(s, today);
     const f = baseFilters;

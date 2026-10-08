@@ -156,7 +156,7 @@ describe("the production case and natural / multilingual phrasings (exact figure
   it("no match: says no merchant matches the name (never invents one)", async () => {
     const a = await one("how much did I spend at zorblax?");
     expect(a.status).toBe("no_match");
-    expect(a.text).toMatch(/couldn't find a merchant matching “Zorblax”/i);
+    expect(a.text).toMatch(/couldn't find a merchant or a remark matching “Zorblax”/i);
     expect(a.blocks).toEqual([]);
   });
 });

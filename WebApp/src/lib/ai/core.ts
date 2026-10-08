@@ -125,7 +125,7 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   };
   const hints = {
     intent: p.intent, notes, topN: p.style?.topN, smallest: p.style?.smallest, restaurants: p.style?.restaurants, judgement: p.style?.judgement, periodWords,
-    lang, subjectParts, frequency: p.style?.frequency, channelFamilies: p.style?.channelFamilies, askedDirection: p.style?.askedDirection,
+    lang, subjectParts, frequency: p.style?.frequency, channelFamilies: p.style?.channelFamilies, askedDirection: p.style?.askedDirection, explain: p.style?.explain,
   };
   const composed = main.result.ok
     ? composeTool(main.name, main.result, hints, detail?.result.ok ? (detail.result.data as TransactionDetail) : undefined)
