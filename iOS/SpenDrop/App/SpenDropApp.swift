@@ -13,6 +13,8 @@ struct SpenDropApp: App {
 
         // The daily cloud backup's background task must be registered before launch finishes.
         SystemBackupTaskScheduler.register()
+        // Live sync's background refresh (pull + push of queued changes).
+        SyncCoordinator.registerBackgroundTask()
 
         NSSetUncaughtExceptionHandler { exception in
             print("[SPENDROP_CRASH] Uncaught Exception: \(exception)")
@@ -44,6 +46,8 @@ struct SpenDropApp: App {
                     // Optional cloud backup (only when configured and signed in; never blocks local use).
                     CloudBackupService.shared.startAutomaticBackups()
                     Task { await AuthService.shared.refreshSessionIfNeeded() }
+                    // Live sync starts after the first frame, at utility priority (never blocks launch or saves).
+                    SyncCoordinator.shared?.start()
 
                     // Safe, non-blocking initial data setup on scene presentation
                     ExpenseDataContainer.migrateLegacyContactsIfNeeded(into: ExpenseDataContainer.shared.mainContext)
@@ -121,6 +125,7 @@ struct SpenDropApp: App {
                 // Flush pending autosave changes, then back up immediately before the app is suspended.
                 if context.hasChanges { try? context.save() }
                 UserDataBackupService.saveAutoBackup(from: context)
+                if SyncCoordinator.shared != nil { SyncCoordinator.scheduleBackgroundRefresh() }
                 // Never starts a cloud backup (backup is opt-in). If one the user or the daily schedule started
                 // is still running, give it time to finish instead of being cut off.
                 if CloudBackupService.shared.isBackupRunning {
@@ -136,6 +141,8 @@ struct SpenDropApp: App {
                 // iOS doesn't guarantee when background work runs: catch up on today's daily cloud backup if it
                 // is on, its time has passed and it hasn't succeeded yet today (does nothing otherwise).
                 Task { await CloudBackupService.shared.runAutomaticBackupIfDue() }
+                // Pull what other devices changed and push anything queued.
+                SyncCoordinator.shared?.appBecameActive()
             default:
                 break
             }

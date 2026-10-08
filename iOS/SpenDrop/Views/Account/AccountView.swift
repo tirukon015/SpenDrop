@@ -134,6 +134,9 @@ public struct AccountView: View {
                 } footer: {
                     Text(backupFooter)
                 }
+                if let sync = SyncCoordinator.shared {
+                    SyncSection(sync: sync, status: sync.status)
+                }
                 Section {
                     Button("Sign Out") { confirmSignOut = true }
                 } footer: {
@@ -229,14 +232,17 @@ public struct AccountView: View {
     /// Authentication only: never downloads, uploads or merges anything after sign-in.
     private func afterSignIn() {
         cloud.refreshStatus()
+        SyncCoordinator.shared?.appBecameActive()
     }
 
     private func deleteAccount() async {
         busy = true
         defer { busy = false }
         do {
+            let deletedUser = auth.currentUser?.id
             try await auth.deleteAccount { try await cloud.deleteAllCloudData() }
             cloud.refreshStatus()
+            if let deletedUser { SyncCoordinator.shared?.forgetAccount(userId: deletedUser) }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -858,5 +864,47 @@ struct RestoreSummaryView: View {
                 }
             }
         }
+    }
+}
+
+/// Account → "Sync across devices": switch, status and two actions. Observes only the small sync status model.
+private struct SyncSection: View {
+    let sync: SyncCoordinator
+    let status: SyncStatusModel
+    @State private var enabled = true
+
+    var body: some View {
+        Section {
+            Toggle("Sync across devices", isOn: Binding(get: { enabled }, set: { enabled = $0; sync.setEnabled($0) }))
+                .accessibilityIdentifier("account.sync")
+            if enabled {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    Text(status.title).foregroundStyle(status.state == .failed || status.state == .authRequired ? Color.orange : Color.secondary)
+                }
+                HStack {
+                    Text("Last Sync")
+                    Spacer()
+                    Text(status.lastSyncDate.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never").foregroundStyle(.secondary)
+                }
+                if status.failedCount > 0, let error = status.lastError {
+                    Text(error).font(.caption).foregroundStyle(.orange)
+                }
+                Button(status.failedCount > 0 ? "Retry Sync" : "Sync Now") { sync.syncNow() }
+                    .disabled(status.state == .syncing)
+                    .accessibilityIdentifier("account.syncNow")
+                if status.heldDeletes > 0 {
+                    Button("Apply \(status.heldDeletes) Deletions to Cloud", role: .destructive) { sync.applyHeldDeletions() }
+                }
+            }
+        } header: {
+            Text("Sync")
+        } footer: {
+            Text(status.heldDeletes > 0
+                 ? "A large delete on this iPhone wasn't sent to your other devices yet. Your data elsewhere stays until you apply it."
+                 : "Changes save on this iPhone instantly, then sync to SpenDrop on the web and your other devices in the background.")
+        }
+        .onAppear { enabled = sync.isEnabledForCurrentUser }
     }
 }
