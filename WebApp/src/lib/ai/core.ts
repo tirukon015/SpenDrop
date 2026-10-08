@@ -84,6 +84,11 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   })();
   const insightRun = insightArgs ? executeTool("get_spending_insights", insightArgs, ctx, repo) : null;
 
+  const step0 = p.steps[0];
+  const synonymRun = p.style?.fallbackKeyword && step0 && (step0.tool === "calculate_spending" || step0.tool === "search_transactions") && (step0.args as { category?: string }).category
+    ? (() => { const { category: _c, ...rest } = step0.args as Record<string, unknown>; return executeTool(step0.tool, { ...rest, remark: p.style!.fallbackKeyword }, ctx, repo); })() // eslint-disable-line @typescript-eslint/no-unused-vars
+    : null;
+
   let main: ExecutedTool | null = null;
   for (const step of p.steps) {
     main = await executeTool(step.tool, step.args, ctx, repo);
@@ -99,6 +104,36 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
       executed.push(next);
       if (!next.result.ok) { main = next; break; }
       if ((next.result.data as { total: number }).total > 0) { main = next; notes.unshift(expansion.note); periodWords = undefined; break; }
+    }
+  }
+
+  // A narrower word than its category ("rent", "internet", "tuition" → Bills / Education): when the user's remarks
+  // mention it, those transactions answer the question (the category is broader). Ran alongside the main query.
+  if (synonymRun) {
+    const alt = await synonymRun;
+    const empty = (e: ExecutedTool) => e.result.ok && (e.name === "calculate_spending" ? (e.result.data as { results: unknown[] }).results.length === 0 : (e.result.data as { total: number }).total === 0);
+    if (alt.result.ok && !empty(alt)) {
+      executed.push(alt);
+      const category = (main.args as { category?: string }).category;
+      main = alt;
+      notes.unshift(`I used the transactions whose remarks mention “${p.style!.fallbackKeyword}”${category ? ` (your ${category} category is broader)` : ""}.`);
+    }
+  }
+
+  // A precise amount ("RM103.88") with no exact match in the default window: an exact match anywhere in the user's
+  // records is the transaction they mean (said plainly). Round amounts stay approximate.
+  if (main.result.ok && main.name === "search_transactions") {
+    const args = main.args as { targetAmount?: number; period?: unknown; currency?: string };
+    const data = main.result.data as { transactions: { matchReason?: string }[] };
+    const precise = typeof args.targetAmount === "number" && Math.round(args.targetAmount * 100) % 100 !== 0;
+    if (precise && args.period && !data.transactions.some((c) => c.matchReason === "exact amount")) {
+      const exact = await executeTool("search_transactions", { amountMin: args.targetAmount, amountMax: args.targetAmount, targetAmount: args.targetAmount, ...(args.currency ? { currency: args.currency } : {}), sort: "date_desc", limit: 10 }, ctx, repo);
+      executed.push(exact);
+      if (exact.result.ok && (exact.result.data as { total: number }).total > 0) {
+        main = exact;
+        notes.unshift("It's older than the last 30 days, so I searched all your records for that exact amount.");
+        periodWords = undefined;
+      }
     }
   }
 

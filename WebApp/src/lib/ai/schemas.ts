@@ -34,6 +34,7 @@ const filterShape = {
   amountMin: amount.optional().describe("Minimum transaction amount in major units"),
   amountMax: amount.optional().describe("Maximum transaction amount in major units"),
   keyword: shortText(80).optional().describe("Text to find in merchant, notes or reference"),
+  remark: shortText(80).optional().describe("Words to find only in the user's own remarks (notes) — context, never facts"),
   hasReceipt: z.boolean().optional().describe("Only transactions with (true) or without (false) a receipt image"),
 };
 

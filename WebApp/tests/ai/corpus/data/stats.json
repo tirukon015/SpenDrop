@@ -1,0 +1,57 @@
+{
+  "total": 9811,
+  "rejected": {
+    "exact duplicate": 21589
+  },
+  "bySplit": {
+    "train": 5597,
+    "dev": 2086,
+    "holdout": 1098,
+    "adversarial": 1030
+  },
+  "byLanguage": {
+    "en": 4688,
+    "bn-latn": 2026,
+    "bn": 659,
+    "ms": 1283,
+    "mixed": 1155
+  },
+  "byKind": {
+    "total": 611,
+    "total_category": 1532,
+    "total_merchant": 1413,
+    "total_account": 220,
+    "count": 704,
+    "frequency": 738,
+    "average": 372,
+    "largest": 192,
+    "channel_compare": 190,
+    "compare": 120,
+    "remark_total": 554,
+    "remark_search": 269,
+    "explain": 671,
+    "followup_period": 160,
+    "followup_why": 118,
+    "casual": 41,
+    "security": 67,
+    "ambiguous": 7,
+    "no_match": 80,
+    "all_time": 169,
+    "smallest": 97,
+    "list_category": 570,
+    "top_category": 155,
+    "top_merchant": 97,
+    "top_account": 98,
+    "weekly_summary": 20,
+    "unusual": 20,
+    "insights": 20,
+    "specific_date": 457,
+    "named_month": 49
+  },
+  "byDifficulty": {
+    "easy": 2680,
+    "medium": 4376,
+    "hard": 2755
+  },
+  "seed": 2026
+}

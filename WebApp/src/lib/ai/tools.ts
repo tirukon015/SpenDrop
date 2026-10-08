@@ -57,6 +57,7 @@ export function describeFilters(f: Omit<FiltersInput, "period">): string {
   else if (f.amountMax !== undefined) parts.push(`up to ${formatMoney(toMinor(f.amountMax), cur)}`);
   if (f.currency && !amounts) parts.push(currencyKey(f.currency));
   if (f.keyword) parts.push(`“${f.keyword}”`);
+  if (f.remark) parts.push(`remarks: “${f.remark}”`);
   if (f.hasReceipt !== undefined) parts.push(f.hasReceipt ? "with receipt" : "without receipt");
   return parts.join(" · ") || "All spending";
 }
@@ -72,6 +73,7 @@ export function describeSubject(f: Omit<FiltersInput, "period">): string {
   if (f.paymentChannels) parts.push(`using ${f.paymentChannels.length === 3 && f.paymentChannels.includes("QR_PAYMENT") ? "QR" : f.paymentChannels.map((c) => channelInfo(c).label).join(" or ")}`);
   if (f.currency && f.amountMin === undefined && f.amountMax === undefined) parts.push(`in ${currencyKey(f.currency)}`);
   if (f.keyword) parts.push(`mentioning “${f.keyword}”`);
+  if (f.remark) parts.push(`whose remarks mention “${f.remark}”`);
   if (f.hasReceipt !== undefined) parts.push(f.hasReceipt ? "with a receipt" : "without a receipt");
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
@@ -206,6 +208,7 @@ async function withRemarkFallback<T extends Pick<FiltersInput, "merchant" | "mer
 export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accountNames: Map<string, string>): Row[] {
   const merchants = merchantSet(rows, f);
   const terms = f.keyword ? keywordTerms(f.keyword) : null;
+  const remarkTerms = f.remark ? keywordTerms(f.remark) : null;
   const minMinor = f.amountMin !== undefined ? toMinor(f.amountMin) : null;
   const maxMinor = f.amountMax !== undefined ? toMinor(f.amountMax) : null;
   const currency = f.currency ? currencyKey(f.currency) : null;
@@ -220,6 +223,7 @@ export function applyFilters(rows: Row[], f: Omit<FiltersInput, "period">, accou
     // Whole words: "Shopee" matches "Shopee" and "Shopee Food", never "ShopeePay" (answers list which names matched).
     if (merchants && !merchants.has(normalizeText(e.merchant))) return false;
     if (terms && !mentions([e.merchant, e.notes, e.transactionReference], terms)) return false;
+    if (remarkTerms && !mentions([e.notes], remarkTerms)) return false;
     if (f.fundingAccount && !accountMatches(e, f.fundingAccount, accountNames)) return false;
     return true;
   });
@@ -322,8 +326,14 @@ export async function searchTransactions(original: SearchInput, ctx: AiContext, 
     const span = resolvePeriod(original.period, ctx.today);
     const [names, all, fallback] = await Promise.all([accountNameMap(repo), loadRows(repo, ctx, span), withRemarkFallback(original, repo)]);
     const input = fallback.input;
-    const rows = applyFilters(all, input, names);
+    let rows = applyFilters(all, input, names);
     const target = input.targetAmount !== undefined ? toMinor(input.targetAmount) : null;
+    // A precise amount (with cents, "RM54.49") identifies a transaction: an exact match wins over nearby amounts.
+    // Round amounts ("RM15") stay approximate — people round them.
+    if (target !== null && target % 100 !== 0) {
+      const exact = rows.filter((r) => r.expense.amountMinor === target || r.spend === target);
+      if (exact.length) rows = exact;
+    }
     const sort = input.sort ?? (target !== null || input.targetDate ? "relevance" : "date_desc");
     const score = (r: Row) => {
       let s = 0;

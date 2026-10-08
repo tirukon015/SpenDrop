@@ -36,6 +36,8 @@ export type Plan = (
         topN?: number; smallest?: boolean; restaurants?: boolean; detailIfSingle?: boolean; judgement?: boolean;
         /** "What was this for?": answer with the transaction's remark (the user's own words), or say there is none. */
         explain?: boolean;
+        /** A category SYNONYM ("rent" → Bills): when remarks mention the word, those transactions answer it. */
+        fallbackKeyword?: string;
         /** A "how often" question: answer with the count of transactions (and distinct days), never "visits". */
         frequency?: boolean;
         /** Payment-channel families the user compared ("card or qr" → Card, QR). */
@@ -156,9 +158,10 @@ export function extractPeriod(text: string, today: LocalDate): PeriodEntity | nu
   }
 
   // A month on its own ("in September", "October 2025"). "may" only with a preposition or a year.
-  m = new RegExp(String.raw`\b(in|during|for|of|on)?\s*(january|february|march|april|may|june|july|august|september|october|november|december)\b(?:\s+(\d{4}))?`).exec(t);
+  m = new RegExp(String.raw`\b(in|during|for|of|on)?\s*(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|apr|jun|jul|aug|sept?|oct|nov|dec)\b\.?(?:\s+(\d{4}))?(?!\s*\d)`).exec(t);
   if (m && (m[2] !== "may" || m[1] || m[3])) {
-    const mi = MONTHS.indexOf(m[2]) + 1;
+    const mi = monthIndex(m[2]) + 1;
+    m[2] = MONTHS[mi - 1];
     let y = m[3] ? Number(m[3]) : year;
     if (!m[3] && `${y}-${pad(mi)}-01` > today) y -= 1;
     const from = `${y}-${pad(mi)}-01`;
@@ -271,7 +274,7 @@ export function extractMerchant(text: string, vocabulary: Vocabulary, exclude: s
   const m = /\bat\s+([a-z0-9][\w&.'-]*(?:\s+(?!on\b|in\b|last\b|this\b|yesterday\b|today\b|using\b|with\b|from\b|for\b|around\b|near\b)[a-z0-9][\w&.'-]*){0,2})/.exec(text.toLowerCase());
   if (m) {
     const name = normalizeText(m[1]);
-    if (name && !/^(least|most|all|the|my|night|home|work|uni|university|campus|office|school|college|mall|around|about)\b/.test(name) && !blocked.some((b) => b.includes(name))) return { merchant: name, word: name };
+    if (name && !/^(least|most|all|the|my|night|home|work|uni|university|campus|office|school|college|mall|around|about|today|tonight|yesterday|tomorrow|this|last|next|the moment|once|least)\b/.test(name) && !blocked.some((b) => b.includes(name))) return { merchant: name, word: name };
   }
   // A capitalised name the user hasn't recorded ("that RM89 Shopee payment"): searching for it is honest.
   for (const w of original.split(/\s+/).slice(1)) {
@@ -283,14 +286,14 @@ export function extractMerchant(text: string, vocabulary: Vocabulary, exclude: s
   return null;
 }
 
-const NOT_NAME = new RegExp(String.raw`^(${MONTH_RE}|${WEEKDAYS.join("|")}|rm|myr|usd|sgd|gbp|eur|bdt|spendrop|apple|pay|qr|duitnow|touch|go|tng|why|how|which|show|did|was|is|it|am|can|could|please|thanks?)$`);
+const NOT_NAME = new RegExp(String.raw`^(${MONTH_RE}|januari|februari|mei|julai|ogos|oktober|disember|${WEEKDAYS.join("|")}|rm|myr|usd|sgd|gbp|eur|bdt|spendrop|apple|pay|qr|duitnow|touch|go|tng|why|how|which|show|did|was|is|it|am|can|could|please|thanks?)$`);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Intent
 // ---------------------------------------------------------------------------------------------------------------
 
 const has = (t: string, re: RegExp) => re.test(t);
-const SECURITY = /\b(every|all|other|another)\s+(customers?|clients?|members?|people)'?s?\b|\b(customers|clients)'?\s+(transactions?|expenses?|data|records|spending)\b|\b(pretend|act as|you are now|role ?play|switch to)\b.{0,30}\b(admin|administrator|developer|root|superuser|god mode)\b|\b(everyone|everybody|anyone)'?s?\b.{0,20}\b(expenses?|transactions?|spending|data|records)\b|\b(other|another|every|all|someone else'?s?|different)\s+(users?|people'?s|accounts? of)|\buser[\s_-]?ids?\b|\b(sql|drop\s+table|database records|all records)\b|\bselect\s+(\*|[a-z_]+\s+from\b)|ignore (all|any|previous|prior|your|the) (instructions|rules)|system prompt|\bjailbreak\b|developer mode/;
+const SECURITY = /\b(every|all|other|another)\s+(customers?|clients?|members?|people)'?s?\b|\b(customers|clients)'?\s+(transactions?|expenses?|data|records|spending)\b|\b(pretend|act as|you are now|role ?play|switch to)\b.{0,30}\b(admin|administrator|developer|root|superuser|god mode)\b|\b(everyone|everybody|anyone)'?s?\b.{0,20}\b(expenses?|transactions?|spending|data|records)\b|\b(other|another|every|all|someone else'?s?|different)\s+(users?|people'?s|accounts? of)|\buser[\s_-]?ids?\b|\b(sql|drop\s+table|database records|all records)\b|\bselect\s+(\*|[a-z_]+\s+from\b)|ignore (all|any|previous|prior|your|the) (instructions|rules)|system prompt|\bs[a-z]{2,5}m\s+p[a-z]{3,6}t\b|\b(your|the) (instructions|rules|prompt)\b.{0,12}\b(reveal|show|print|dump|ignore)|\b(reveal|show|print|dump)\b.{0,12}\b(instructions|prompt)\b|\bjailbreak\b|developer mode/;
 /** "What can you do?" — greetings and other small talk are handled by the conversation router (conversation.ts). */
 const HELP = /^(help|what can you do|how do(es)? (this|you) work|what can i ask)\??$/;
 /** A message that only points at something ("there?", "that?", "it?"). */
@@ -299,16 +302,16 @@ const WHY = /\bwhy\b|what changed|\breason\b|kenapa|keno\b|কেন/;
 const COMPARE = /\b(worse|better) than\b|\b(more|less)( money)? (spent|spending)\b|\b(going|go|gone) (up|down)\b|\b(more|less) (spent|spending)\b|\bcompare|comparison|\bvs\.?\b|versus|(spend|spent|spending)\s+(more|less)|\b(more|less|higher|lower)\s+than\b|increase|decrease|went (up|down)|too much|getting (worse|better)|\b(trend|trending)\b|\b(habit|lately|recently)\b.*\b(worse|better|more|less)\b/;
 const UNUSUAL = /\b(unusual|strange|weird|odd|anomal\w*|abnormal|out of the ordinary|spikes?|than usual|than normal|suspicious)\b|\b(anything|something) (off|odd|weird|strange|wrong) (with|in|about) my\b/;
 const SUMMARY = /\b(summary|summari[sz]e|recap|overview|report|wrap[- ]?up)\b|where did (all )?my money go|where('?s| is) my money going|\bmy money where (goes|go|going)\b|\bwhere (does|do) my money (go|goes)\b/;
-const ACCOUNT_Q = /\b(which|what)\s+(funding\s+)?(account|bank|wallet)s?\b|\baccounts? do i\b|\bby (funding )?account\b|\bper account\b/;
+const ACCOUNT_Q = /\b(account|bank|wallet)s? which\b|\b(which|what)\s+(funding\s+)?(account|bank|wallet)s?\b|\baccounts? do i\b|\bby (funding )?account\b|\bper account\b/;
 const CHANNEL_Q = /\bpa(y|id) with (the )?most\b|\b(which|what) (card|app|way|method)s?\b.*\bpa(y|id)\b|\b(which|what)\s+(payment\s+)?(channel|method)s?\b|how do i (usually |mostly )?pay\b|\bby (payment )?(channel|method)\b/;
-const CATEGORY_Q = /\bwhat am i spending (my money )?on\b|\bwhere (is|does|do|did) (most of |all of |all )?my money (go|going|goes|went)\b|\bmost of my money\b|\bwhat do i spend (the )?most on\b|\b(which|what)\s+categor(y|ies)\b|\bby categor(y|ies)\b|categor(y|ies) (cost|costs|take|takes)|breakdown|\b(share|percent(age)?|proportion|portion) of (my )?(spending|money)\b/;
-const MERCHANT_Q = /\b(which|what)\s+(merchants?|shops?|stores?|places?|restaurants?|cafes?|brands?)\b|\btop merchants?\b|where do i (spend|shop|eat) (the )?most|\bmost (at|from)\b/;
-const BIGGEST = /\b(biggest|largest|most expensive|highest|priciest|top \d+)\b/;
+const CATEGORY_Q = /\bcategor(y|ies) which\b|\b(biggest|largest|top|main|highest|most expensive)\s+(spending\s+|expense\s+)?categor(y|ies)\b|\bwhat am i spending (my money )?on\b|\bwhere (is|does|do|did) (most of |all of |all )?my money (go|going|goes|went)\b|\bmost of my money\b|\bwhat do i spend (the )?most on\b|\b(which|what)\s+categor(y|ies)\b|\bby categor(y|ies)\b|categor(y|ies) (cost|costs|take|takes)|breakdown|\b(share|percent(age)?|proportion|portion) of (my )?(spending|money)\b/;
+const MERCHANT_Q = /\b(merchants?|shops?|stores?) which\b|\b(which|what)\s+(merchants?|shops?|stores?|places?|restaurants?|cafes?|brands?)\b|\btop merchants?\b|where do i (spend|shop|eat) (the )?most|\bmost (at|from)\b/;
+const BIGGEST = /\b(biggest|largest|most expensive|highest|priciest|top \d+)\b(?!\s+(spending\s+|expense\s+)?(categor|merchant|shop|store|account|bank))/;
 const SMALLEST = /\b(smallest|cheapest|lowest)\b/;
 const COUNT = /\bhow many\b|\bnumber of\b/;
 const AVERAGE = /\baverage|\bavg\b|\bmean\b|\bper day\b|\bdaily\b/;
-const LIST = /\bbought\b|\b(show|list|find|search|which transactions|what transactions|what was (that|the)|what did i buy|purchases|payments|transactions|receipts?|look for|look up)\b/;
-const HOW_MUCH = /\bhow much|\btotal|\bspent\b|\bspend(ing)?\b|\bcost\b|\bpaid\b|\bberapa|\bbelanja|\bkoto\b|\bkhoroch|কত|খরচ/;
+const LIST = /\b(anything|something) (about|with|related to|regarding|mentioning)\b|\bwhat\b.{1,40}\bdid i (buy|get|purchase|order)\b|\bbought\b|\b(show|list|find|search|which transactions|what transactions|what was (that|the)|what did i buy|purchases|payments|transactions|receipts?|look for|look up)\b/;
+const HOW_MUCH = /\bwhat did i pay\b|\bwhat'?s the damage\b|\bcame out of\b|\bhow much|\btotal|\bspent\b|\bspend(ing)?\b|\bcost\b|\bpaid\b|\bberapa|\bbelanja|\bkoto\b|\bkhoroch|কত|খরচ/;
 const DETAIL = /\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|last) one\b|#\s?([1-9])\b|\bnumber ([1-9])\b|\b(that|this) one\b|\btell me more\b|\bmore details?\b|\bdetails\b/;
 /** A question about the last answer compared with normal ("Was that higher than normal?", "is that a lot?"). */
 const NORMAL_Q = /\b(is|was|isn'?t|wasn'?t)\s+(that|this|it)(\s+(amount|total|spending|figure))?\s+(higher|lower|more|less|bigger|smaller|normal|usual|a lot|too much|average|high|low|okay|ok)\b|\b(that|it)('?s| is| was)\s+(a lot|too much|normal|usual|high)\b|\b(higher|lower|more|less) than (normal|usual|average)\b|^(normal|usual|is that normal)\??$/;
@@ -329,7 +332,7 @@ const TREND_DOWN = /\b(decreas(e|es|ed|ing)|going down|go down|went down|droppin
 /** "What was this for?", "why did I spend this?", "what did I write?", "who was this with?" — the purpose of a payment. */
 const EXPLAIN = /\bwhat (was|is) (this|that|it)\b.{0,30}\bfor\b|\bwhat was this for\b|\bwhy did i (spend|pay|buy|get|spent)\b.{0,12}\b(this|that|it|rm|\d)|\bwhat did i (buy|spend|pay|get)\b.{0,25}\b(for|on)\s*(this|that|it)?\s*\??$|\bwhat (was|is) the money for\b|\bwhat (was|is) (this|that) (expense|transaction|payment|charge|transfer)( about)?\b|\btell me (more )?about (this|that) (expense|transaction|payment|charge|transfer|one)\b|\bwhat was i doing\b|\bwhat did i (write|note|put)\b|\b(remark|note|memo)s?\b.{0,20}\b(say|says|said)\b|\bwho was (this|that|it) with\b|\bthis expense\b.{0,20}\bfor\b|\bwhat was this transfer for\b/;
 /** Topic words that can only be found in remarks ("for my birthday", "with friends", "related to university"). */
-const TOPIC = /\b(?:related to|relating to|regarding|about|mentioning|mentions?|labell?ed|tagged(?: as)?|with|for|on)\s+(?:my |the |a |an |our |some |his |her |their )?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2}?)(?=\s+(?:this|last|next|in|on|during|yesterday|today|so|and|from|using|via|by|at|with|for|of|ever|overall|altogether|till|until|how|koto|berapa|spent|spend|paid|bought|buy|cost|did|do|was|were|is|are)\b|\s*[?.!,]|\s*$)|\b([a-z]+)[- ]related\b(?!\s+to\b)/g;
+const TOPIC = /\b(?:related to|relating to|regarding|about|mentioning|mentions?|labell?ed|tagged(?: as)?|with|for|on)\s+(?:my |the |a |an |our |some |his |her |their )?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2}?)(?=\s+(?:this|last|next|in|on|during|yesterday|today|so|and|from|using|via|by|at|with|for|of|ever|overall|altogether|till|until|how|koto|berapa|spent|spend|paid|bought|buy|cost|did|do|was|were|is|are|over|past|within|the past|previous)\b|\s+\d|\s*[?.!,]|\s*$)|\b([a-z]+)[- ]related\b(?!\s+to\b)/g;
 const TOPIC_STOP = new Set(("it this that these those them me us you what which who whom something anything everything stuff things thing spending money " +
   "expenses expense transactions transaction payments payment purchases purchase average total much many time times week weeks month months year " +
   "day days today yesterday here there it's everyday daily now again all lot most least more less best biggest largest smallest " +
@@ -339,7 +342,7 @@ const FREQ = /\bhow (often|frequently|regularly)\b|\bhow many times\b|\bnumber o
 const withoutIdioms = (t: string) => t.replace(new RegExp(`${CONSUME.source}|${EXCESS.source}|${WASTE.source}`, "g"), " ").replace(/\s+/g, " ").trim();
 
 /** What drives a change ("What's causing the increase?"). */
-const CAUSE = /\b(what'?s|what is|what) (causing|driving|behind)\b|\bcaus(e|ed|ing) (the|this|my) (increase|rise|jump|drop)\b|\b(reason|reasons) for\b/;
+const CAUSE = /\bwhat caused\b|\bwhat made (it|that|this|them)\b|\b(what'?s|what is|what) (causing|driving|behind)\b|\bcaus(e|ed|ing) (the|this|my) (increase|rise|jump|drop)\b|\b(reason|reasons) for\b/;
 /** A period relative to the last answer ("the day before?", "previous week", "the next day"). */
 const RELATIVE = /\b(the )?(day|week|month) (before|after)\b|\b(previous|next|following) (day|week|month)\b/;
 const FOLLOW_UP = /^(and|what about|how about|also|then|so|ok(ay)?|but)\b|^(why|those|them)\b|^compare (it |that |this )?(with|to)\b/;
@@ -348,7 +351,7 @@ const WEAK_FOLLOW_UP = /^(which|show|list|that)\b/;
 const REPEAT = /^(please )?((show|tell|give)( me)?( it| that| them| those)? again|again( (show|tell|please))?( it| that| them| me)?|repeat( (it|that))?|once more|one more time)( please)?\??$/;
 const LOCATION = /\bnear\s+(the\s+)?\w+|\bat\s+(the\s+)?(uni|university|campus|office|college|school|mall|home|work)\b/;
 const ORDINALS = ["first", "second", "third", "fourth", "fifth"];
-const SECRETS = /\b(passwords?|passcodes?|pin( number)?|otp|tac code|cvv|cvc|card number|full card|login details|api key|secret key|service role)\b/;
+const SECRETS = /\b(passwords?|passcodes?|pin( number)?|otp|tac code|cvv|cvc|card number|full card|login details|api key|secret key|service role|kata la[a-z]{3,5}n|kata rah[a-z]{2,4}|pass[a-z]{0,2}w[a-z]{0,2}rd|nombor pin|kod tac|nombor kad)\b|পাসওয়ার্ড|পিন নম্বর|ওটিপি/;
 const BALANCE = /\b(bank )?balance\b|\bhow much (money )?(do i have|is (left )?in)\b/;
 /** Questions SpenDrop has no data for: answered with an honest limitation, never sent to a model to improvise. */
 const OFF_TOPIC: [RegExp, string][] = [
@@ -415,6 +418,15 @@ export function plan(input: PlanInput): Plan {
   // "What was the RM35 for?" / "why did I spend at X yesterday?": a lookup whose answer leads with the remark.
   if (p.kind === "tools" && (has(u.text, EXPLAIN) || (has(u.text, DETAIL) && /\bfor\s*\??\s*$/.test(u.text))) && (p.intent === "SEARCH" || p.intent === "TRANSACTION_DETAIL"))
     p.style = { ...p.style, explain: true, detailIfSingle: true };
+  // "How much on tuition?": Education is the category, but if there's none, the user probably wrote it in remarks.
+  if (p.kind === "tools") {
+    const args = p.steps[0]?.args ?? {};
+    const cat = extractCategory(u.text);
+    const word = cat ? normalizeText(cat.word) : "";
+    const canonical = cat?.category.toLowerCase() ?? "";
+    if (cat && args.category === cat.category && !args.merchant && !args.merchants && !args.keyword && word && ![canonical, `${canonical}s`, canonical.replace(/s$/, "")].includes(word) && !word.includes(" "))
+      p.style = { ...p.style, fallbackKeyword: word };
+  }
   const shown = understoodAs(u);
   const preface = opener ? openerPreface(opener) : undefined;
   return { ...p, ...(shown && p.kind !== "unknown" ? { understoodAs: shown } : {}), ...(preface && p.kind !== "unknown" ? { preface } : {}) };
@@ -431,7 +443,8 @@ const FINANCE = /\b(spend|spends|spent|spending|money|cost|costs|costing|paid|pa
  */
 export function isFinancial(t: string, raw: string, vocabulary: Vocabulary, focus: Focus | null, social: SocialReading): boolean {
   const strong = has(t, FINANCE) || Boolean(extractAmount(raw) ?? extractAmount(t)) || Boolean(extractCategory(t)) || Boolean(extractChannel(t))
-    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || namesOwnMerchant(raw, vocabulary) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND) || has(t, EXPLAIN);
+    || Boolean(extractFundingAccount(t, vocabulary)) || Boolean(knownMerchant(t, vocabulary)) || namesOwnMerchant(raw, vocabulary) || has(t, SECURITY) || has(t, AMBIGUOUS_SPEND) || has(t, EXPLAIN)
+    || /\b(anything|something|everything) (about|with|related to|regarding|mentioning|for)\b/.test(t);
   if (strong) return true;
   const sociallyAddressed = social.act !== null && social.act !== "chitchat" && social.act !== "ack" && social.act !== "affirm" && social.act !== "deny";
   if (sociallyAddressed) return false;
@@ -485,7 +498,9 @@ function gates(t: string, raw: string): Plan | null {
       text: "SpenDrop doesn't connect to your bank, so I can't see your balance. I can tell you what you've recorded spending — for example from one account.",
       followUps: ["How much did I spend from Maybank this month?", "Which account do I use most?"],
     };
-  const offTopic = OFF_TOPIC.find(([re]) => re.test(t));
+  // "How much did I spend on the movie?" is about the user's own spending, not a movie question.
+  const aboutOwnSpending = /\b(spend|spent|spending|expenses?|transactions?|paid|bought|purchases?|remarks?|mention(s|ing)?|related to)\b/.test(t);
+  const offTopic = aboutOwnSpending ? undefined : OFF_TOPIC.find(([re]) => re.test(t));
   if (offTopic)
     return {
       kind: "reply", intent: "OUT_OF_SCOPE", status: "clarify",
@@ -511,7 +526,10 @@ const QUESTION_WORDS = new Set(("i me my mine you your we our it its is am are w
   "what where when which why who whom whose spend spent spending money total amount cost costs paid pay bought buy this last next week weeks month months " +
   "year years today yesterday tomorrow day days all so more less lot a lot bro bhai lah now lately recently usually ever again overall whole entire up down " +
   "kemon kmn show list find search transactions transaction payments payment purchases purchase receipts receipt goes go went gone where number times time " +
-  "compare vs versus normal usual average both each every any some only really very too there their them they she he his her").split(" "));
+  "compare vs versus normal usual average both each every any some only really very too there their them they she he his her " +
+  "biggest largest smallest cheapest highest lowest priciest expensive out went tell give let know check category categories " +
+  "account accounts shop shops store stores merchant merchants bank banks most least thing things sum theke used digunakan " +
+  "previous prior past far recent recently latest over during within hari").split(" "));
 
 /** In a money question, a single unrecognised word is the subject the user is asking about ("shopee te koto gese"). */
 /** Everyday verbs / fillers that are never a merchant name on their own ("getting", "increasing", "lately"). */
@@ -595,7 +613,13 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   // typo — "bijoy" → BIJOYSHARIARALAMIN). Several close matches → ask which one (unless the user asked for all similar
   // names). Only then the older heuristics for names the user hasn't recorded ("at Foo Bar", a capitalised word).
   const taken = [accountHit?.word ?? "", channelHit?.word ?? "", categoryHit?.word ?? ""].filter(Boolean);
-  const resolved = resolveMerchant(raw, vocabulary.merchants, { exclude: taken });
+  // An explicit topic cue ("related to X", "mentioning X") asks about remarks: only a whole-name / whole-word merchant
+  // match overrides it, never a partial or typo match ("related to team" ≠ Tealive).
+  const topicCue = /\b(related to|relating to|regarding|mentioning|mentions?|about)\b|[- ]related\b/.test(t);
+  // Words that are category words in their own right ("grocery", "rides") are never a partial / typo merchant reference.
+  const categoryWords = raw.toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length >= 3 && extractCategory(w));
+  const resolved0 = resolveMerchant(raw, vocabulary.merchants, { exclude: [...taken, ...categoryWords] });
+  const resolved = topicCue && resolved0 && !(resolved0.kind === "match" && (resolved0.quality === "exact" || resolved0.quality === "word")) ? null : resolved0;
   if (resolved?.kind === "ambiguous") {
     const ref = resolved.reference;
     const swap = (name: string) => raw.replace(new RegExp(ref.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s\\W_]*"), "i"), name);
@@ -815,7 +839,9 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
   }
 
   // Comparison ("did I spend more this month?", "this month vs last month", "compare with last week")
-  if (has(t, COMPARE) && !(amount && /\b(more|less|higher|lower) than\b/.test(t))) {
+  // "Which account / shop / category did I spend more from?" ranks within one period — that's an analysis, not a comparison.
+  const ranks = [ACCOUNT_Q, MERCHANT_Q, CATEGORY_Q].some((re) => has(t, re)) && !/\b(than|vs|versus|compared?)\b/.test(t);
+  if (has(t, COMPARE) && !ranks && !(amount && /\b(more|less|higher|lower) than\b/.test(t))) {
     const unit = /\b(?:this|current|last|previous)\s+(week|month|year)\b/.exec(t)?.[1] as "week" | "month" | "year" | undefined;
     const current = (u: "week" | "month" | "year") => presetSpan(u === "week" ? "this_week" : u === "month" ? "this_month" : "this_year", today)!;
     const previous = (u: "week" | "month" | "year") => presetSpan(u === "week" ? "last_week" : u === "month" ? "last_month" : "last_year", today)!;
@@ -888,9 +914,10 @@ function planFrom({ message, today, vocabulary, focus }: PlanInput, u: Understan
       ...(amount ? { amountMin: amount.min, amountMax: amount.max } : {}),
       ...(amount?.currency && !f.currency ? { currency: amount.currency } : {}),
       ...(amount?.target ? { targetAmount: amount.target } : {}),
-      ...(period?.exactDay ? { targetDate: period.span.from } : {}),
+      // A remembered day narrows a lookup ("where did my RM15 go on Monday"); "show my groceries yesterday" is a list.
+      ...(period?.exactDay && amount ? { targetDate: period.span.from } : {}),
       ...(/\breceipts?\b/.test(t) ? { hasReceipt: true } : {}),
-      sort: amount || period?.exactDay ? "relevance" : "date_desc",
+      sort: amount ? "relevance" : "date_desc",
       limit: amount ? 10 : 20,
     });
     // A remembered amount is searched in its own default window — never inside the period of an unrelated earlier

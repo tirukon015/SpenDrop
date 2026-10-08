@@ -60,7 +60,8 @@ describe("several close candidates → ask, unless the user asked for all simila
   const close = ["BIJOY MART", "BIJOY CAFE", "BIJOYSHARIARALAMIN"];
   it("a whole word shared by names → all (disclosed); a partial reference shared by names → clarify", () => {
     expect(resolveMerchant("how much did I spend at bijoy?", close)).toMatchObject({ kind: "match", names: ["BIJOY CAFE", "BIJOY MART"] });
-    expect(resolveMerchant("how much at bij?", close)).toMatchObject({ kind: "ambiguous" });
+    expect(resolveMerchant("how much at bijo?", close)).toMatchObject({ kind: "ambiguous" });
+    expect(resolveMerchant("how much at bij?", close)).toBeNull(); // 3 letters is too little for a long name
   });
   it("the planner asks which one, listing the candidates, with ready-made follow-ups", () => {
     const p = plan({ message: "how much at bijo?", today: "2026-10-07", vocabulary: vocab(close), focus: null });

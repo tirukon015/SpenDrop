@@ -9,7 +9,7 @@
 //   word       a whole word (or run of words) of the name                                 90
 //   prefix     the name, or one of its words, starts with the reference (≥ 3 letters)      80
 //   substring  the reference appears inside the name (≥ 5 letters)                          70
-//   fuzzy      one small typo against the start of a word / the name (≥ 4 letters)          60
+//   fuzzy      one small typo against the start of a word / the name (≥ 5 letters)          60
 //
 // Weaker references never match (no single letters, no common words), a stronger match always beats a weaker one,
 // and several close candidates are reported as ambiguous rather than silently combined. The stored names are never
@@ -52,11 +52,12 @@ export function matchQuality(reference: string, merchant: string): MatchQuality 
   if (refC === nameC) return "exact";
   if (` ${name} `.includes(` ${ref} `)) return "word";
   const words = name.split(" ");
-  if (nameC.startsWith(refC) || words.some((w) => w.length > refC.length && w.startsWith(refC))) return "prefix";
+  // A 3-letter start only counts for short names ("kfc"); longer names need 4+ letters ("tea" ≠ Tealive).
+  if ((refC.length >= 4 || nameC.length <= refC.length + 2) && (nameC.startsWith(refC) || words.some((w) => w.length > refC.length && w.startsWith(refC)))) return "prefix";
   // Inside a word only from 5 letters ("sharia", "alamin"): shorter inner fragments are noise ("hope" in "Shopee").
   if (refC.length >= 5 && nameC.includes(refC)) return "substring";
   // A small typo ("bijoi", "bijoyy", "starbuck", "jaya grocr"): compare with the start of the name and of each word.
-  if (refC.length >= 4) {
+  if (refC.length >= 5) {
     const max = refC.length >= 8 ? 2 : 1;
     const starts = [nameC, ...words.filter((w) => w.length >= 3)];
     for (const s of starts)

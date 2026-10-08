@@ -24,6 +24,13 @@ const PHRASES: [RegExp, string, Understanding["languages"][number]][] = [
   [/\b(eta|eita|oita|ota|ei\s+taka\s+ta|ei\s+khoroch\s+ta)\s+keno\s+(khoroch|khorch|kinsilam|kinechilam|kinlam|korsilam|korechilam|disilam|dilam)\w*(\s+(korsilam|korechilam|korlam|korsi))?\b/g, "why did i spend this", "bn-latn"],
   [/\b(remark|note|nota|memo)\s*(e|te|er\s+moddhe)?\s*ki\s+likh\w*/g, "what did i write in the remark", "bn-latn"],
   [/\buntuk\s+apa\b/g, "what was this for", "ms"],
+  [/\b(eta|eita|ota|oita|ei)\s+(ki|kisher)\s+(for|jonno)(\s+(chilo|silo|sil|chhilo))?\b/g, "what was this for", "bn-latn"],
+  [/\b(money|cash|taka)\s+went\s+out\b|\bwent\s+out\s+of\s+my\s+(account|wallet)\b/g, "spent", "en"],
+  [/\bbarang\s+(runcit|dapur)\b/g, "groceries", "ms"],
+  [/\bluar\s+biasa\b/g, "unusual", "ms"],
+  [/\bke\s*mana\b/g, "where", "ms"],
+  [/\b(pengguna|orang)\s+(lain|lain-lain)\b|\bsemua\s+pengguna\b/g, "other users", "ms"],
+  [/\bpaling\s+banyak\b/g, "most", "ms"],
   [/\bkenapa\s+saya\s+(belanja|beli|bayar)\s+(ini|itu)\b/g, "why did i spend this", "ms"],
   [/\bapa\s+yang\s+saya\s+tulis\s+dalam\s+(nota|catatan|remark)\b/g, "what did i write in the remark", "ms"],
   [/\b(perbelanjaan|transaksi|bayaran)\s+(ini|itu)\b/g, "this expense", "ms"],
@@ -37,6 +44,9 @@ const PHRASES: [RegExp, string, Understanding["languages"][number]][] = [
   [/\b(gotho|goto|gato|ager)\s+(mash|mashe|mas|month)\b/g, "last month", "bn-latn"],
   [/\bkhaoa\s+dawa\b|\bkhawa\s+dawa\b|\bkhaowa\s+dawa\b/g, "food", "bn-latn"],
   [/\b(sob|shob)\s*(cheye|chaite|theke)\s+(boro|beshi)\b/g, "biggest", "bn-latn"],
+  [/\b(sob|shob)\s*(cheye|chaite|theke)\s+(choto|kom|sosta)\b/g, "smallest", "bn-latn"],
+  [/\bgrocery\s+(shopping|run|runs|trip|trips)\b/g, "groceries", "en"],
+  [/\b(paling\s+(kecil|murah))\b/g, "smallest", "ms"],
   [/\b(eto|etto|onek)\s+beshi\b/g, "so much", "bn-latn"],
   [/\bonno\s+(user|lok|manush)(er)?\b/g, "other users", "bn-latn"],
   [/\b(er\s+)?(pichone|pichhone|jonno|jonne)\b/g, " on ", "bn-latn"],
@@ -84,6 +94,11 @@ const WORDS: Record<string, [string, Understanding["languages"][number]]> = {
   // Malay
   berapa: ["how much", "ms"], belanja: ["spent", "ms"], perbelanjaan: ["spending", "ms"], spend: ["spend", "en"],
   makan: ["food", "ms"], makanan: ["food", "ms"], minum: ["food", "ms"], pengangkutan: ["transport", "ms"], minyak: ["fuel", "ms"],
+  digunakan: ["used", "ms"],
+  kad: ["card", "ms"], atau: ["or", "ms"], berkaitan: ["related to", "ms"], kategori: ["category", "ms"], mana: ["which", "ms"], pergi: ["go", "ms"],
+  bil: ["bills", "ms"], runcit: ["groceries", "ms"], purata: ["average", "ms"], jumlah: ["total", "ms"], "membeli-belah": ["shopping", "ms"],
+  ringkasan: ["summary", "ms"], kedai: ["shop", "ms"], akaun: ["account", "ms"], jatayat: ["transport", "bn-latn"], kenakata: ["shopping", "bn-latn"], dokan: ["shop", "bn-latn"], lenden: ["transactions", "bn-latn"],
+  oktober: ["october", "ms"], ogos: ["august", "ms"], disember: ["december", "ms"], januari: ["january", "ms"], februari: ["february", "ms"], mei: ["may", "ms"], julai: ["july", "ms"], jun: ["june", "ms"],
   saya: ["i", "ms"], aku: ["i", "ms"], untuk: ["on", "ms"], pada: ["on", "ms"], kat: ["at", "ms"], dekat: ["at", "ms"],
   kenapa: ["why", "ms"], tunjuk: ["show", "ms"], tunjukkan: ["show", "ms"], lebih: ["more", "ms"], kurang: ["less", "ms"],
   cuaca: ["weather", "ms"], esok: ["tomorrow", "ms"], guna: ["using", "ms"], pakai: ["using", "ms"], transaksi: ["transactions", "ms"], adakah: ["", "ms"],
@@ -126,6 +141,16 @@ const SHORT: Record<string, string> = {
 
 // Bengali script (a few common words).
 const BENGALI: [RegExp, string][] = [
+  [/কার্ড/g, " card "], [/কিউআর|কিউ আর/g, " qr "], [/\s+না\s+(?=\s*(qr|card)\b)/g, " or "], [/কোন/g, " which "], [/বেশি/g, " more "],
+  [/বাড়ছে|বেড়েছে|বাড়ছেনা/g, " increasing "], [/কমছে|কমেছে/g, " decreasing "],
+  [/অন্য\s*(ইউজার|ব্যবহারকারী|লোক|মানুষ)(ের|দের|এর)?|সবার|সকলের/g, " other users "],
+  [/খরচগুলো|খরচগুলি/g, " expenses "], [/লেনদেনগুলো|লেনদেনগুলি/g, " transactions "], [/দেখাও|দেখান/g, " show "], [/সম্পর্কিত/g, " related "],
+  [/কতবার/g, " how many times "], [/গড়ে|গড়/g, " average "], [/যাতায়াতে|যাতায়াত/g, " transport "], [/কেনাকাটায়|কেনাকাটা/g, " shopping "],
+  [/বাজারে/g, " groceries "], [/বিলে|বিল/g, " bills "], [/দোকানে|দোকান/g, " shop "], [/অ্যাকাউন্ট/g, " account "], [/অস্বাভাবিক/g, " unusual "],
+  [/সারাংশ/g, " summary "], [/খাতে/g, " category "],
+  [/সবচেয়ে\s*বড়|সবচেয়ে\s*বেশি\s*দামি/g, " biggest "], [/সবচেয়ে\s*ছোট|সবচেয়ে\s*কম\s*দামি/g, " smallest "], [/কোনটা|কোনটি/g, " which "],
+  [/সেপ্টেম্বর/g, " september "], [/অক্টোবর/g, " october "], [/আগস্ট/g, " august "], [/নভেম্বর/g, " november "], [/ডিসেম্বর/g, " december "],
+  [/জানুয়ারি/g, " january "], [/ফেব্রুয়ারি/g, " february "], [/মার্চ/g, " march "], [/এপ্রিল/g, " april "], [/মে মাসে/g, " may "], [/জুন/g, " june "], [/জুলাই/g, " july "],
   [/কিসের\s*জন্য(\s*ছিল)?/g, " what was this for "], [/কেন\s*(এই\s*)?(টাকা\s*)?খরচ\s*করেছিলাম|কেন\s*(এটা\s*)?কিনেছিলাম/g, " why did i spend this "],
   [/(রিমার্কে|নোটে|মন্তব্যে)\s*(কী|কি)\s*লিখেছিলাম/g, " what did i write in the remark "], [/এই\s*(খরচটা|খরচটি|ট্রানজ্যাকশনের|ট্রানজ্যাকশনটা|ট্রানজ্যাকশন|লেনদেনটা|লেনদেন)/g, " this expense "],
   [/ট্রানজ্যাকশন|লেনদেন/g, " transaction "], [/রিমার্ক/g, " remark "],
@@ -191,8 +216,17 @@ export function understand(message: string, names: string[] = []): Understanding
 
   if (/[ঀ-৿]/.test(t)) {
     languages.add("bn");
+    // "friends এর জন্য" (X for) → "for friends" before the word-level rules
+    t = t.replace(/([a-z][a-z-]{2,})\s*(?:এর|র)?\s*জন্য/g, (m, x: string) => { translations.push({ from: m.trim(), to: `for ${x}` }); return ` for ${x} `; });
     for (const [re, to] of BENGALI) t = t.replace(re, (m) => { translations.push({ from: m.trim(), to: to.trim() }); return to; });
   }
+  // "last N days" in Bengali / Malay / Banglish → "last N days"
+  t = t.replace(/গত\s*([0-9০-৯]+)\s*দিনে?|\b(\d+)\s+hari\s+(lepas|terakhir|yang lepas)\b|\blast\s+(\d+)\s+(?:din|days?)\s*e?\b/g, (m, a?: string, b?: string, _c?: string, d?: string) => {
+    const n = (a ?? b ?? d ?? "").replace(/[০-৯]/g, (x) => String("০১২৩৪৫৬৭৮৯".indexOf(x)));
+    translations.push({ from: m.trim(), to: `last ${n} days` });
+    return ` last ${n} days `;
+  });
+  t = t.replace(/\bso far\b/g, " ");
   // Banglish puts the topic before its postposition: "friends der sathe" → "with friends", "office er jonno" → "for office".
   t = t.replace(/\b([a-z][a-z-]{2,})\s+(?:der|er|ra|r)?\s*(?:sathe|shathe|songe)\b/g, (m, x: string) => { translations.push({ from: m.trim(), to: `with ${x}` }); languages.add("bn-latn"); return ` with ${x} `; });
   t = t.replace(/\b([a-z][a-z-]{2,})\s+(?:er|r)\s+(?:jonno|jonne)\b/g, (m, x: string) => { if (/^(ki|kis|kisher|eta|ei|oi|ota)$/.test(x)) return m; translations.push({ from: m.trim(), to: `for ${x}` }); languages.add("bn-latn"); return ` for ${x} `; });
