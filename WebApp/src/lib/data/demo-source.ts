@@ -31,6 +31,7 @@ export class DemoSource implements DataSource {
   readonly userId = "00000000-0000-4000-8000-000000000000";
   readonly email = "demo@spendrop.local";
   readonly provider = "demo";
+  readonly displayName = "Demo";
   private tables: Tables;
   private receipts = new Map<string, string>();
 

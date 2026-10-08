@@ -147,6 +147,11 @@
 		F72B5037E66856BE42B4A8B3 /* Money.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9EABF66839D037C004194B7 /* Money.swift */; };
 		FC6E5D22C4F58747920F37AB /* ExpenseShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3DA25EB4357CCED07D0652 /* ExpenseShare.swift */; };
 		FEE1AF6C9818C4E7E30401FB /* DirectionDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF3A130AC63C9063C4E0A4E /* DirectionDetector.swift */; };
+		184177C9632A549AB5228353 /* AskService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63063D2C04D6960D481CE82 /* AskService.swift */; };
+		2577D02DA62FF9EB2445E2E4 /* AskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 640FA629604D9B85A5361426 /* AskTests.swift */; };
+		7FE88E0F854B3B8E5BE8ADAA /* AskSpenDropModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BE7DE41434EA8BC8C10A2B /* AskSpenDropModel.swift */; };
+		41901A3AFD1335F67166E824 /* AskSpenDropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D16923CB735D9C1DC5EF80F /* AskSpenDropView.swift */; };
+		666CFB627F1DFEA1D8EF3BA7 /* FloatingSpenDropAIButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A9D37F0753C41C0304004 /* FloatingSpenDropAIButton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -287,6 +292,11 @@
 		F97B0096BF1A9431D6AB3E3E /* CloudBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupService.swift; sourceTree = "<group>"; };
 		FB002B7393FFC8EA56E05118 /* DataSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSafetyTests.swift; sourceTree = "<group>"; };
 		FEF5DFB0894B7B693871AD35 /* AccountLinker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountLinker.swift; sourceTree = "<group>"; };
+		A63063D2C04D6960D481CE82 /* AskService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskService.swift; sourceTree = "<group>"; };
+		640FA629604D9B85A5361426 /* AskTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskTests.swift; sourceTree = "<group>"; };
+		20BE7DE41434EA8BC8C10A2B /* AskSpenDropModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSpenDropModel.swift; sourceTree = "<group>"; };
+		9D16923CB735D9C1DC5EF80F /* AskSpenDropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSpenDropView.swift; sourceTree = "<group>"; };
+		234A9D37F0753C41C0304004 /* FloatingSpenDropAIButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingSpenDropAIButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -440,6 +450,7 @@
 				0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */,
 				5F1ED00000000000000000B2 /* SplitHybridTests.swift */,
 				68CE5BA46F294CB69AC4816C /* TestKit.swift */,
+				640FA629604D9B85A5361426 /* AskTests.swift */,
 				97C6C4D96250C1F526514E6C /* SplitFeatureTests.swift */,
 				5308225118CA1DC65E77572B /* PeopleBalanceTests.swift */,
 				32215A13AA3C105228C1533E /* ActivityFeedTests.swift */,
@@ -505,6 +516,7 @@
 				AE2E795C6B286712D4C32545 /* ApplePayAutomation.swift */,
 				0F7D24CAAD991423026BD7CE /* PeriodGrouping.swift */,
 				6F074F298701FCC50A413C3A /* Cloud */,
+				F5E15DA0FE9643883323881D /* AI */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -646,6 +658,7 @@
 				A40430555BB6F4C685063F9B /* MainTabView.swift */,
 				21116A3F136FA9212ADA65C9 /* Split */,
 				5CB4C81C090C8D7EAA340609 /* Account */,
+				35533591416D05C27D53D20C /* Ask */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -656,6 +669,24 @@
 				3B41B7DFE8CFEACB492417B6 /* ExpenseReviewView.swift */,
 			);
 			path = Review;
+			sourceTree = "<group>";
+		};
+		F5E15DA0FE9643883323881D /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				A63063D2C04D6960D481CE82 /* AskService.swift */,
+			);
+			path = AI;
+			sourceTree = "<group>";
+		};
+		35533591416D05C27D53D20C /* Ask */ = {
+			isa = PBXGroup;
+			children = (
+				20BE7DE41434EA8BC8C10A2B /* AskSpenDropModel.swift */,
+				9D16923CB735D9C1DC5EF80F /* AskSpenDropView.swift */,
+				234A9D37F0753C41C0304004 /* FloatingSpenDropAIButton.swift */,
+			);
+			path = Ask;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -936,6 +967,11 @@
 				1541721A9B013C1876784365 /* PeriodGrouping.swift in Sources */,
 				D4C8DDBB0D7EA4E2A38A3629 /* Phase7Tests.swift in Sources */,
 				72C09F9642ABB8B13D11F053 /* CloudCore.swift in Sources */,
+				184177C9632A549AB5228353 /* AskService.swift in Sources */,
+				2577D02DA62FF9EB2445E2E4 /* AskTests.swift in Sources */,
+				7FE88E0F854B3B8E5BE8ADAA /* AskSpenDropModel.swift in Sources */,
+				41901A3AFD1335F67166E824 /* AskSpenDropView.swift in Sources */,
+				666CFB627F1DFEA1D8EF3BA7 /* FloatingSpenDropAIButton.swift in Sources */,
 				E0572EF2E706CB66AA9CA7BC /* AuthService.swift in Sources */,
 				694ACAF9C4D5D02430B21D0F /* CloudBackupService.swift in Sources */,
 				062CC524F561E39F69C27406 /* AccountView.swift in Sources */,

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, CalendarClock, ChartColumn, CloudDownload, Plus, ReceiptText, SunMedium, Users } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, ChartColumn, CloudDownload, Plus, ReceiptText, Sparkles, SunMedium, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Page, PageHeader, SyncStatus } from "@/components/app-shell";
@@ -77,7 +77,12 @@ export default function HomePage() {
 
   return (
     <>
-      <PageHeader title="Home" subtitle={monthName} actions={<span className="md:hidden"><SyncStatus compact /></span>} />
+      <PageHeader title="Home" subtitle={monthName} actions={
+        <span className="flex items-center gap-2 md:hidden">
+          <SyncStatus compact />
+          <Link href="/ask" aria-label="Ask SpenDrop" className="inline-flex size-9 items-center justify-center rounded-full bg-card text-[var(--sd-accent-text)] shadow-card"><Sparkles aria-hidden className="size-[18px]" /></Link>
+        </span>
+      } />
       <Page className="flex flex-col gap-5">
         {error && <ErrorBanner message={error} onRetry={refresh} />}
 
@@ -134,7 +139,7 @@ export default function HomePage() {
               </div>
             )}
 
-            <div className="sd-rise grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" style={rise(4)}>
+            <div className="sd-rise grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" style={rise(4)}>
               <div className="flex flex-col gap-5">
                 <section aria-labelledby="today-heading">
                   <SectionHeader id="today-heading" action={<span className="text-xs text-label-2">{view.todayExpenses.length} transactions</span>}>Today&apos;s Expenses</SectionHeader>

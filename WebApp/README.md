@@ -16,3 +16,4 @@ Checks: `npm run typecheck` · `npm run lint` · `npm test` · `npm run build` �
 - Architecture: `../Docs/Architecture.md` · Data model: `../Docs/Data-Model.md` · Sync: `../Docs/Sync-Architecture.md`
 - Setup & deployment (Supabase migration, auth redirect URLs, Vercel): `../Docs/WebApp-Setup.md`
 - Shared rules this app is tested against: `../Common/`
+- SpenDrop AI ("Ask SpenDrop", `/ask`): `../Docs/AI-Architecture.md` — needs migration `20261009000000_spendrop_ai.sql`; optional local model via Ollama

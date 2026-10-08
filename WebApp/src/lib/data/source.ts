@@ -26,6 +26,8 @@ export interface DataSource {
   readonly userId: string;
   readonly email: string | null;
   readonly provider: string | null;
+  /** The name the user signed up with (Google profile name), if any — presentation only. */
+  readonly displayName?: string | null;
   /** Rows changed since `since` (server time), oldest first, all pages. */
   pull(table: TableName, since: string | null): Promise<PulledRows>;
   /** Insert or update whole records (snake_case rows). Deleting = upsert with deleted_at set. */

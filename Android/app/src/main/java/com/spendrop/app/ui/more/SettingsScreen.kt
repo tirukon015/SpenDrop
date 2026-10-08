@@ -50,6 +50,10 @@ import com.spendrop.app.ui.components.LoadingState
 import com.spendrop.app.ui.components.MessageDialog
 import com.spendrop.app.ui.components.PhotoStore
 import com.spendrop.app.ui.components.RowDivider
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.spendrop.app.ui.components.SDCard
 import com.spendrop.app.ui.components.SDScreen
 import com.spendrop.app.ui.components.SectionFooter
@@ -72,6 +76,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () 
     val snapshot by container.repository.snapshot.collectAsState()
     val authState by container.auth.state.collectAsState()
     val appearance by container.preferences.string(Preferences.Keys.appearance, "system").collectAsState("system")
+    val aiFloating by container.preferences.aiFloatingAssistant.collectAsState(com.spendrop.app.data.AiDefaults.FLOATING_ASSISTANT)
+    val aiShowName by container.preferences.aiShowName.collectAsState(com.spendrop.app.data.AiDefaults.SHOW_NAME)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -124,6 +130,20 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit, openRestore: () 
                     Segmented(Appearance.entries, Appearance.fromRaw(appearance), { it.label }, { a -> scope.launch { container.preferences.set(Preferences.Keys.appearance, a.raw) } })
                 }
                 SectionFooter("Amounts are recorded in RM, like SpenDrop on iPhone.")
+            }
+            item {
+                SectionHeader("SpenDrop AI")
+                SDCard {
+                    ListRow("Floating AI Assistant", subtitle = "Show the SpenDrop AI robot on the main screens", modifier = Modifier.testTag("aiFloatingRow"), trailing = {
+                        Switch(aiFloating, { v -> scope.launch { container.preferences.set(Preferences.Keys.aiFloatingAssistant, v) } },
+                            modifier = Modifier.testTag("aiFloatingSwitch").semantics { contentDescription = "Floating AI Assistant" })
+                    }); RowDivider()
+                    ListRow("Show My Name", subtitle = "Only changes what SpenDrop AI shows on screen. It doesn't affect your sign-in or your data.", modifier = Modifier.testTag("aiShowNameRow"), trailing = {
+                        Switch(aiShowName, { v -> scope.launch { container.preferences.set(Preferences.Keys.aiShowName, v) } },
+                            modifier = Modifier.testTag("aiShowNameSwitch").semantics { contentDescription = "Show My Name" })
+                    })
+                }
+                SectionFooter("Ask SpenDrop is in More, or tap the robot. It needs SpenDrop Cloud sign-in and an internet connection.")
             }
             item {
                 SectionHeader("Screenshot storage")

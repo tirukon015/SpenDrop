@@ -1,10 +1,11 @@
 "use client";
 
-import { BookUser, ChartColumn, CircleEllipsis, CloudOff, House, PanelLeftClose, PanelLeftOpen, Plus, ReceiptText, RefreshCw } from "lucide-react";
+import { BookUser, ChartColumn, CircleEllipsis, CloudOff, House, PanelLeftClose, PanelLeftOpen, Plus, ReceiptText, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand";
+import { FloatingSpenDropAI } from "@/components/floating-ai";
 import { useData } from "@/components/providers/data-provider";
 import { cx } from "@/components/ui/primitives";
 import { isDemoMode } from "@/lib/supabase/config";
@@ -19,6 +20,9 @@ export const NAV = [
   { href: "/breakdown", label: "Breakdown", icon: ChartColumn },
   { href: "/more", label: "More", icon: CircleEllipsis },
 ];
+
+/** Extra sidebar destinations (the phone tab bar keeps the five iOS tabs; Ask is reached from Home and More there). */
+export const SIDEBAR_EXTRA = [{ href: "/ask", label: "Ask SpenDrop", icon: Sparkles }];
 
 const isActive = (pathname: string, href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
 
@@ -86,7 +90,8 @@ function useSidebar() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { source } = useData();
-  const adding = pathname.startsWith("/add");
+  // No floating Add button where it would cover a screen's own bottom controls (Add itself, the Ask composer).
+  const adding = pathname.startsWith("/add") || pathname === "/ask";
   const { hidden, toggle } = useSidebar();
   // Sliding active highlight: positioned from the active link (measured only on route change / resize).
   const listRef = useRef<HTMLUListElement>(null);
@@ -131,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <ul ref={listRef} className="relative flex flex-1 flex-col gap-1 px-3 max-lg:px-2">
           <li aria-hidden className="pointer-events-none absolute inset-x-3 top-0 max-lg:inset-x-2"><div ref={indicatorRef} className="sd-nav-indicator" /></li>
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {[...NAV, ...SIDEBAR_EXTRA].map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (
               <li key={href}>
@@ -185,6 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Plus aria-hidden className="size-7" />
         </Link>
       )}
+      <FloatingSpenDropAI />
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-20 border-t border-separator bg-card/85 pb-safe backdrop-blur-xl md:hidden">
         <ul className="grid grid-cols-5">
           {NAV.map(({ href, label, icon: Icon }) => {

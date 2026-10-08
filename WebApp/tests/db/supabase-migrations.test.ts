@@ -66,7 +66,7 @@ describe("cloud records migration", () => {
     const tables = await db.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema = 'public' order by 1");
     expect(tables.rows.map((r) => r.table_name)).toEqual([
-      "accounts", "backups", "channel_rules", "classification_rules", "expense_shares", "expenses",
+      "accounts", "ai_conversations", "ai_memories", "ai_messages", "backups", "channel_rules", "classification_rules", "expense_shares", "expenses",
       "money_movements", "people", "person_payment_methods", "settlement_allocations",
     ]);
     const buckets = await db.query<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");

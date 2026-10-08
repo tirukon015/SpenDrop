@@ -9,6 +9,8 @@ public struct SettingsView: View {
 
     @AppStorage("app_currency") private var selectedCurrency = "RM"
     @AppStorage("user_appearance") private var selectedAppearance = "system"
+    @AppStorage(AskSpenDropSettings.floatingAssistantKey) private var floatingAssistant = true
+    @AppStorage(AskSpenDropSettings.showMyNameKey) private var showMyName = true
 
     @State private var showingClearConfirmation = false
     @State private var showingSampleDataLoadedAlert = false
@@ -157,6 +159,31 @@ public struct SettingsView: View {
                         Text(label).tag(key)
                     }
                 }
+            }
+
+            // SPENDROP AI
+            Section(header: Text("SpenDrop AI")) {
+                Button {
+                    AskSpenDropPresenter.shared.open()
+                } label: {
+                    Label {
+                        Text("Ask SpenDrop")
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        Image("SpenDropRobot")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 24, height: 24)
+                    }
+                }
+                .accessibilityIdentifier("settings.askSpenDrop")
+
+                Toggle("Floating AI Assistant", isOn: $floatingAssistant)
+                    .accessibilityIdentifier("settings.ai.floatingAssistant")
+            }
+            Section(footer: Text("Only changes what SpenDrop AI shows on screen. It doesn't affect your sign-in or your data.")) {
+                Toggle("Show My Name", isOn: $showMyName)
+                    .accessibilityIdentifier("settings.ai.showMyName")
             }
 
             // SCREENSHOT STORAGE

@@ -12,6 +12,7 @@ public struct MainTabView: View {
     /// UI tests only: the Share Extension's review screen for an OCR-parsed RM 100 DuitNow QR receipt.
     @State private var shareReviewFixture: ShareExtensionViewModel? = MainTabView.makeShareReviewFixture()
     @AppStorage("user_appearance") private var selectedAppearance = "system"
+    @State private var askPresenter = AskSpenDropPresenter.shared
 
     public init() {}
 
@@ -26,30 +27,35 @@ public struct MainTabView: View {
     public var body: some View {
         TabView(selection: $selectedTab) {
             DashboardView()
+                .floatingSpenDropAI()
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
                 .tag(0)
 
             ExpensesView()
+                .floatingSpenDropAI()
                 .tabItem {
                     Label("Transactions", systemImage: "list.bullet.rectangle.portrait.fill")
                 }
                 .tag(1)
 
             PayBookView()
+                .floatingSpenDropAI()
                 .tabItem {
                     Label("PayBook", systemImage: "person.crop.rectangle.stack.fill")
                 }
                 .tag(2)
 
             AnalyticsView()
+                .floatingSpenDropAI()
                 .tabItem {
                     Label("Breakdown", systemImage: "chart.bar.xaxis")
                 }
                 .tag(3)
 
             MoreView()
+                .floatingSpenDropAI()
                 .tabItem {
                     Label("More", systemImage: "ellipsis.circle.fill")
                 }
@@ -57,6 +63,10 @@ public struct MainTabView: View {
         }
         .preferredColorScheme(preferredColorScheme)
         .tint(.blue)
+        .sheet(isPresented: $askPresenter.isPresented) {
+            AskSpenDropView(model: askPresenter.model)
+                .preferredColorScheme(preferredColorScheme)
+        }
         .fullScreenCover(isPresented: Binding(get: { shareReviewFixture != nil }, set: { if !$0 { shareReviewFixture = nil } })) {
             if let fixture = shareReviewFixture {
                 ShareExtensionView(viewModel: fixture, onComplete: { shareReviewFixture = nil }, onCancel: { shareReviewFixture = nil })

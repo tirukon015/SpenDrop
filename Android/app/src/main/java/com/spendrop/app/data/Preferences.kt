@@ -34,6 +34,10 @@ class Preferences(private val context: Context) {
         val syncLastAt = stringPreferencesKey("cloud_sync_last_at")
         val syncLastMessage = stringPreferencesKey("cloud_sync_last_message")
         fun syncCursor(table: String) = stringPreferencesKey("cloud_sync_cursor_$table")
+        /** SpenDrop AI: the floating robot on the main tabs (default ON). */
+        val aiFloatingAssistant = booleanPreferencesKey("ai_floating_assistant")
+        /** SpenDrop AI: greet with the user's name on the Ask screen (default ON). Display only. */
+        val aiShowName = booleanPreferencesKey("ai_show_name")
     }
 
     val data: Flow<DsPreferences> = context.dataStore.data
@@ -45,6 +49,18 @@ class Preferences(private val context: Context) {
         context.dataStore.edit { if (value == null) it.remove(key) else it[key] = value }
     }
 
+    fun bool(key: DsPreferences.Key<Boolean>, default: Boolean): Flow<Boolean> = data.map { it[key] ?: default }
+
+    /** SpenDrop AI display settings. They change only what the AI shows on screen, never sign-in or data. */
+    val aiFloatingAssistant: Flow<Boolean> get() = bool(Keys.aiFloatingAssistant, AiDefaults.FLOATING_ASSISTANT)
+    val aiShowName: Flow<Boolean> get() = bool(Keys.aiShowName, AiDefaults.SHOW_NAME)
+
     /** Stable random id for this installation (cloud backup folder `<user>/<device id>/`). */
     suspend fun deviceId(): String = get(Keys.deviceId) ?: java.util.UUID.randomUUID().toString().uppercase().also { set(Keys.deviceId, it) }
+}
+
+/** Defaults for the SpenDrop AI settings (both ON, like iOS and the Web). */
+object AiDefaults {
+    const val FLOATING_ASSISTANT = true
+    const val SHOW_NAME = true
 }
