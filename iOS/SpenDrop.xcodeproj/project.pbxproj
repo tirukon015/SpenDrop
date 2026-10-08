@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D7FABFE6202DB56D9A5EFBD6 /* SyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBFB02A82576BD68B04C9C8 /* SyncModels.swift */; };
+		384565994620077C19C12DAB /* SyncChangeRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B217FB9DCBAD1A441E1E715E /* SyncChangeRecorder.swift */; };
+		7E82F7416005146AF3492212 /* SyncRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA6ED44757DEB8631B88639F /* SyncRows.swift */; };
+		13EA1661C1EB3DBA4ABEB0B1 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F77C831F77AAFE9F43ACC6 /* SyncEngine.swift */; };
+		3CDEB8A5A5ECB045246ED5DC /* SyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC0F40906719915AE78E370 /* SyncCoordinator.swift */; };
+		1CEC3F8CAACED43F84F75E3F /* SyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6090F05EBCCD75C0B6B50CD /* SyncTests.swift */; };
 		709E8CB67BC805B97EFD78E2 /* BulkImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482BF450B9EEC0CF234B7692 /* BulkImportView.swift */; };
 		0AAA7843BFD50E1CA02B99DA /* BulkImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */; };
 		5F1ED00000000000000000A1 /* SplitHybridTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1ED00000000000000000B2 /* SplitHybridTests.swift */; };
@@ -186,6 +192,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9BBFB02A82576BD68B04C9C8 /* SyncModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModels.swift; sourceTree = "<group>"; };
+		B217FB9DCBAD1A441E1E715E /* SyncChangeRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncChangeRecorder.swift; sourceTree = "<group>"; };
+		BA6ED44757DEB8631B88639F /* SyncRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRows.swift; sourceTree = "<group>"; };
+		B1F77C831F77AAFE9F43ACC6 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		0DC0F40906719915AE78E370 /* SyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCoordinator.swift; sourceTree = "<group>"; };
+		D6090F05EBCCD75C0B6B50CD /* SyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncTests.swift; sourceTree = "<group>"; };
 		482BF450B9EEC0CF234B7692 /* BulkImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportView.swift; sourceTree = "<group>"; };
 		0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportTests.swift; sourceTree = "<group>"; };
 		5F1ED00000000000000000B2 /* SplitHybridTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitHybridTests.swift; sourceTree = "<group>"; };
@@ -324,6 +336,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		983223C3A8FAB25DD6107AC9 /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				9BBFB02A82576BD68B04C9C8 /* SyncModels.swift */,
+				B217FB9DCBAD1A441E1E715E /* SyncChangeRecorder.swift */,
+				BA6ED44757DEB8631B88639F /* SyncRows.swift */,
+				B1F77C831F77AAFE9F43ACC6 /* SyncEngine.swift */,
+				0DC0F40906719915AE78E370 /* SyncCoordinator.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
 		073CC5FBB52E5462EC8A6EFA /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -450,6 +474,7 @@
 				0AEE306FFC27B2313E8915A2 /* BulkImportTests.swift */,
 				5F1ED00000000000000000B2 /* SplitHybridTests.swift */,
 				68CE5BA46F294CB69AC4816C /* TestKit.swift */,
+				D6090F05EBCCD75C0B6B50CD /* SyncTests.swift */,
 				640FA629604D9B85A5361426 /* AskTests.swift */,
 				97C6C4D96250C1F526514E6C /* SplitFeatureTests.swift */,
 				5308225118CA1DC65E77572B /* PeopleBalanceTests.swift */,
@@ -516,6 +541,7 @@
 				AE2E795C6B286712D4C32545 /* ApplePayAutomation.swift */,
 				0F7D24CAAD991423026BD7CE /* PeriodGrouping.swift */,
 				6F074F298701FCC50A413C3A /* Cloud */,
+				983223C3A8FAB25DD6107AC9 /* Sync */,
 				F5E15DA0FE9643883323881D /* AI */,
 			);
 			path = Data;
@@ -974,6 +1000,12 @@
 				666CFB627F1DFEA1D8EF3BA7 /* FloatingSpenDropAIButton.swift in Sources */,
 				E0572EF2E706CB66AA9CA7BC /* AuthService.swift in Sources */,
 				694ACAF9C4D5D02430B21D0F /* CloudBackupService.swift in Sources */,
+				D7FABFE6202DB56D9A5EFBD6 /* SyncModels.swift in Sources */,
+				384565994620077C19C12DAB /* SyncChangeRecorder.swift in Sources */,
+				7E82F7416005146AF3492212 /* SyncRows.swift in Sources */,
+				13EA1661C1EB3DBA4ABEB0B1 /* SyncEngine.swift in Sources */,
+				3CDEB8A5A5ECB045246ED5DC /* SyncCoordinator.swift in Sources */,
+				1CEC3F8CAACED43F84F75E3F /* SyncTests.swift in Sources */,
 				062CC524F561E39F69C27406 /* AccountView.swift in Sources */,
 				0645A5D38FAA7940C0F32190 /* CloudTests.swift in Sources */,
 				BFEA037B5D35C7144F1BFC50 /* HardeningTests.swift in Sources */,

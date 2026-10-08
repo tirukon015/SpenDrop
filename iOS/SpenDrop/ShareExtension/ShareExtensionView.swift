@@ -279,6 +279,13 @@ public final class ShareExtensionViewModel: ObservableObject {
         return wanted == .moneyIn ? .otherIn : .otherOut
     }
 
+    /// The Share Extension runs in its own process, where live sync doesn't record changes: leave a mark so the app
+    /// queues what was saved here the next time it opens (key read by SyncSettings.extensionLastSave).
+    static func noteSaveForSync() {
+        guard Bundle.main.bundlePath.hasSuffix(".appex") else { return }
+        UserDefaults(suiteName: "group.com.spendrop.shared")?.set(Date(), forKey: "SpenDrop.sync.extensionLastSave")
+    }
+
     /// Money In / Money Out. The account is resolved from the funding account text (Unknown stays unlinked, no
     /// duplicate accounts are created). Inserts and saves; the caller reports the result.
     @discardableResult
@@ -297,6 +304,7 @@ public final class ShareExtensionViewModel: ObservableObject {
         )
         modelContext.insert(movement)
         try modelContext.save()
+        Self.noteSaveForSync()
         return movement
     }
 
@@ -364,6 +372,7 @@ public final class ShareExtensionViewModel: ObservableObject {
 
         try modelContext.save()
         modelContext.processPendingChanges()
+        Self.noteSaveForSync()
         return saved
     }
 }

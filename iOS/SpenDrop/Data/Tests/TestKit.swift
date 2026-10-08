@@ -66,6 +66,7 @@ public enum AllTestSuites {
         ("Bulk import", "--run-bulk-import-tests", { blocking { await BulkImportTests.runAllTests() } }),
         ("Hybrid split", "--run-split-hybrid-tests", { SplitHybridTests.runAllTests() }),
         ("Ask SpenDrop", "--run-ask-tests", { blocking { await AskTests.runAllTests() } }),
+        ("Sync", "--run-sync-tests", { blocking { await SyncTests.runAllTests() } }),
         // Must stay last: proves none of the suites above touched the user's real database.
         ("Test isolation", "--run-all-tests", { isolationCheck() })
     ]
