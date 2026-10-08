@@ -173,3 +173,13 @@ Signed-out users see nothing new and nothing is recorded or sent. Cloud Backup i
   enqueuing records with `updatedAt`/`createdAt` newer than the last catch-up mark.
 - The plain-table race described under Conflicts.
 - Instruments profiling was not run (headless environment); latency/request counts are measured in the test suite.
+
+## 4. Verification (2026-10-08, simulator iPhone 17 Pro Max)
+- `--run-all-tests`: 27 suites, 619/619 checks passed, including the new **Sync** suite (34/34) and Test isolation.
+- Sync suite uses an in-memory main store, an in-memory/temp-file outbox and `FakeSyncServer` (owner-only by token,
+  `server_updated_at` stamping, RPC LWW guard, PATCH tombstones).
+- Save latency (median of 100 `ModelContext.save()` calls, one new expense each): 0.240 ms with sync recording on vs
+  0.233 ms off; 0 network requests during saves.
+- Burst: 25 saves across 5 expenses → 5 upserts (RPC) + 9 pull GETs (pre-push guard + throttled full pull).
+- Main schema unchanged (V6); the outbox is a separate store, so no user-data migration.
+- Not run: Instruments (headless), XCUITests, real Supabase.
