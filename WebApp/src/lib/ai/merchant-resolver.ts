@@ -9,7 +9,7 @@
 //   word       a whole word (or run of words) of the name                                 90
 //   prefix     the name, or one of its words, starts with the reference (≥ 3 letters)      80
 //   substring  the reference appears inside the name (≥ 5 letters)                          70
-//   fuzzy      one small typo against the start of a word / the name (≥ 4 letters)          60
+//   fuzzy      one small typo against the start of a word / the name (≥ 5 letters)          60
 //
 // Weaker references never match (no single letters, no common words), a stronger match always beats a weaker one,
 // and several close candidates are reported as ambiguous rather than silently combined. The stored names are never
@@ -52,11 +52,12 @@ export function matchQuality(reference: string, merchant: string): MatchQuality 
   if (refC === nameC) return "exact";
   if (` ${name} `.includes(` ${ref} `)) return "word";
   const words = name.split(" ");
-  if (nameC.startsWith(refC) || words.some((w) => w.length > refC.length && w.startsWith(refC))) return "prefix";
+  // A 3-letter start only counts for short names ("kfc"); longer names need 4+ letters ("tea" ≠ Tealive).
+  if ((refC.length >= 4 || nameC.length <= refC.length + 2) && (nameC.startsWith(refC) || words.some((w) => w.length > refC.length && w.startsWith(refC)))) return "prefix";
   // Inside a word only from 5 letters ("sharia", "alamin"): shorter inner fragments are noise ("hope" in "Shopee").
   if (refC.length >= 5 && nameC.includes(refC)) return "substring";
   // A small typo ("bijoi", "bijoyy", "starbuck", "jaya grocr"): compare with the start of the name and of each word.
-  if (refC.length >= 4) {
+  if (refC.length >= 5) {
     const max = refC.length >= 8 ? 2 : 1;
     const starts = [nameC, ...words.filter((w) => w.length >= 3)];
     for (const s of starts)
@@ -73,6 +74,15 @@ export function matchQuality(reference: string, merchant: string): MatchQuality 
 }
 
 export interface Candidate { name: string; quality: MatchQuality; score: number }
+
+/** The same merchant written differently ("BIJOYSHARIARALAMIN" / "BIJOY SHARIAR AL AMIN") shares this key. */
+export const sameMerchantKey = (name: string) => normalizeName(name).replace(/ /g, "");
+
+/** Every stored spelling of the same merchants (names equal once spaces and punctuation are ignored). */
+export function withSpellings(names: readonly string[], all: readonly string[]): string[] {
+  const keys = new Set(names.map(sameMerchantKey));
+  return [...new Set([...names, ...all.filter((n) => keys.has(sameMerchantKey(n)))])];
+}
 
 /** The user's merchants that match a reference, best first (ties: more transactions-like = shorter name first). */
 export function candidatesFor(reference: string, merchants: readonly string[]): Candidate[] {
@@ -99,16 +109,23 @@ export type Resolution =
  *  • otherwise every candidate when the user asked for them all ("similar names", "anything with …")
  *  • otherwise ambiguous: the user is asked which one
  */
-export function decide(reference: string, candidates: Candidate[], wantsAll: boolean): Resolution | null {
-  if (candidates.length === 0) return null;
+export function decide(reference: string, all: Candidate[], wantsAll: boolean): Resolution | null {
+  if (all.length === 0) return null;
+  // Spellings of one merchant count as one candidate (the best-scoring spelling represents the group).
+  const groups = new Map<string, Candidate[]>();
+  for (const c of all) groups.set(sameMerchantKey(c.name), [...(groups.get(sameMerchantKey(c.name)) ?? []), c]);
+  const spell = (c: Candidate) => groups.get(sameMerchantKey(c.name))!.map((x) => x.name);
+  const seen = new Set<string>();
+  const candidates = all.filter((c) => { const k = sameMerchantKey(c.name); if (seen.has(k)) return false; seen.add(k); return true; });
+  const expand = (cs: Candidate[]) => cs.flatMap(spell);
   const top = candidates[0];
   if (top.score >= SCORE.word) {
     const strong = candidates.filter((c) => c.score >= SCORE.word);
-    return { kind: "match", reference, names: strong.map((c) => c.name), quality: top.quality };
+    return { kind: "match", reference, names: expand(strong), quality: top.quality };
   }
-  if (candidates.length === 1 || top.score - candidates[1].score >= 15) return { kind: "match", reference, names: [top.name], quality: top.quality };
+  if (candidates.length === 1 || top.score - candidates[1].score >= 15) return { kind: "match", reference, names: spell(top), quality: top.quality };
   const close = candidates.filter((c) => top.score - c.score < 15);
-  if (wantsAll) return { kind: "match", reference, names: candidates.map((c) => c.name), quality: top.quality };
+  if (wantsAll) return { kind: "match", reference, names: expand(candidates), quality: top.quality };
   return { kind: "ambiguous", reference, names: close.slice(0, 6).map((c) => c.name) };
 }
 

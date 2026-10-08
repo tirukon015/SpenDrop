@@ -237,12 +237,61 @@ disclosure when a name matches several merchants; an unrecognised name in a mone
 | **Hold-out v3 (40, written after, never tuned)** | **34/40 (85%)** — all casual and all safety cases right; misses: idioms ("eating up my money", "getting out of hand", "throw away"), "how often", "do I pay more by card or qr", Banglish "barche" |
 | Property tests (3 random datasets × filters × periods vs an independent oracle) | all pass |
 
-## 10. Not implemented yet (deliberately)
+## 10. Intelligence upgrade (2026-10-08): merchants, remarks, corpus, speed
+
+**Merchant / entity resolution** (`lib/ai/merchant-resolver.ts`): deterministic scoring over the signed-in user's own
+merchant names — exact (case/spacing/punctuation/accents ignored) > whole word > prefix (4+ letters) > inner part (5+)
+> one typo (5+). Spellings of one merchant (`BIJOYSHARIARALAMIN` / `BIJOY SHARIAR AL AMIN`) are one candidate. Close
+candidates → "which one?" (or all, when the user asks for similar names). No special cases. Candidates come only from
+the user's vocabulary, which `ai_vocabulary()` (migration 20261011000000, SECURITY INVOKER) returns as DISTINCT names
+under the caller's RLS — 1 call / ~2 KB instead of 5,000 rows / ~770 KB.
+
+**Remarks** are first-class CONTEXT and never FACTS: "what was this for?" answers with the remark, quoted and labelled
+as the user's own note (amount/date/merchant always from the record); remark topics ("with friends", "for my birthday",
+"related to university", "office er jonno", "untuk birthday") are searched word-by-word (plural-aware); a category
+synonym narrower than its category ("rent", "internet", "tuition") uses the remarks that mention it, when any do.
+Remarks never change figures, never reach the planner as instructions, and numbers inside them are not accepted as
+evidence by the grounding check.
+
+**Speed.** Measured: the deterministic pipeline (plan + tools + compose) takes ~0.4 ms p50 / ~1.2 ms p95 in memory
+(see the corpus report). Real latency was the network: functions ran in `iad1` (USA) while Supabase is in Seoul, so
+each of ~15–20 sequential round trips crossed the Pacific (3–7 s per answer). Now: functions in `icn1` (Seoul,
+`vercel.json`), independent reads in parallel, the same period loaded once per request, the insight read alongside
+the total, and a `Server-Timing` header (auth / prepare / answer / save / tools / total — no data) on every answer.
+
+**Corpus and training.** `tests/ai/corpus/` generates (seeded, reproducible) **9,811** quality-controlled examples —
+train 5,597 / dev 2,086 / holdout 1,098 / adversarial 1,030 — across English, Banglish, Bengali, Malay and mixed,
+30 question families (totals, counts, frequency, averages, largest/smallest, merchants incl. partial/typo references,
+categories, accounts, card-vs-QR, comparisons, all-time, specific dates, named months, remark totals/searches,
+"what was this for?", follow-ups, casual, security, ambiguity, no-match, insights, weekly, unusual). Splits are
+separated by phrasing AND by fixture (different merchants, remarks and amounts for holdout), with exact and
+pattern-level leakage checks. Expected results come from an independent oracle over the fixture (integer sen). The
+evaluator checks intent, filters, period, figures, evidence, language and security, and attributes each failure to a
+stage. Results (`tests/ai/corpus/reports/benchmark-2026-10-08.json`):
+
+| Split | Before (master 13b98bc) | After |
+|---|---|---|
+| train | 66.8% | 99.6% |
+| dev | 60.8% | 99.7% |
+| **holdout (first run, untuned)** | 51.0% | **79.4%** |
+| **adversarial (first run, untuned)** | 50.4% | **74.1%** |
+
+The train/dev → holdout gap (≈20 points) is real: held-out phrasings for lists ("what X did I buy"), top category and
+weekly/insight wording are not generalised yet. Holdout misses were NOT tuned against; a fresh hidden holdout should
+be generated for the next iteration. After the run, only security gaps found there were fixed (Malay "kata laluan",
+typo'd "system prompt") — no data was exposed by them (they returned no data).
+
+**No model was fine-tuned.** The failures were planner understanding (intent / entity / period), which deterministic,
+testable rules fix directly; production runs without an LLM (zero cost), and the deterministic path answers in
+~1 ms. The corpus is used for evaluation, planner development and regression testing — not to put private data in a
+model. Personal knowledge stays in the user's own memory rules and data (RLS), never in global training.
+
+## 11. Not implemented yet (deliberately)
 
 - **Memory beyond merchant → category** (terminology like "when I say food include cafes", goals, report preferences) and an in-app memory settings screen (today: list/forget by chat).
 - **Write actions** (re-categorise, edit): none. Future write tools need explicit confirmation, ownership check, audit log with before/after values.
 - **Receipt text / OCR investigation**: receipts are images; OCR text isn't stored, so the AI can only say a receipt exists.
 - **Locations**: not recorded by SpenDrop.
 - **Recurring payments, duplicates, monthly/yearly reports, budgets/goals, proactive alerts, streaming answers, model routing by size, Android/iOS UI** — the architecture (tool registry, providers, permissions) is ready for them.
-- **Answers are in English.** Understanding covers common Malay, Banglish and some Bengali-script phrasing (lexicon-based); unusual phrasing falls back to the model or to "I'm not sure what you mean".
+- **Answers** are worded in English, Banglish, Bengali or Malay for totals, counts, comparisons, insights and channel answers (same verified figures); other answer types are English. Understanding is lexicon + rules; unusual phrasing falls back to the model (if configured) or a clarifying reply.
 - **Proactive notifications** outside the Ask screen (push, weekly scheduled reports) and recurring/duplicate detection.

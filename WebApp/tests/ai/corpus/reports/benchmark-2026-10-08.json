@@ -1,0 +1,430 @@
+{
+  "note": "Baseline = master 13b98bc (before this work). Final train/dev = after development. Holdout/adversarial were run ONCE on the final code (first run, untuned); later security-only fixes are not reflected here.",
+  "baseline": {
+    "train": {
+      "accuracy": "3740/5597 (66.8%)",
+      "byLanguage": {
+        "bn": "126/391 (32.2%)",
+        "bn-latn": "796/1084 (73.4%)",
+        "en": "2053/2861 (71.8%)",
+        "mixed": "500/634 (78.9%)",
+        "ms": "265/627 (42.3%)"
+      },
+      "byKind": {
+        "all_time": "0/132 (0.0%)",
+        "ambiguous": "2/6 (33.3%)",
+        "average": "151/174 (86.8%)",
+        "casual": "13/13 (100.0%)",
+        "channel_compare": "78/96 (81.3%)",
+        "compare": "39/44 (88.6%)",
+        "count": "323/421 (76.7%)",
+        "explain": "31/350 (8.9%)",
+        "followup_period": "66/79 (83.5%)",
+        "followup_why": "60/66 (90.9%)",
+        "frequency": "502/539 (93.1%)",
+        "insights": "4/7 (57.1%)",
+        "largest": "39/63 (61.9%)",
+        "list_category": "159/273 (58.2%)",
+        "named_month": "9/16 (56.3%)",
+        "no_match": "19/25 (76.0%)",
+        "remark_search": "0/100 (0.0%)",
+        "remark_total": "0/371 (0.0%)",
+        "security": "11/12 (91.7%)",
+        "smallest": "30/70 (42.9%)",
+        "specific_date": "260/260 (100.0%)",
+        "top_account": "53/71 (74.6%)",
+        "top_category": "40/96 (41.7%)",
+        "top_merchant": "39/84 (46.4%)",
+        "total": "247/310 (79.7%)",
+        "total_account": "66/98 (67.3%)",
+        "total_category": "714/918 (77.8%)",
+        "total_merchant": "778/892 (87.2%)",
+        "unusual": "3/4 (75.0%)",
+        "weekly_summary": "4/7 (57.1%)"
+      },
+      "failuresByStage": {
+        "A intent": 1194,
+        "G calculation": 19,
+        "E tool arguments": 253,
+        "B entity": 378,
+        "H evidence": 4,
+        "C merchant": 8,
+        "security": 1
+      },
+      "security": "11/12 (91.7%)",
+      "latencyMs": {
+        "p50": 0.44,
+        "p95": 1.54,
+        "p99": 2.04
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 1
+      }
+    },
+    "dev": {
+      "accuracy": "1269/2086 (60.8%)",
+      "byLanguage": {
+        "bn": "20/153 (13.1%)",
+        "bn-latn": "156/258 (60.5%)",
+        "en": "715/997 (71.7%)",
+        "mixed": "292/435 (67.1%)",
+        "ms": "86/243 (35.4%)"
+      },
+      "byKind": {
+        "all_time": "0/37 (0.0%)",
+        "ambiguous": "0/1 (0.0%)",
+        "average": "110/198 (55.6%)",
+        "casual": "5/5 (100.0%)",
+        "channel_compare": "13/13 (100.0%)",
+        "compare": "28/40 (70.0%)",
+        "count": "47/54 (87.0%)",
+        "explain": "0/138 (0.0%)",
+        "followup_period": "10/11 (90.9%)",
+        "followup_why": "0/11 (0.0%)",
+        "frequency": "93/93 (100.0%)",
+        "insights": "1/1 (100.0%)",
+        "largest": "18/46 (39.1%)",
+        "list_category": "99/155 (63.9%)",
+        "named_month": "21/33 (63.6%)",
+        "no_match": "49/55 (89.1%)",
+        "remark_search": "0/67 (0.0%)",
+        "remark_total": "0/58 (0.0%)",
+        "security": "2/2 (100.0%)",
+        "smallest": "13/27 (48.1%)",
+        "specific_date": "157/197 (79.7%)",
+        "top_account": "5/27 (18.5%)",
+        "top_category": "0/13 (0.0%)",
+        "top_merchant": "13/13 (100.0%)",
+        "total": "70/95 (73.7%)",
+        "total_account": "107/122 (87.7%)",
+        "total_category": "210/321 (65.4%)",
+        "total_merchant": "195/248 (78.6%)",
+        "unusual": "2/4 (50.0%)",
+        "weekly_summary": "1/1 (100.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 521,
+        "E tool arguments": 116,
+        "B entity": 131,
+        "G calculation": 43,
+        "C merchant": 6
+      },
+      "security": "2/2 (100.0%)",
+      "latencyMs": {
+        "p50": 0.41,
+        "p95": 1.52,
+        "p99": 1.97
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 1
+      }
+    },
+    "holdout": {
+      "accuracy": "560/1098 (51.0%)",
+      "byLanguage": {
+        "bn": "5/66 (7.6%)",
+        "bn-latn": "147/302 (48.7%)",
+        "en": "264/479 (55.1%)",
+        "mixed": "64/64 (100.0%)",
+        "ms": "80/187 (42.8%)"
+      },
+      "byKind": {
+        "casual": "2/2 (100.0%)",
+        "channel_compare": "22/24 (91.7%)",
+        "compare": "9/11 (81.8%)",
+        "count": "65/160 (40.6%)",
+        "explain": "0/104 (0.0%)",
+        "followup_period": "14/19 (73.7%)",
+        "followup_why": "10/10 (100.0%)",
+        "frequency": "56/56 (100.0%)",
+        "insights": "0/1 (0.0%)",
+        "largest": "8/24 (33.3%)",
+        "list_category": "0/91 (0.0%)",
+        "remark_search": "0/50 (0.0%)",
+        "remark_total": "0/79 (0.0%)",
+        "security": "3/4 (75.0%)",
+        "top_category": "0/14 (0.0%)",
+        "total": "42/63 (66.7%)",
+        "total_category": "131/187 (70.1%)",
+        "total_merchant": "197/197 (100.0%)",
+        "unusual": "1/1 (100.0%)",
+        "weekly_summary": "0/1 (0.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 432,
+        "E tool arguments": 12,
+        "B entity": 93,
+        "security": 1
+      },
+      "security": "3/4 (75.0%)",
+      "latencyMs": {
+        "p50": 0.4,
+        "p95": 1.25,
+        "p99": 1.7
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 1
+      }
+    },
+    "adversarial": {
+      "accuracy": "519/1030 (50.4%)",
+      "byLanguage": {
+        "bn": "3/49 (6.1%)",
+        "bn-latn": "198/382 (51.8%)",
+        "en": "199/351 (56.7%)",
+        "mixed": "22/22 (100.0%)",
+        "ms": "97/226 (42.9%)"
+      },
+      "byKind": {
+        "casual": "21/21 (100.0%)",
+        "channel_compare": "48/57 (84.2%)",
+        "compare": "19/25 (76.0%)",
+        "count": "31/69 (44.9%)",
+        "explain": "0/79 (0.0%)",
+        "followup_period": "30/51 (58.8%)",
+        "followup_why": "28/31 (90.3%)",
+        "frequency": "41/50 (82.0%)",
+        "insights": "0/11 (0.0%)",
+        "largest": "23/59 (39.0%)",
+        "list_category": "0/51 (0.0%)",
+        "remark_search": "0/52 (0.0%)",
+        "remark_total": "0/46 (0.0%)",
+        "security": "35/49 (71.4%)",
+        "top_category": "0/32 (0.0%)",
+        "total": "85/143 (59.4%)",
+        "total_category": "71/106 (67.0%)",
+        "total_merchant": "76/76 (100.0%)",
+        "unusual": "11/11 (100.0%)",
+        "weekly_summary": "0/11 (0.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 391,
+        "E tool arguments": 36,
+        "B entity": 69,
+        "G calculation": 1,
+        "security": 14
+      },
+      "security": "35/49 (71.4%)",
+      "latencyMs": {
+        "p50": 0.45,
+        "p95": 1.43,
+        "p99": 1.85
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 1
+      }
+    }
+  },
+  "final": {
+    "train": {
+      "accuracy": "5574/5597 (99.6%)",
+      "byLanguage": {
+        "bn": "390/391 (99.7%)",
+        "bn-latn": "1083/1084 (99.9%)",
+        "en": "2843/2861 (99.4%)",
+        "mixed": "633/634 (99.8%)",
+        "ms": "625/627 (99.7%)"
+      },
+      "byKind": {
+        "all_time": "132/132 (100.0%)",
+        "ambiguous": "6/6 (100.0%)",
+        "average": "174/174 (100.0%)",
+        "casual": "13/13 (100.0%)",
+        "channel_compare": "96/96 (100.0%)",
+        "compare": "44/44 (100.0%)",
+        "count": "421/421 (100.0%)",
+        "explain": "350/350 (100.0%)",
+        "followup_period": "79/79 (100.0%)",
+        "followup_why": "66/66 (100.0%)",
+        "frequency": "539/539 (100.0%)",
+        "insights": "5/7 (71.4%)",
+        "largest": "63/63 (100.0%)",
+        "list_category": "273/273 (100.0%)",
+        "named_month": "14/16 (87.5%)",
+        "no_match": "24/25 (96.0%)",
+        "remark_search": "99/100 (99.0%)",
+        "remark_total": "361/371 (97.3%)",
+        "security": "12/12 (100.0%)",
+        "smallest": "70/70 (100.0%)",
+        "specific_date": "260/260 (100.0%)",
+        "top_account": "71/71 (100.0%)",
+        "top_category": "96/96 (100.0%)",
+        "top_merchant": "79/84 (94.0%)",
+        "total": "310/310 (100.0%)",
+        "total_account": "98/98 (100.0%)",
+        "total_category": "918/918 (100.0%)",
+        "total_merchant": "892/892 (100.0%)",
+        "unusual": "3/4 (75.0%)",
+        "weekly_summary": "6/7 (85.7%)"
+      },
+      "failuresByStage": {
+        "A intent": 22,
+        "C merchant": 1
+      },
+      "security": "12/12 (100.0%)",
+      "latencyMs": {
+        "p50": 0.45,
+        "p95": 1.16,
+        "p99": 1.94
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 2
+      }
+    },
+    "dev": {
+      "accuracy": "2080/2086 (99.7%)",
+      "byLanguage": {
+        "bn": "153/153 (100.0%)",
+        "bn-latn": "258/258 (100.0%)",
+        "en": "991/997 (99.4%)",
+        "mixed": "435/435 (100.0%)",
+        "ms": "243/243 (100.0%)"
+      },
+      "byKind": {
+        "all_time": "37/37 (100.0%)",
+        "ambiguous": "1/1 (100.0%)",
+        "average": "198/198 (100.0%)",
+        "casual": "5/5 (100.0%)",
+        "channel_compare": "13/13 (100.0%)",
+        "compare": "40/40 (100.0%)",
+        "count": "54/54 (100.0%)",
+        "explain": "138/138 (100.0%)",
+        "followup_period": "11/11 (100.0%)",
+        "followup_why": "11/11 (100.0%)",
+        "frequency": "93/93 (100.0%)",
+        "insights": "1/1 (100.0%)",
+        "largest": "46/46 (100.0%)",
+        "list_category": "155/155 (100.0%)",
+        "named_month": "33/33 (100.0%)",
+        "no_match": "55/55 (100.0%)",
+        "remark_search": "67/67 (100.0%)",
+        "remark_total": "57/58 (98.3%)",
+        "security": "2/2 (100.0%)",
+        "smallest": "27/27 (100.0%)",
+        "specific_date": "197/197 (100.0%)",
+        "top_account": "27/27 (100.0%)",
+        "top_category": "13/13 (100.0%)",
+        "top_merchant": "13/13 (100.0%)",
+        "total": "90/95 (94.7%)",
+        "total_account": "122/122 (100.0%)",
+        "total_category": "321/321 (100.0%)",
+        "total_merchant": "248/248 (100.0%)",
+        "unusual": "4/4 (100.0%)",
+        "weekly_summary": "1/1 (100.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 6
+      },
+      "security": "2/2 (100.0%)",
+      "latencyMs": {
+        "p50": 0.43,
+        "p95": 0.94,
+        "p99": 1.73
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 2
+      }
+    },
+    "holdout": {
+      "accuracy": "872/1098 (79.4%)",
+      "byLanguage": {
+        "bn": "66/66 (100.0%)",
+        "bn-latn": "234/302 (77.5%)",
+        "en": "373/479 (77.9%)",
+        "mixed": "64/64 (100.0%)",
+        "ms": "135/187 (72.2%)"
+      },
+      "byKind": {
+        "casual": "2/2 (100.0%)",
+        "channel_compare": "24/24 (100.0%)",
+        "compare": "11/11 (100.0%)",
+        "count": "98/160 (61.3%)",
+        "explain": "104/104 (100.0%)",
+        "followup_period": "19/19 (100.0%)",
+        "followup_why": "10/10 (100.0%)",
+        "frequency": "56/56 (100.0%)",
+        "insights": "0/1 (0.0%)",
+        "largest": "14/24 (58.3%)",
+        "list_category": "0/91 (0.0%)",
+        "remark_search": "24/50 (48.0%)",
+        "remark_total": "77/79 (97.5%)",
+        "security": "3/4 (75.0%)",
+        "top_category": "0/14 (0.0%)",
+        "total": "63/63 (100.0%)",
+        "total_category": "169/187 (90.4%)",
+        "total_merchant": "197/197 (100.0%)",
+        "unusual": "1/1 (100.0%)",
+        "weekly_summary": "0/1 (0.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 223,
+        "B entity": 3
+      },
+      "security": "3/4 (75.0%)",
+      "latencyMs": {
+        "p50": 0.44,
+        "p95": 1.05,
+        "p99": 1.85
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 2
+      }
+    },
+    "adversarial": {
+      "accuracy": "763/1030 (74.1%)",
+      "byLanguage": {
+        "bn": "48/49 (98.0%)",
+        "bn-latn": "270/382 (70.7%)",
+        "en": "280/351 (79.8%)",
+        "mixed": "22/22 (100.0%)",
+        "ms": "143/226 (63.3%)"
+      },
+      "byKind": {
+        "casual": "21/21 (100.0%)",
+        "channel_compare": "57/57 (100.0%)",
+        "compare": "23/25 (92.0%)",
+        "count": "45/69 (65.2%)",
+        "explain": "76/79 (96.2%)",
+        "followup_period": "44/51 (86.3%)",
+        "followup_why": "28/31 (90.3%)",
+        "frequency": "41/50 (82.0%)",
+        "insights": "0/11 (0.0%)",
+        "largest": "28/59 (47.5%)",
+        "list_category": "0/51 (0.0%)",
+        "remark_search": "15/52 (28.8%)",
+        "remark_total": "41/46 (89.1%)",
+        "security": "35/49 (71.4%)",
+        "top_category": "0/32 (0.0%)",
+        "total": "126/143 (88.1%)",
+        "total_category": "96/106 (90.6%)",
+        "total_merchant": "76/76 (100.0%)",
+        "unusual": "11/11 (100.0%)",
+        "weekly_summary": "0/11 (0.0%)"
+      },
+      "failuresByStage": {
+        "A intent": 250,
+        "E tool arguments": 4,
+        "G calculation": 2,
+        "B entity": 8,
+        "security": 3
+      },
+      "security": "35/49 (71.4%)",
+      "latencyMs": {
+        "p50": 0.46,
+        "p95": 1.37,
+        "p99": 1.85
+      },
+      "toolMs": {
+        "p50": 0,
+        "p95": 2
+      }
+    }
+  }
+}

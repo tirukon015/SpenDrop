@@ -44,6 +44,8 @@ export interface ComposeHints {
   frequency?: boolean;
   /** "Card or QR?": the families compared. */
   channelFamilies?: string[];
+  /** "What was this for?": the user wants the purpose — the remark leads, or say there is none. */
+  explain?: boolean;
   /** "Is it increasing?" = up, "is it going down?" = down: yes / no follows the question asked. */
   askedDirection?: "up" | "down";
 }
@@ -85,14 +87,17 @@ export function ruleNote(rules: AppliedRule[] | undefined): string[] {
 /** No merchant in the user's records resembles the name asked about: say so (never invent a match). */
 const unknownMerchantAnswer = (name: string): Composed => ({
   status: "no_match", confidence: "NO_MATCH",
-  text: `I couldn't find a merchant matching “${name}” in your records. Try part of the name as it appears on your transactions — or ask me to show your recent transactions.`,
+  text: `I couldn't find a merchant or a remark matching “${name}” in your records. Try part of the name as it appears on your transactions — or ask me to show your recent transactions.`,
   blocks: [], followUps: ["Show my recent transactions", "Which merchants do I spend the most at?"],
 });
 
 // ---------------------------------------------------------------------------------------------------------------
 
+/** A name that is no merchant was found in the user's remarks instead: say so. */
+const remarksNote = (word: string | undefined): string[] => (word ? [`No merchant is called “${word}”, so I used the transactions whose remarks mention it.`] : []);
+
 export function composeSearch(d: SearchData, hints: ComposeHints, detail?: TransactionDetail): Composed {
-  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...merchantNote(d.merchantsMatched)] };
+  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...(d.searchedRemarks ? remarksNote(d.searchedRemarks) : merchantNote(d.merchantsMatched))] };
   const cards = d.transactions;
   const ids = cards.map((c) => c.id);
   const target = d.target.amountMinor !== null ? ` close to ${money(d.target.amountMinor, d.transactions[0]?.currency ?? "RM")}` : "";
@@ -114,6 +119,9 @@ export function composeSearch(d: SearchData, hints: ComposeHints, detail?: Trans
       : `Here are your ${Math.min(h.topN, cards.length)} ${h.smallest ? "smallest" : "biggest"} purchases${d.subject} ${when(d.period, h.periodWords)}.`;
     return withNotes({ status: "answered", text, blocks: [{ type: "transactions", title: "Transactions", items: cards.slice(0, h.topN) }], followUps: ["Tell me more about the first one", "Which category costs me the most?"], transactionIds: ids }, h.notes);
   }
+
+  // "What was the RM35 for?" with exactly one match: the transaction, led by its remark.
+  if (h.explain && detail && d.total === 1) return composeTransaction(detail, h);
 
   // Lookups ("where did my RM15 go?")
   if (d.confidence) {
@@ -159,7 +167,7 @@ const DIMENSION: Record<string, { noun: string; block: "category" | "merchant" |
 };
 
 export function composeCalculate(d: CalculateData, hints: ComposeHints): Composed {
-  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...merchantNote(d.merchantsMatched)] };
+  const h = { ...hints, notes: [...(hints.notes ?? []), ...ruleNote(d.personalRules), ...(d.searchedRemarks ? remarksNote(d.searchedRemarks) : merchantNote(d.merchantsMatched))] };
   const subject = d.subject;
   const period = when(d.period, h.periodWords);
   const lang = h.lang ?? "en";
@@ -364,10 +372,16 @@ export function composeTransaction(d: TransactionDetail, h: ComposeHints): Compo
   const t = d.transaction;
   const category = t.recordedCategory ? `${t.recordedCategory} (your rule counts it as ${t.category})` : t.category;
   const s = [`${money(t.amountMinor, t.currency)} at ${t.merchant} on ${onDay(t)}. Category: ${category}. Funding account: ${t.fundingAccount}. Payment channel: ${channelInfo(t.paymentChannel).label}.`];
+  // "What was this for?": the user's remark answers it — first, quoted, and clearly theirs.
+  if (h.explain && d.notes) s.unshift(`Your remark says: “${d.notes}”.`);
   if (d.split.isShared) s.push(`It was split between ${d.split.people} people; your share was ${money(d.split.myShareMinor, t.currency)}${d.split.paidByMe ? "" : `, and ${d.split.payer ?? "someone else"} paid`}.`);
   else if (!d.split.paidByMe) s.push(`${d.split.payer ?? "Someone else"} paid for it.`);
   if (d.reference) s.push(`Reference: ${d.reference}.`);
-  if (d.notes) s.push(`Your note: “${d.notes}”.`);
+  // The remark is the user's own words: quoted and labelled, never treated as fact (amount, date and merchant above
+  // come from the record, even if the remark says otherwise).
+  if (d.notes && h.explain) s.push("(That's your own note — the amount, date and merchant come from the transaction record.)");
+  else if (d.notes) s.push(`Your remark: “${d.notes}” — that's your own note; the amount, date and merchant above are from the transaction record.`);
+  else if (h.explain) s.push("There's no remark on this transaction, so I can't tell what it was for — only what the record shows.");
   s.push(d.receipt.available ? "A receipt image is attached — open the transaction to see it. I can't read its items, so I can't confirm exactly what was bought." : "There's no receipt attached.");
   return withNotes({ status: "answered", confidence: "HIGH", text: s.join(" "), blocks: [{ type: "transactions", title: "Transaction", items: [t] }], followUps: [`How much did I spend at ${t.merchant} this month?`], transactionIds: [t.id] }, h.notes);
 }

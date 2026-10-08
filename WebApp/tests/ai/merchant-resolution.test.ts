@@ -60,7 +60,8 @@ describe("several close candidates → ask, unless the user asked for all simila
   const close = ["BIJOY MART", "BIJOY CAFE", "BIJOYSHARIARALAMIN"];
   it("a whole word shared by names → all (disclosed); a partial reference shared by names → clarify", () => {
     expect(resolveMerchant("how much did I spend at bijoy?", close)).toMatchObject({ kind: "match", names: ["BIJOY CAFE", "BIJOY MART"] });
-    expect(resolveMerchant("how much at bij?", close)).toMatchObject({ kind: "ambiguous" });
+    expect(resolveMerchant("how much at bijo?", close)).toMatchObject({ kind: "ambiguous" });
+    expect(resolveMerchant("how much at bij?", close)).toBeNull(); // 3 letters is too little for a long name
   });
   it("the planner asks which one, listing the candidates, with ready-made follow-ups", () => {
     const p = plan({ message: "how much at bijo?", today: "2026-10-07", vocabulary: vocab(close), focus: null });
@@ -156,7 +157,7 @@ describe("the production case and natural / multilingual phrasings (exact figure
   it("no match: says no merchant matches the name (never invents one)", async () => {
     const a = await one("how much did I spend at zorblax?");
     expect(a.status).toBe("no_match");
-    expect(a.text).toMatch(/couldn't find a merchant matching “Zorblax”/i);
+    expect(a.text).toMatch(/couldn't find a merchant or a remark matching “Zorblax”/i);
     expect(a.blocks).toEqual([]);
   });
 });
@@ -232,5 +233,33 @@ describe("generalisation on random synthetic merchants (seeded)", () => {
     }
     for (const w of ["hope", "having", "good", "day", "thanks", "weather", "tomorrow", "please", "today", "money"]) if (resolveMerchant(w, mine)?.kind === "match") wrong++;
     expect(wrong).toBe(0);
+  });
+});
+
+describe("one merchant, several spellings (real data: BIJOYSHARIARALAMIN and BIJOY SHARIAR AL AMIN)", () => {
+  function twoSpellings() {
+    const s = new MemoryTenantStore();
+    s.add(USER_A, { expenses: [
+      exp({ merchant: "BIJOYSHARIARALAMIN", amount: 599.32, date: "2026-10-07", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "BIJOYSHARIARALAMIN", amount: 7, date: "2026-10-03", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "BIJOY SHARIAR AL AMIN", amount: 50, date: "2026-09-20", category: "Other", channel: "QR_PAYMENT", account: "Maybank" }),
+      exp({ merchant: "KK Super Mart", amount: 5.5, date: "2026-10-05", category: "Food" }),
+    ] });
+    return s;
+  }
+  const ask = async (q: string) => { const r = await answerDeterministic(q, ctx(), twoSpellings().forUser(USER_A), null); if (r.kind !== "answer") throw new Error(q); return r.answer; };
+
+  it("spellings are one candidate (a typo is not 'ambiguous')", () => {
+    expect(resolveMerchant("bijoi", ["BIJOYSHARIARALAMIN", "BIJOY SHARIAR AL AMIN"])).toMatchObject({ kind: "match" });
+    expect(resolveMerchant("bijoi", ["BIJOYSHARIARALAMIN", "BIJOY SHARIAR AL AMIN"])?.names.sort()).toEqual(["BIJOY SHARIAR AL AMIN", "BIJOYSHARIARALAMIN"]);
+  });
+  it("all-time transactions include every spelling (3 rows), and the answer discloses both names", async () => {
+    const a = await ask("show bijoy transactions");
+    expect(listed(a).map((r) => r.spendMinor).sort((x, y) => x - y)).toEqual([700, 5000, 59932]);
+    expect(a.text).toMatch(/2 merchant names/);
+  });
+  it("totals across spellings are exact", async () => {
+    expect((await ask("how much did I spend at bijoi of all time?")).text).toContain("RM 656.32");
+    expect((await ask("similar name with bijoy how much")).text).toContain("RM 606.32"); // this month: only the October spelling has rows
   });
 });

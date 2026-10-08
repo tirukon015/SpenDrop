@@ -38,7 +38,21 @@ export class SupabaseRepository implements FinanceRepository {
     throw new DataUnavailableError(`query failed (${error.code ?? "unknown"})`);
   }
 
-  async expenses(range: InstantRange, limit: number): Promise<ExpenseSet> {
+  /** Per-request cache: the same period is often read twice in one answer (e.g. a total and its insight line). */
+  private expenseCache = new Map<string, Promise<ExpenseSet>>();
+
+  expenses(range: InstantRange, limit: number): Promise<ExpenseSet> {
+    const key = `${range.start?.toISOString() ?? ""}|${range.end?.toISOString() ?? ""}|${limit}`;
+    let hit = this.expenseCache.get(key);
+    if (!hit) {
+      hit = this.loadExpenses(range, limit);
+      hit.catch(() => this.expenseCache.delete(key));
+      this.expenseCache.set(key, hit);
+    }
+    return hit;
+  }
+
+  private async loadExpenses(range: InstantRange, limit: number): Promise<ExpenseSet> {
     const rows: Row[] = [];
     for (let from = 0; ; from += PAGE) {
       let q = this.client.from("expenses").select("*").eq("user_id", this.userId).is("deleted_at", null);

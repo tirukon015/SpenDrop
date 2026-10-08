@@ -46,6 +46,8 @@ export interface TxnCard {
   hasReceipt: boolean;
   isShared: boolean;
   source: string;
+  /** The user's own remark on the transaction (context only — never a source of facts). */
+  remark?: string;
 }
 
 export interface PeriodInfo { from: LocalDate; to: LocalDate; label: string }

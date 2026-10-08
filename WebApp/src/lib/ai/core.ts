@@ -54,7 +54,8 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   const started = Date.now();
   let vocabulary: Vocabulary;
   try {
-    vocabulary = await repo.vocabulary();
+    // Warm the per-request caches in one round trip (accounts and personal rules are needed by most tools).
+    [vocabulary] = await Promise.all([repo.vocabulary(), repo.accounts().catch(() => []), repo.personalRules().catch(() => [])]);
   } catch {
     return { kind: "answer", answer: unavailable(ctx, started) };
   }
@@ -71,6 +72,23 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   const executed: ExecutedTool[] = [];
   const notes = [...p.notes];
   let periodWords = periodWordsOf(message, ctx.today);
+  // A total for this week / this month also gets one line against the user's normal: that read is independent of
+  // the main calculation, so it runs at the same time (used only when the main result is a single-currency total).
+  const insightArgs = (() => {
+    const args = (p.steps[0]?.args ?? {}) as Record<string, unknown> & { period?: { from: string; to: string }; operation?: string };
+    if (p.intent !== "CALCULATE" || p.steps[0]?.tool !== "calculate_spending" || args.operation !== "sum" || args.amountMin !== undefined) return null;
+    const unit = ["this_week", "this_month"].find((u) => { const sp = presetSpan(u as "this_week", ctx.today)!; return args.period?.from === sp.from && args.period?.to === sp.to; });
+    if (!unit) return null;
+    const { period: _p, operation: _o, groupBy: _g, ...filters } = args; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { period: unit, ...filters };
+  })();
+  const insightRun = insightArgs ? executeTool("get_spending_insights", insightArgs, ctx, repo) : null;
+
+  const step0 = p.steps[0];
+  const synonymRun = p.style?.fallbackKeyword && step0 && (step0.tool === "calculate_spending" || step0.tool === "search_transactions") && (step0.args as { category?: string }).category
+    ? (() => { const { category: _c, ...rest } = step0.args as Record<string, unknown>; return executeTool(step0.tool, { ...rest, remark: p.style!.fallbackKeyword }, ctx, repo); })() // eslint-disable-line @typescript-eslint/no-unused-vars
+    : null;
+
   let main: ExecutedTool | null = null;
   for (const step of p.steps) {
     main = await executeTool(step.tool, step.args, ctx, repo);
@@ -86,6 +104,36 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
       executed.push(next);
       if (!next.result.ok) { main = next; break; }
       if ((next.result.data as { total: number }).total > 0) { main = next; notes.unshift(expansion.note); periodWords = undefined; break; }
+    }
+  }
+
+  // A narrower word than its category ("rent", "internet", "tuition" → Bills / Education): when the user's remarks
+  // mention it, those transactions answer the question (the category is broader). Ran alongside the main query.
+  if (synonymRun) {
+    const alt = await synonymRun;
+    const empty = (e: ExecutedTool) => e.result.ok && (e.name === "calculate_spending" ? (e.result.data as { results: unknown[] }).results.length === 0 : (e.result.data as { total: number }).total === 0);
+    if (alt.result.ok && !empty(alt)) {
+      executed.push(alt);
+      const category = (main.args as { category?: string }).category;
+      main = alt;
+      notes.unshift(`I used the transactions whose remarks mention “${p.style!.fallbackKeyword}”${category ? ` (your ${category} category is broader)` : ""}.`);
+    }
+  }
+
+  // A precise amount ("RM103.88") with no exact match in the default window: an exact match anywhere in the user's
+  // records is the transaction they mean (said plainly). Round amounts stay approximate.
+  if (main.result.ok && main.name === "search_transactions") {
+    const args = main.args as { targetAmount?: number; period?: unknown; currency?: string };
+    const data = main.result.data as { transactions: { matchReason?: string }[] };
+    const precise = typeof args.targetAmount === "number" && Math.round(args.targetAmount * 100) % 100 !== 0;
+    if (precise && args.period && !data.transactions.some((c) => c.matchReason === "exact amount")) {
+      const exact = await executeTool("search_transactions", { amountMin: args.targetAmount, amountMax: args.targetAmount, targetAmount: args.targetAmount, ...(args.currency ? { currency: args.currency } : {}), sort: "date_desc", limit: 10 }, ctx, repo);
+      executed.push(exact);
+      if (exact.result.ok && (exact.result.data as { total: number }).total > 0) {
+        main = exact;
+        notes.unshift("It's older than the last 30 days, so I searched all your records for that exact amount.");
+        periodWords = undefined;
+      }
     }
   }
 
@@ -112,7 +160,7 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
   };
   const hints = {
     intent: p.intent, notes, topN: p.style?.topN, smallest: p.style?.smallest, restaurants: p.style?.restaurants, judgement: p.style?.judgement, periodWords,
-    lang, subjectParts, frequency: p.style?.frequency, channelFamilies: p.style?.channelFamilies, askedDirection: p.style?.askedDirection,
+    lang, subjectParts, frequency: p.style?.frequency, channelFamilies: p.style?.channelFamilies, askedDirection: p.style?.askedDirection, explain: p.style?.explain,
   };
   const composed = main.result.ok
     ? composeTool(main.name, main.result, hints, detail?.result.ok ? (detail.result.data as TransactionDetail) : undefined)
@@ -122,13 +170,10 @@ async function answerInner(message: string, ctx: AiContext, repo: FinanceReposit
 
   // A total for this week / this month also gets one line of context against the user's own normal — only when
   // the difference is meaningful (the insight tool's thresholds), never as filler.
-  if (main.result.ok && main.name === "calculate_spending" && p.intent === "CALCULATE" && !composed.insight) {
-    const args = (p.steps[0]?.args ?? {}) as Record<string, unknown> & { period?: { from: string; to: string }; operation?: string };
-    const unit = ["this_week", "this_month"].find((u) => { const s = presetSpan(u as "this_week", ctx.today)!; return args.period?.from === s.from && args.period?.to === s.to; });
+  if (insightRun && main.result.ok && main.name === "calculate_spending" && !composed.insight) {
     const results = (main.result.data as { results: unknown[] }).results;
-    if (unit && args.operation === "sum" && results.length === 1 && args.amountMin === undefined) {
-      const { period: _p, operation: _o, groupBy: _g, ...filters } = args; // eslint-disable-line @typescript-eslint/no-unused-vars
-      const extra = await executeTool("get_spending_insights", { period: unit, ...filters }, ctx, repo);
+    const extra = await insightRun;
+    if (results.length === 1) {
       executed.push(extra);
       const line = extra.result.ok ? totalInsight(extra.result.data as InsightsData) : undefined;
       if (line && extra.result.ok) { composed.insight = line; evidence.push(extra.result.evidence); }
