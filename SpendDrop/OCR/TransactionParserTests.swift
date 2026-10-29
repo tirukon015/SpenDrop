@@ -214,7 +214,7 @@ public struct TransactionParserTests {
         let schema = Schema([Expense.self])
         let memConfig = ModelConfiguration(isStoredInMemoryOnly: true)
         if let memContainer = try? ModelContainer(for: schema, configurations: [memConfig]) {
-            let testContext = memContainer.mainContext
+            let testContext = ModelContext(memContainer)
             let existing = Expense(
                 amount: 18.50,
                 merchant: "McDonald's",
